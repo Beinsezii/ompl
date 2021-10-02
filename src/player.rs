@@ -78,7 +78,7 @@ impl Player {
                 } else {
                     src.inner_mut()
                         .inner_mut()
-                        .set_factor(state.volume.load(ORD) as f32 / 100.0);
+                        .set_factor(std::cmp::min(state.volume.load(ORD), 100) as f32 / 100.0);
                     src.inner_mut().set_paused(state.pause.load(ORD));
                 }
             })
