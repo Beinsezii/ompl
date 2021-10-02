@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 
-mod player;
-use player::{Player, Track};
+mod library;
+use library::Library;
+use library::Player;
 
 #[derive(Debug)]
 enum Instance {
@@ -23,76 +24,92 @@ enum Action {
 
 #[derive(Debug, Clone, Clap, Serialize, Deserialize)]
 #[clap(name = "ompl", version = "0.1.0", author = "Beinsezii")]
-struct Args {
+struct SubArgs {
     #[clap(arg_enum)]
-    action: Option<Action>,
+    action: Action,
+}
+
+#[derive(Debug, Clone, Clap)]
+#[clap(name = "ompl", version = "0.1.0", author = "Beinsezii")]
+struct MainArgs {
+    /// Path to music libary folder
+    library: std::path::PathBuf,
 }
 
 const ID: &str = "OMPL SERVER 0.1.0";
 
-fn instance_main(listener: TcpListener, _args: Args) {
-    let mut player = Player::new();
-    player.queue.push(Track::new(
-        "/home/beinsezii/Music/NieR Replicant/Song of the Ancients - Fate.mp3".to_owned(),
-    ));
-    player.queue.push(Track::new(
-        "/home/beinsezii/Music/NieR Replicant/Snow in Summer.mp3".to_owned(),
-    ));
-    println!("{:?}", player.queue);
+fn instance_main(listener: TcpListener) {
+    let main_args = MainArgs::parse();
+
+    let library = Library::new(main_args.library);
+
+    assert!(!library.songs.is_empty());
+
+    let mut player = Player::new(library.get_random().unwrap().clone());
 
     for stream in listener.incoming() {
         match stream {
             Ok(mut s) => {
                 // confirmation ID
-                s.write_all(ID.as_bytes()).unwrap();
+                if s.write_all(ID.as_bytes()).is_err() {
+                    continue;
+                };
 
-                #[allow(unused_assignments)]
                 let mut response = String::from("fail");
 
                 // exchange size
                 let mut data = [0u8; std::mem::size_of::<usize>()];
-                s.read_exact(&mut data).unwrap();
+                match s.read_exact(&mut data) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
                 let size: usize = usize::from_be_bytes(data);
-                println!("{}", size);
 
                 // exchange args
                 let mut data = vec![0u8; size];
-                s.read_exact(&mut data).unwrap();
-                match bincode::deserialize::<Args>(&data) {
-                    Ok(a) => {
-                        match a.action {
-                            Some(ref action) => match action {
-                                Action::Exit => {
-                                    // finalize response 2
-                                    s.write_all("success".as_bytes()).unwrap();
-                                    break;
-                                }
-                                Action::Next => player.next(),
-                                Action::Pause => player.pause(),
-                                Action::Play => player.play(),
-                                Action::Stop => player.stop(),
-                            },
-                            None => (),
+                match s.read_exact(&mut data) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
+                match bincode::deserialize::<SubArgs>(&data) {
+                    Ok(sub_args) => {
+                        match sub_args.action {
+                            Action::Exit => {
+                                // finalize response 2
+                                match s.write_all(response.as_bytes()) {
+                                    Ok(_) => (),
+                                    Err(e) => println!("{}", e),
+                                };
+                                break;
+                            }
+                            Action::Next => player.next(library.get_random().unwrap().clone()),
+                            Action::Pause => player.pause(),
+                            Action::Play => player.play(),
+                            Action::Stop => player.stop(),
                         };
                         response = "success".to_string()
                     }
                     Err(e) => response = format!("Could not deserialize args, {}", e),
                 };
                 // finalize response
-                s.write_all(response.as_bytes()).unwrap();
+                match s.write_all(response.as_bytes()) {
+                    Ok(_) => (),
+                    Err(e) => println!("{}", e),
+                };
             }
             Err(e) => std::panic::panic_any(e),
         }
     }
 }
 
-fn instance_sub(mut stream: TcpStream, args: Args) {
+fn instance_sub(mut stream: TcpStream) {
+    let sub_args = SubArgs::parse();
     // confirmation ID
     let mut confirmation = vec![0u8; ID.bytes().count()];
     stream.read_exact(&mut confirmation).unwrap();
     assert!(String::from_utf8(confirmation).unwrap() == ID);
 
-    let data = match bincode::serialize(&args) {
+    let data = match bincode::serialize(&sub_args) {
         Ok(d) => d,
         Err(e) => panic!("Could not serialize args\n{}", e),
     };
@@ -110,8 +127,6 @@ fn instance_sub(mut stream: TcpStream, args: Args) {
 }
 
 fn main() {
-    let args: Args = Args::parse();
-    println!("{:?}", args);
     let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 18346);
 
     let instance = match TcpListener::bind(socket) {
@@ -123,7 +138,7 @@ fn main() {
     };
 
     match instance {
-        Instance::Main(m) => instance_main(m, args),
-        Instance::Sub(s) => instance_sub(s, args),
+        Instance::Main(m) => instance_main(m),
+        Instance::Sub(s) => instance_sub(s),
     }
 }

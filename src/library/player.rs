@@ -5,25 +5,10 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
-pub struct Track {
-    path: String,
-}
+use super::track::Track;
 
 static ORD: Ordering = Ordering::SeqCst;
 static POLL_MS: u64 = 5;
-
-impl Track {
-    pub fn new(path: String) -> Self {
-        Self { path }
-    }
-    pub fn get_reader(&self) -> BufReader<File> {
-        BufReader::new(File::open(&self.path).unwrap())
-    }
-    pub fn get_decoder(&self) -> Result<Decoder<BufReader<File>>, rodio::decoder::DecoderError> {
-        Decoder::new(self.get_reader())
-    }
-}
 
 struct State {
     done: AtomicBool,
@@ -32,19 +17,22 @@ struct State {
     volume: AtomicU8,
 }
 
+fn get_decoder(track: &Track) -> Result<Decoder<BufReader<File>>, rodio::decoder::DecoderError> {
+    Decoder::new(track.get_reader())
+}
+
 pub struct Player {
     #[allow(dead_code)]
     stream: OutputStream,
-
     stream_handle: OutputStreamHandle,
+
     state: Arc<State>,
 
-    pub queue: Vec<Track>,
-    pub index: usize,
+    track: Track,
 }
 
 impl Player {
-    pub fn new() -> Self {
+    pub fn new(track: Track) -> Self {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
         Self {
             stream,
@@ -55,18 +43,14 @@ impl Player {
                 stop: AtomicBool::new(true),
                 volume: AtomicU8::new(5),
             }),
-            index: 0,
-            queue: Vec::new(),
+            track: track,
         }
     }
 
     fn start(&mut self) {
         let state = self.state.clone();
 
-        let src = self
-            .get_track()
-            .unwrap()
-            .get_decoder()
+        let src = get_decoder(self.get_track())
             .unwrap()
             .amplify(1.0)
             .pausable(false)
@@ -107,14 +91,14 @@ impl Player {
             std::thread::sleep(Duration::from_millis(POLL_MS))
         }
     }
-    pub fn next(&mut self) {
+    pub fn next(&mut self, next: Track) {
         self.stop();
-        self.index = (self.index + 1) % (self.queue.len());
+        self.track = next;
         self.play();
     }
 
-    // returns track from queue
-    pub fn get_track(&self) -> Option<&Track> {
-        self.queue.get(self.index)
+    // returns track from
+    pub fn get_track(&self) -> &Track {
+        &self.track
     }
 }
