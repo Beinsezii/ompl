@@ -56,26 +56,23 @@ fn instance_main(listener: TcpListener) {
 
                 // exchange size
                 let mut data = [0u8; std::mem::size_of::<usize>()];
-                match s.read_exact(&mut data) {
-                    Ok(_) => (),
-                    Err(e) => println!("{}", e),
+                if let Err(e) = s.read_exact(&mut data) {
+                    println!("{}", e)
                 };
                 let size: usize = usize::from_be_bytes(data);
 
                 // exchange args
                 let mut data = vec![0u8; size];
-                match s.read_exact(&mut data) {
-                    Ok(_) => (),
-                    Err(e) => println!("{}", e),
+                if let Err(e) = s.read_exact(&mut data) {
+                    println!("{}", e)
                 };
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
                         match sub_args.action {
                             Action::Exit => {
                                 // finalize response 2
-                                match s.write_all(response.as_bytes()) {
-                                    Ok(_) => (),
-                                    Err(e) => println!("{}", e),
+                                if let Err(e) = s.write_all(response.as_bytes()) {
+                                    println!("{}", e)
                                 };
                                 break;
                             }
@@ -89,9 +86,8 @@ fn instance_main(listener: TcpListener) {
                     Err(e) => response = format!("Could not deserialize args, {}", e),
                 };
                 // finalize response
-                match s.write_all(response.as_bytes()) {
-                    Ok(_) => (),
-                    Err(e) => println!("{}", e),
+                if let Err(e) = s.write_all(response.as_bytes()) {
+                    println!("{}", e)
                 };
             }
             Err(e) => std::panic::panic_any(e),
