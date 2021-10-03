@@ -1,6 +1,7 @@
 mod player;
 mod track;
 use rand::random;
+use std::cell::RefCell;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -9,6 +10,7 @@ pub use track::Track;
 
 pub struct Library {
     pub songs: Vec<Track>,
+    player: RefCell<Player>,
 }
 
 impl Library {
@@ -32,7 +34,23 @@ impl Library {
             .map(|e| Track::new(e.path()))
             .collect();
 
-        Self { songs }
+        Self {
+            player: RefCell::new(Player::new(songs.get(0).cloned())),
+            songs,
+        }
+    }
+
+    pub fn play(&self) {
+        self.player.borrow_mut().play()
+    }
+    pub fn pause(&self) {
+        self.player.borrow_mut().pause()
+    }
+    pub fn stop(&self) {
+        self.player.borrow_mut().stop()
+    }
+    pub fn next(&self) {
+        self.player.borrow_mut().next(self.get_random().cloned())
     }
 
     pub fn get_random<'a>(&'a self) -> Option<&'a Track> {

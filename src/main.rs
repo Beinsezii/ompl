@@ -5,7 +5,6 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 
 mod library;
 use library::Library;
-use library::Player;
 
 #[derive(Debug)]
 enum Instance {
@@ -41,11 +40,9 @@ const ID: &str = "OMPL SERVER 0.1.0";
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
 
-    let library = Library::new(main_args.library);
+    let library = Library::new(&main_args.library);
 
     assert!(!library.songs.is_empty());
-
-    let mut player = Player::new(library.get_random().unwrap().clone());
 
     for stream in listener.incoming() {
         match stream {
@@ -82,10 +79,10 @@ fn instance_main(listener: TcpListener) {
                                 };
                                 break;
                             }
-                            Action::Next => player.next(library.get_random().unwrap().clone()),
-                            Action::Pause => player.pause(),
-                            Action::Play => player.play(),
-                            Action::Stop => player.stop(),
+                            Action::Next => library.next(),
+                            Action::Pause => library.pause(),
+                            Action::Play => library.play(),
+                            Action::Stop => library.stop(),
                         };
                         response = "success".to_string()
                     }
