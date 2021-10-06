@@ -43,7 +43,7 @@ fn instance_main(listener: TcpListener) {
 
     let library = Library::new(&main_args.library);
 
-    assert!(!library.lock().unwrap().songs.is_empty());
+    assert!(!library.lock().unwrap().tracks.is_empty());
 
     for stream in listener.incoming() {
         match stream {
@@ -53,6 +53,7 @@ fn instance_main(listener: TcpListener) {
                     continue;
                 };
 
+                #[allow(unused_assignments)]
                 let mut response = String::from("fail");
 
                 // exchange size
@@ -73,11 +74,10 @@ fn instance_main(listener: TcpListener) {
                             match sub_args.action {
                                 Action::Exit => {
                                     // finalize response 2
+                                    response = "success".to_string();
                                     if let Err(e) = s.write_all(response.as_bytes()) {
                                         println!("{}", e)
                                     };
-                                    drop(library);
-                                    std::thread::sleep_ms(1000);
                                     break;
                                 }
                                 Action::Next => library.next(),

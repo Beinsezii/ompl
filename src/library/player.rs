@@ -1,16 +1,16 @@
-use rodio::{source::Done, Decoder, OutputStream, OutputStreamHandle, Source};
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender, SyncSender};
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration;
 
-use std::sync::mpsc::{Receiver, Sender, SyncSender};
+use rodio::{source::Done, Decoder, OutputStream, OutputStreamHandle, Source};
 
 use super::track::Track;
+use super::POLL_MS;
 
 static ORD: Ordering = Ordering::SeqCst;
-static POLL_MS: u64 = 5;
 
 struct State {
     pause: AtomicBool,
@@ -19,42 +19,27 @@ struct State {
     drop: AtomicBool,
 }
 
-fn get_decoder(track: &Track) -> Result<Decoder<BufReader<File>>, rodio::decoder::DecoderError> {
-    Decoder::new(track.get_reader())
-}
-
 fn track_ender(state: Arc<State>, active: Arc<AtomicUsize>, signal_next: Sender<()>) {
-    let mut cur = (active.load(ORD), state.stop.load(ORD));
-    let mut prev = cur.clone();
-    loop {
-        if state.drop.load(ORD) {
-            break;
-        };
-
-        cur = (active.load(ORD), state.stop.load(ORD));
-        if cur != prev {
-            println!("ACT: {} STOP: {}", cur.0, cur.1);
-            if cur.0 == 0 && !cur.1 {
-                println!("next?");
-                if let Err(_) = signal_next.send(()) {
-                    break;
-                }
+    while !state.drop.load(ORD) {
+        if active.load(ORD) == 0 && !state.stop.load(ORD) {
+            if let Err(_) = signal_next.send(()) {
+                break;
             }
         }
-        prev = cur;
-        std::thread::sleep(Duration::from_millis(POLL_MS));
+
+        thread::sleep(Duration::from_millis(POLL_MS));
     }
 }
 
-fn stream(hanchan_s: Sender<OutputStreamHandle>, sterm_r: Receiver<()>) {
+fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
     let (_stream, handle) = OutputStream::try_default().unwrap();
-    hanchan_s.send(handle).unwrap();
-    sterm_r.recv().unwrap();
+    han_ch_s.send(handle).unwrap();
+    stm_ex_r.recv().unwrap();
 }
 
 pub struct Player {
     stream_handle: OutputStreamHandle,
-    stmterm_s: SyncSender<()>,
+    stm_ex_s: SyncSender<()>,
 
     active: Arc<AtomicUsize>,
     state: Arc<State>,
@@ -65,16 +50,16 @@ pub struct Player {
 impl Drop for Player {
     fn drop(&mut self) {
         self.state.drop.store(true, ORD);
-        self.stmterm_s.send(()).unwrap();
+        self.stm_ex_s.send(()).unwrap();
     }
 }
 
 impl Player {
-    pub fn new(track: Option<Track>, signal_next: Sender<()>) -> Self {
-        let (hanchan_s, hanchan_r) = std::sync::mpsc::channel();
-        let (stmterm_s, stmterm_r) = std::sync::mpsc::sync_channel(0);
-        std::thread::spawn(|| stream(hanchan_s, stmterm_r));
-        let stream_handle = hanchan_r.recv().unwrap();
+    pub fn new(track: Option<Track>, signal_next: Option<Sender<()>>) -> Self {
+        let (han_ch_s, han_ch_r) = mpsc::channel();
+        let (stm_ex_s, stm_ex_r) = mpsc::sync_channel(0);
+        thread::spawn(|| stream(han_ch_s, stm_ex_r));
+        let stream_handle = han_ch_r.recv().unwrap();
 
         let active = Arc::new(AtomicUsize::new(0));
         let state = Arc::new(State {
@@ -84,12 +69,14 @@ impl Player {
             drop: AtomicBool::new(false),
         });
 
-        let thread_state = state.clone();
-        let thread_active = active.clone();
-        std::thread::spawn(move || track_ender(thread_state, thread_active, signal_next));
+        if let Some(sig) = signal_next {
+            let thread_state = state.clone();
+            let thread_active = active.clone();
+            thread::spawn(move || track_ender(thread_state, thread_active, sig));
+        }
 
         Self {
-            stmterm_s,
+            stm_ex_s,
             stream_handle,
             active,
             state,
@@ -103,7 +90,7 @@ impl Player {
             let active = self.active.clone();
 
             let src = Done::new(
-                get_decoder(track)
+                Decoder::new(track.get_reader())
                     .unwrap()
                     .amplify(1.0)
                     .pausable(false)
@@ -143,7 +130,7 @@ impl Player {
         self.state.stop.store(true, ORD);
         self.state.pause.store(false, ORD);
         while self.active.load(ORD) != 0 {
-            std::thread::sleep(Duration::from_millis(POLL_MS))
+            thread::sleep(Duration::from_millis(POLL_MS))
         }
     }
     pub fn play_pause(&self) {
