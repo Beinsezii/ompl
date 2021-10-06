@@ -1,4 +1,4 @@
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Source, source::Done};
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
@@ -11,14 +11,34 @@ static ORD: Ordering = Ordering::SeqCst;
 static POLL_MS: u64 = 5;
 
 struct State {
-    active: AtomicUsize,
     pause: AtomicBool,
     stop: AtomicBool,
     volume: AtomicU8,
+    drop: AtomicBool,
 }
 
 fn get_decoder(track: &Track) -> Result<Decoder<BufReader<File>>, rodio::decoder::DecoderError> {
     Decoder::new(track.get_reader())
+}
+
+fn track_ender(state: Arc<State>, active: Arc<AtomicUsize>) {
+    let mut cur = (active.load(ORD), state.stop.load(ORD));
+    let mut prev = cur.clone();
+    loop {
+        if state.drop.load(ORD) {
+            break;
+        };
+
+        cur = (active.load(ORD), state.stop.load(ORD));
+        if cur != prev {
+            println!("ACT: {} STOP: {}", cur.0, cur.1);
+            if cur.0 == 0 && !cur.1 {
+                println!("next?");
+            }
+        }
+        prev = cur;
+        std::thread::sleep(Duration::from_millis(POLL_MS));
+    }
 }
 
 pub struct Player {
@@ -26,23 +46,40 @@ pub struct Player {
     stream: OutputStream,
     stream_handle: OutputStreamHandle,
 
+    active: Arc<AtomicUsize>,
     state: Arc<State>,
 
     track: Option<Track>,
 }
 
+impl Drop for Player {
+    fn drop(&mut self) {
+        println!("dropping");
+        self.state.drop.store(true, ORD);
+    }
+}
+
 impl Player {
     pub fn new(track: Option<Track>) -> Self {
         let (stream, stream_handle) = OutputStream::try_default().unwrap();
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let state = Arc::new(State {
+            pause: AtomicBool::new(false),
+            stop: AtomicBool::new(true),
+            volume: AtomicU8::new(5),
+            drop: AtomicBool::new(false),
+        });
+
+        let thread_state = state.clone();
+        let thread_active = active.clone();
+        std::thread::spawn(move || track_ender(thread_state, thread_active));
+
         Self {
             stream,
             stream_handle,
-            state: Arc::new(State {
-                active: AtomicUsize::new(0),
-                pause: AtomicBool::new(false),
-                stop: AtomicBool::new(true),
-                volume: AtomicU8::new(5),
-            }),
+            active,
+            state,
             track,
         }
     }
@@ -50,8 +87,9 @@ impl Player {
     fn start(&mut self) {
         if let Some(track) = self.get_track() {
             let state = self.state.clone();
+            let active = self.active.clone();
 
-            let src = get_decoder(track)
+            let src = Done::new(get_decoder(track)
                 .unwrap()
                 .amplify(1.0)
                 .pausable(false)
@@ -59,7 +97,6 @@ impl Player {
                 .periodic_access(Duration::from_millis(POLL_MS), move |src| {
                     if state.stop.load(ORD) {
                         src.stop();
-                        state.active.store(0, ORD);
                     } else {
                         src.inner_mut()
                             .inner_mut()
@@ -67,10 +104,10 @@ impl Player {
                         src.inner_mut().set_paused(state.pause.load(ORD));
                     }
                 })
-                .convert_samples();
+                .convert_samples(), active);
 
             self.stream_handle.play_raw(src).unwrap();
-            self.state.active.store(1, ORD);
+            self.active.store(1, ORD);
         }
     }
 
@@ -89,8 +126,15 @@ impl Player {
     pub fn stop(&mut self) {
         self.state.stop.store(true, ORD);
         self.state.pause.store(false, ORD);
-        while self.state.active.load(ORD) != 0 {
+        while self.active.load(ORD) != 0 {
             std::thread::sleep(Duration::from_millis(POLL_MS))
+        }
+    }
+    pub fn play_pause(&mut self) {
+        if !self.state.pause.load(ORD) && !self.state.stop.load(ORD) {
+            self.pause();
+        } else {
+            self.play();
         }
     }
     pub fn next(&mut self, next: Option<Track>) {

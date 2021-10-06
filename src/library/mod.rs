@@ -49,6 +49,9 @@ impl Library {
     pub fn stop(&self) {
         self.player.borrow_mut().stop()
     }
+    pub fn play_pause(&self) {
+        self.player.borrow_mut().play_pause();
+    }
     pub fn next(&self) {
         self.player.borrow_mut().next(self.get_random().cloned())
     }

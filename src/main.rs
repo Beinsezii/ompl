@@ -17,6 +17,7 @@ enum Action {
     Play,
     Pause,
     Stop,
+    PlayPause,
     Next,
     Exit,
 }
@@ -79,6 +80,7 @@ fn instance_main(listener: TcpListener) {
                             Action::Next => library.next(),
                             Action::Pause => library.pause(),
                             Action::Play => library.play(),
+                            Action::PlayPause => library.play_pause(),
                             Action::Stop => library.stop(),
                         };
                         response = "success".to_string()
