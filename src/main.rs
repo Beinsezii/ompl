@@ -43,7 +43,7 @@ fn instance_main(listener: TcpListener) {
 
     let library = Library::new(&main_args.library);
 
-    assert!(!library.songs.is_empty());
+    assert!(!library.lock().unwrap().songs.is_empty());
 
     for stream in listener.incoming() {
         match stream {
@@ -69,19 +69,23 @@ fn instance_main(listener: TcpListener) {
                 };
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
-                        match sub_args.action {
-                            Action::Exit => {
-                                // finalize response 2
-                                if let Err(e) = s.write_all(response.as_bytes()) {
-                                    println!("{}", e)
-                                };
-                                break;
-                            }
-                            Action::Next => library.next(),
-                            Action::Pause => library.pause(),
-                            Action::Play => library.play(),
-                            Action::PlayPause => library.play_pause(),
-                            Action::Stop => library.stop(),
+                        if let Ok(mut library) = library.lock() {
+                            match sub_args.action {
+                                Action::Exit => {
+                                    // finalize response 2
+                                    if let Err(e) = s.write_all(response.as_bytes()) {
+                                        println!("{}", e)
+                                    };
+                                    drop(library);
+                                    std::thread::sleep_ms(1000);
+                                    break;
+                                }
+                                Action::Next => library.next(),
+                                Action::Pause => library.pause(),
+                                Action::Play => library.play(),
+                                Action::PlayPause => library.play_pause(),
+                                Action::Stop => library.stop(),
+                            };
                         };
                         response = "success".to_string()
                     }

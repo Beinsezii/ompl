@@ -1,20 +1,31 @@
 mod player;
 mod track;
 use rand::random;
-use std::cell::RefCell;
 use std::path::Path;
 use walkdir::WalkDir;
+
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{SyncSender, Sender, Receiver};
 
 pub use player::Player;
 pub use track::Track;
 
+fn track_nexter(library: Arc<Mutex<Library>>, next_r: Receiver<()>) {
+    loop {
+        match next_r.recv() {
+            Ok(_) => library.lock().unwrap().next(),
+            Err(_) => break,
+        }
+    }
+}
+
 pub struct Library {
     pub songs: Vec<Track>,
-    player: RefCell<Player>,
+    player: Player,
 }
 
 impl Library {
-    pub fn new<T: AsRef<Path>>(path: T) -> Self {
+    pub fn new<T: AsRef<Path>>(path: T) -> Arc<Mutex<Self>> {
         let songs: Vec<Track> = WalkDir::new(path)
             .max_depth(10)
             .into_iter()
@@ -34,26 +45,33 @@ impl Library {
             .map(|e| Track::new(e.path()))
             .collect();
 
-        Self {
-            player: RefCell::new(Player::new(songs.get(0).cloned())),
+        let (next_s, next_r) = std::sync::mpsc::channel();
+        let result = Arc::new(Mutex::new(Self {
+            player: Player::new(songs.get(0).cloned(), next_s),
             songs,
-        }
+        }));
+
+        let result_c = result.clone();
+
+        std::thread::spawn(move || track_nexter(result_c, next_r));
+
+        result
     }
 
     pub fn play(&self) {
-        self.player.borrow_mut().play()
+        self.player.play()
     }
     pub fn pause(&self) {
-        self.player.borrow_mut().pause()
+        self.player.pause()
     }
     pub fn stop(&self) {
-        self.player.borrow_mut().stop()
+        self.player.stop()
     }
     pub fn play_pause(&self) {
-        self.player.borrow_mut().play_pause();
+        self.player.play_pause();
     }
-    pub fn next(&self) {
-        self.player.borrow_mut().next(self.get_random().cloned())
+    pub fn next(&mut self) {
+        self.player.next(self.get_random().cloned())
     }
 
     pub fn get_random<'a>(&'a self) -> Option<&'a Track> {
