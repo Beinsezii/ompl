@@ -20,3 +20,7 @@ opt-level = 1
 [profile.release]
 opt-level = 3
 lto = "fat"
+# From Claxon docs:
+# Note that for decent performance, Claxon should be compiled with -C codegen-units=1
+# on Rust ≥ 1.24.0. Not passing this RUSTFLAG can cause as much as a 45% increase in running time.
+codegen-units = 1
