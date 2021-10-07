@@ -130,8 +130,11 @@ impl Player {
     pub fn stop(&self) {
         self.state.stop.store(true, ORD);
         self.state.pause.store(false, ORD);
-        while self.active.load(ORD) != 0 {
-            thread::sleep(Duration::from_millis(POLL_MS))
+        // sometimes Done doesn't fire. Idk why.
+        let mut breaker = 0;
+        while self.active.load(ORD) != 0 && breaker < std::cmp::max(500/POLL_MS, 10){
+            thread::sleep(Duration::from_millis(POLL_MS));
+            breaker += 1;
         }
     }
     pub fn play_pause(&self) {
@@ -142,9 +145,13 @@ impl Player {
         }
     }
     pub fn next(&mut self, next: Option<Track>) {
+        println!("stopping...");
         self.stop();
+        println!("switching...");
         self.track = next;
+        println!("playing...");
         self.play();
+        println!("done...");
     }
 
     // returns track from
