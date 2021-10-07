@@ -46,7 +46,16 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
         .filter(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| s.ends_with(".mp3") || s.ends_with(".flac"))
+                .map(|s| {
+                    let mut res = false;
+                    for t in player::TYPES.into_iter() {
+                        if s.ends_with(t) {
+                            res = true;
+                            break;
+                        }
+                    }
+                    res
+                })
                 .unwrap_or(false)
         })
         .map(|e| Track::new(e.path()))

@@ -11,6 +11,7 @@ use super::track::Track;
 use super::POLL_MS;
 
 static ORD: Ordering = Ordering::SeqCst;
+pub static TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
 
 struct State {
     pause: AtomicBool,
