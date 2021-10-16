@@ -15,9 +15,9 @@ enum Instance {
 #[derive(Clap, Debug, Clone, Serialize, Deserialize)]
 enum VolumeCmd {
     Get,
-    Add { amount: u8 },
-    Sub { amount: u8 },
-    Set { amount: u8 },
+    Add { amount: f32 },
+    Sub { amount: f32 },
+    Set { amount: f32 },
 }
 
 #[derive(Clap, Debug, Clone, Serialize, Deserialize)]
@@ -111,14 +111,14 @@ fn instance_main(listener: TcpListener) {
                             Action::Stop => library.stop(),
                             Action::Volume(vol_cmd) => match vol_cmd {
                                 VolumeCmd::Get => {
-                                    response = library.volume_get().to_string();
+                                    response = format!("{:.3}", library.volume_get());
                                 }
                                 VolumeCmd::Add { amount } => library.volume_add(amount),
                                 VolumeCmd::Sub { amount } => library.volume_sub(amount),
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
                             Action::Print(print_cmd) => match print_cmd {
-                                PrintCmd::Status => response = "Unimplemented!".to_string(),
+                                PrintCmd::Status => response = format!("{}", library.get_status().read().unwrap()),
                                 PrintCmd::Playing { format_string } => {
                                     response = format!("Unimplemented!\n{}", format_string)
                                 }
