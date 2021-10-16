@@ -44,6 +44,9 @@ struct SubArgs {
 struct MainArgs {
     /// Path to music libary folder
     library: std::path::PathBuf,
+    #[clap(long)]
+    /// Play immediately
+    now: bool,
 }
 
 const ID: &str = "OMPL SERVER 0.1.0";
@@ -56,6 +59,10 @@ fn instance_main(listener: TcpListener) {
     println!("Library loading in {:?}", std::time::Instant::now() - now);
 
     assert!(!library.tracks.is_empty());
+
+    if main_args.now {
+        library.play()
+    }
 
     for stream in listener.incoming() {
         match stream {
