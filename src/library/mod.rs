@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 
 use rand::random;
@@ -16,10 +16,10 @@ pub use track::Track;
 
 pub static POLL_MS: u64 = 5;
 
-fn track_nexter(library: Arc<Mutex<Library>>, next_r: Receiver<()>) {
+fn track_nexter(library: Arc<Library>, next_r: Receiver<()>) {
     loop {
         match next_r.try_recv() {
-            Ok(_) => library.lock().unwrap().next(),
+            Ok(_) => library.next(),
             Err(_) => (),
         }
         // prevent deadlock. Library will never drop cause thread holds it in scope, which prevents
@@ -69,7 +69,7 @@ pub struct Library {
 }
 
 impl Library {
-    pub fn new<T: AsRef<Path>>(path: T) -> Arc<Mutex<Self>> {
+    pub fn new<T: AsRef<Path>>(path: T) -> Arc<Self> {
         let mut tracks = get_tracks(path);
 
         // rayon cuts this down by about 3x on my 4-core machine.
@@ -80,10 +80,10 @@ impl Library {
         tracks.par_iter_mut().for_each(|track| track.load_meta());
 
         let (next_s, next_r) = mpsc::channel();
-        let result = Arc::new(Mutex::new(Self {
+        let result = Arc::new(Self {
             player: Player::new(tracks.get(0).cloned(), Some(next_s)),
             tracks,
-        }));
+        });
 
         let result_c = result.clone();
 
@@ -104,7 +104,7 @@ impl Library {
     pub fn play_pause(&self) {
         self.player.play_pause();
     }
-    pub fn next(&mut self) {
+    pub fn next(&self) {
         self.player.next(self.get_random().cloned())
     }
 

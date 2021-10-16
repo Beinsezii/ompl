@@ -55,7 +55,7 @@ fn instance_main(listener: TcpListener) {
     let library = Library::new(&main_args.library);
     println!("Library loading in {:?}", std::time::Instant::now() - now);
 
-    assert!(!library.lock().unwrap().tracks.is_empty());
+    assert!(!library.tracks.is_empty());
 
     for stream in listener.incoming() {
         match stream {
@@ -81,29 +81,27 @@ fn instance_main(listener: TcpListener) {
                 };
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
-                        if let Ok(mut library) = library.lock() {
-                            match sub_args.action {
-                                Action::Exit => {
-                                    // finalize response 2
-                                    if let Err(e) = s.write_all(response.as_bytes()) {
-                                        println!("{}", e)
-                                    };
-                                    break;
+                        match sub_args.action {
+                            Action::Exit => {
+                                // finalize response 2
+                                if let Err(e) = s.write_all(response.as_bytes()) {
+                                    println!("{}", e)
+                                };
+                                break;
+                            }
+                            Action::Next => library.next(),
+                            Action::Pause => library.pause(),
+                            Action::Play => library.play(),
+                            Action::PlayPause => library.play_pause(),
+                            Action::Stop => library.stop(),
+                            Action::Volume(vol_cmd) => match vol_cmd {
+                                VolumeVar::Get => {
+                                    response = library.volume_get().to_string();
                                 }
-                                Action::Next => library.next(),
-                                Action::Pause => library.pause(),
-                                Action::Play => library.play(),
-                                Action::PlayPause => library.play_pause(),
-                                Action::Stop => library.stop(),
-                                Action::Volume(vol_cmd) => match vol_cmd {
-                                    VolumeVar::Get => {
-                                        response = library.volume_get().to_string();
-                                    }
-                                    VolumeVar::Add { amount } => library.volume_add(amount),
-                                    VolumeVar::Sub { amount } => library.volume_sub(amount),
-                                    VolumeVar::Set { amount } => library.volume_set(amount),
-                                },
-                            };
+                                VolumeVar::Add { amount } => library.volume_add(amount),
+                                VolumeVar::Sub { amount } => library.volume_sub(amount),
+                                VolumeVar::Set { amount } => library.volume_set(amount),
+                            },
                         };
                     }
                     Err(e) => response = format!("Could not deserialize args, {}", e),

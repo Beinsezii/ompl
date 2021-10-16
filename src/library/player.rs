@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 
@@ -45,7 +45,7 @@ pub struct Player {
     active: Arc<AtomicUsize>,
     state: Arc<State>,
 
-    track: Option<Track>,
+    track: RwLock<Option<Track>>,
 }
 
 impl Drop for Player {
@@ -81,7 +81,7 @@ impl Player {
             stream_handle,
             active,
             state,
-            track,
+            track: RwLock::new(track),
         }
     }
 
@@ -144,9 +144,9 @@ impl Player {
             self.play();
         }
     }
-    pub fn next(&mut self, next: Option<Track>) {
+    pub fn next(&self, next: Option<Track>) {
         self.stop();
-        self.track = next;
+        *self.track.write().unwrap() = next;
         self.play();
     }
 
@@ -164,8 +164,7 @@ impl Player {
         self.volume_set(cur - std::cmp::min(amount, cur))
     }
 
-    // returns track from
-    pub fn get_track(&self) -> Option<&Track> {
-        self.track.as_ref()
+    pub fn get_track(&self) -> Option<Track> {
+        self.track.read().unwrap().as_ref().cloned()
     }
 }
