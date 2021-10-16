@@ -164,6 +164,8 @@ fn instance_sub(mut stream: TcpStream) {
 }
 
 fn main() {
+    // I want the port to be change-able but don't know a good way to without buggering the
+    // sub & main args
     let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 18346);
 
     let instance = match TcpListener::bind(socket) {

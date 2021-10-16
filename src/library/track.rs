@@ -97,7 +97,7 @@ impl Track {
         if !self.tags.contains_key("Title") {
             if let Some(path_title) = self.path.file_stem().map(|os_s| os_s.to_str()).flatten() {
                 self.tags
-                    .insert("title".to_string(), path_title.to_string());
+                    .insert("Title".to_string(), path_title.to_string());
             }
         }
     }
