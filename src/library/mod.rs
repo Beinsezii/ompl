@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use rand::random;
+use rayon::prelude::*;
 use walkdir::WalkDir;
 
 mod player;
@@ -69,7 +70,14 @@ pub struct Library {
 
 impl Library {
     pub fn new<T: AsRef<Path>>(path: T) -> Arc<Mutex<Self>> {
-        let tracks = get_tracks(path);
+        let mut tracks = get_tracks(path);
+
+        // rayon cuts this down by about 3x on my 4-core machine.
+        // *should* be good enough for most cases. Assuming you have a recent computer, it'd take
+        // no more than a couple secs for a 10,000 track library. Could probably be optimized
+        // further using a unique solution a la my gimp plugin PixelBuster v2.
+        // Also, WalkDir hits pretty hard. Accounts for 1/3 of runtime after rayon.
+        tracks.par_iter_mut().for_each(|track| track.load_meta());
 
         let (next_s, next_r) = mpsc::channel();
         let result = Arc::new(Mutex::new(Self {

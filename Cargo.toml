@@ -8,12 +8,14 @@ edition = "2018"
 [dependencies]
 rodio = "0.14"
 # pending https://github.com/pdeljanov/Symphonia/pull/61
-symphonia = {git = "https://github.com/Beinsezii/Symphonia.git"}
+# symphonia = {git = "https://github.com/Beinsezii/Symphonia.git"}
+id3 = "0.6"
 clap = "3.0.0-beta.4"
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
 walkdir = "2"
 rand = "0.8"
+rayon = "1"
 # crossterm = "0.21"
 
 [profile.dev]

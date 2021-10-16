@@ -41,13 +41,11 @@ const ID: &str = "OMPL SERVER 0.1.0";
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
 
+    let now = std::time::Instant::now();
     let library = Library::new(&main_args.library);
+    println!("Library loading in {:?}", std::time::Instant::now() - now);
 
     assert!(!library.lock().unwrap().tracks.is_empty());
-
-    // for t in library.lock().unwrap().tracks.iter_mut() {
-    //     t.load_meta();
-    // }
 
     for stream in listener.incoming() {
         match stream {
