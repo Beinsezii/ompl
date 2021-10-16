@@ -108,6 +108,19 @@ impl Library {
         self.player.next(self.get_random().cloned())
     }
 
+    pub fn volume_get(&self) -> u8 {
+        self.player.volume_get()
+    }
+    pub fn volume_set(&self, amount: u8) {
+        self.player.volume_set(amount)
+    }
+    pub fn volume_add(&self, amount: u8) {
+        self.player.volume_add(amount)
+    }
+    pub fn volume_sub(&self, amount: u8) {
+        self.player.volume_sub(amount)
+    }
+
     pub fn get_random<'a>(&'a self) -> Option<&'a Track> {
         self.tracks.get(random::<usize>() % self.tracks.len())
     }

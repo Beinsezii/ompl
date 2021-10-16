@@ -1,4 +1,4 @@
-use clap::{ArgEnum, Clap};
+use clap::Clap;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -12,7 +12,15 @@ enum Instance {
     Sub(TcpStream),
 }
 
-#[derive(ArgEnum, Debug, Clone, Serialize, Deserialize)]
+#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
+enum VolumeVar {
+    Get,
+    Add { amount: u8 },
+    Sub { amount: u8 },
+    Set { amount: u8 },
+}
+
+#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
 enum Action {
     Play,
     Pause,
@@ -20,12 +28,14 @@ enum Action {
     PlayPause,
     Next,
     Exit,
+    #[clap(subcommand)]
+    Volume(VolumeVar),
 }
 
 #[derive(Debug, Clone, Clap, Serialize, Deserialize)]
 #[clap(name = "ompl", version = "0.1.0", author = "Beinsezii")]
 struct SubArgs {
-    #[clap(arg_enum)]
+    #[clap(subcommand)]
     action: Action,
 }
 
@@ -55,8 +65,7 @@ fn instance_main(listener: TcpListener) {
                     continue;
                 };
 
-                #[allow(unused_assignments)]
-                let mut response = String::from("fail");
+                let mut response = String::new();
 
                 // exchange size
                 let mut data = [0u8; std::mem::size_of::<usize>()];
@@ -76,7 +85,6 @@ fn instance_main(listener: TcpListener) {
                             match sub_args.action {
                                 Action::Exit => {
                                     // finalize response 2
-                                    response = "success".to_string();
                                     if let Err(e) = s.write_all(response.as_bytes()) {
                                         println!("{}", e)
                                     };
@@ -87,9 +95,16 @@ fn instance_main(listener: TcpListener) {
                                 Action::Play => library.play(),
                                 Action::PlayPause => library.play_pause(),
                                 Action::Stop => library.stop(),
+                                Action::Volume(vol_cmd) => match vol_cmd {
+                                    VolumeVar::Get => {
+                                        response = library.volume_get().to_string();
+                                    }
+                                    VolumeVar::Add { amount } => library.volume_add(amount),
+                                    VolumeVar::Sub { amount } => library.volume_sub(amount),
+                                    VolumeVar::Set { amount } => library.volume_set(amount),
+                                },
                             };
                         };
-                        response = "success".to_string()
                     }
                     Err(e) => response = format!("Could not deserialize args, {}", e),
                 };
@@ -124,7 +139,9 @@ fn instance_sub(mut stream: TcpStream) {
     // finalize response
     let mut response = String::new();
     stream.read_to_string(&mut response).unwrap();
-    println!("{}", response);
+    if !response.is_empty() {
+        println!("{}", response);
+    }
 }
 
 fn main() {

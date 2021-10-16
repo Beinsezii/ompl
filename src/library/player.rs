@@ -66,7 +66,7 @@ impl Player {
         let state = Arc::new(State {
             pause: AtomicBool::new(false),
             stop: AtomicBool::new(true),
-            volume: AtomicU8::new(5),
+            volume: AtomicU8::new(10),
             drop: AtomicBool::new(false),
         });
 
@@ -148,6 +148,20 @@ impl Player {
         self.stop();
         self.track = next;
         self.play();
+    }
+
+    pub fn volume_get(&self) -> u8 {
+        self.state.volume.load(ORD)
+    }
+    pub fn volume_set(&self, amount: u8) {
+        self.state.volume.store(std::cmp::min(amount, 100), ORD)
+    }
+    pub fn volume_add(&self, amount:u8) {
+        self.volume_set(self.volume_get() + amount)
+    }
+    pub fn volume_sub(&self, amount:u8) {
+        let cur = self.volume_get();
+        self.volume_set(cur - std::cmp::min(amount, cur))
     }
 
     // returns track from
