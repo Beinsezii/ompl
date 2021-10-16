@@ -45,6 +45,10 @@ fn instance_main(listener: TcpListener) {
 
     assert!(!library.lock().unwrap().tracks.is_empty());
 
+    // for t in library.lock().unwrap().tracks.iter_mut() {
+    //     t.load_meta();
+    // }
+
     for stream in listener.incoming() {
         match stream {
             Ok(mut s) => {

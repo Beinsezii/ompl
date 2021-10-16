@@ -145,13 +145,9 @@ impl Player {
         }
     }
     pub fn next(&mut self, next: Option<Track>) {
-        println!("stopping...");
         self.stop();
-        println!("switching...");
         self.track = next;
-        println!("playing...");
         self.play();
-        println!("done...");
     }
 
     // returns track from

@@ -7,6 +7,8 @@ edition = "2018"
 
 [dependencies]
 rodio = "0.14"
+# pending https://github.com/pdeljanov/Symphonia/pull/61
+symphonia = {git = "https://github.com/Beinsezii/Symphonia.git"}
 clap = "3.0.0-beta.4"
 serde = { version = "1", features = ["derive"] }
 bincode = "1"
