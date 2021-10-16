@@ -66,7 +66,7 @@ impl Player {
         let state = Arc::new(State {
             pause: AtomicBool::new(false),
             stop: AtomicBool::new(true),
-            volume: AtomicU8::new(10),
+            volume: AtomicU8::new(50),
             drop: AtomicBool::new(false),
         });
 
@@ -101,7 +101,7 @@ impl Player {
                             src.stop();
                         } else {
                             src.inner_mut().inner_mut().set_factor(
-                                std::cmp::min(state.volume.load(ORD), 100) as f32 / 100.0,
+                                (std::cmp::min(state.volume.load(ORD), 100) as f32 / 100.0).powf(3.0),
                             );
                             src.inner_mut().set_paused(state.pause.load(ORD));
                         }
