@@ -13,11 +13,17 @@ enum Instance {
 }
 
 #[derive(Clap, Debug, Clone, Serialize, Deserialize)]
-enum VolumeVar {
+enum VolumeCmd {
     Get,
     Add { amount: u8 },
     Sub { amount: u8 },
     Set { amount: u8 },
+}
+
+#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
+enum PrintCmd {
+    Status,
+    Playing { format_string: String },
 }
 
 #[derive(Clap, Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +35,9 @@ enum Action {
     Next,
     Exit,
     #[clap(subcommand)]
-    Volume(VolumeVar),
+    Volume(VolumeCmd),
+    #[clap(subcommand)]
+    Print(PrintCmd),
 }
 
 #[derive(Debug, Clone, Clap, Serialize, Deserialize)]
@@ -76,15 +84,15 @@ fn instance_main(listener: TcpListener) {
 
                 // exchange size
                 let mut data = [0u8; std::mem::size_of::<usize>()];
-                if let Err(e) = s.read_exact(&mut data) {
-                    println!("{}", e)
+                if s.read_exact(&mut data).is_err() {
+                    continue
                 };
                 let size: usize = usize::from_be_bytes(data);
 
                 // exchange args
                 let mut data = vec![0u8; size];
-                if let Err(e) = s.read_exact(&mut data) {
-                    println!("{}", e)
+                if s.read_exact(&mut data).is_err() {
+                    continue
                 };
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
@@ -102,23 +110,29 @@ fn instance_main(listener: TcpListener) {
                             Action::PlayPause => library.play_pause(),
                             Action::Stop => library.stop(),
                             Action::Volume(vol_cmd) => match vol_cmd {
-                                VolumeVar::Get => {
+                                VolumeCmd::Get => {
                                     response = library.volume_get().to_string();
                                 }
-                                VolumeVar::Add { amount } => library.volume_add(amount),
-                                VolumeVar::Sub { amount } => library.volume_sub(amount),
-                                VolumeVar::Set { amount } => library.volume_set(amount),
+                                VolumeCmd::Add { amount } => library.volume_add(amount),
+                                VolumeCmd::Sub { amount } => library.volume_sub(amount),
+                                VolumeCmd::Set { amount } => library.volume_set(amount),
+                            },
+                            Action::Print(print_cmd) => match print_cmd {
+                                PrintCmd::Status => response = "Unimplemented!".to_string(),
+                                PrintCmd::Playing { format_string } => {
+                                    response = format!("Unimplemented!\n{}", format_string)
+                                }
                             },
                         };
                     }
-                    Err(e) => response = format!("Could not deserialize args, {}", e),
+                    Err(e) => response = format!("Could not deserialize args\n{}\nOMPL version mismatch?", e),
                 };
                 // finalize response
-                if let Err(e) = s.write_all(response.as_bytes()) {
-                    println!("{}", e)
+                if s.write_all(response.as_bytes()).is_err() {
+                    continue
                 };
             }
-            Err(e) => std::panic::panic_any(e),
+            Err(e) => panic!("Listener panic: {}", e),
         }
     }
 }
