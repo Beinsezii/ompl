@@ -172,7 +172,16 @@ impl Library {
     }
 
     pub fn get_random<'a>(&'a self) -> Option<&'a Track> {
-        self.tracks.get(random::<usize>() % self.tracks.len())
+        match self.tracks.len() {
+            0 => None,
+            1 => Some(&self.tracks[0]),
+            _ => {
+                loop {
+                    let track = Some(&self.tracks[random::<usize>() % self.tracks.len()]);
+                    if track != self.status.read().unwrap().track.as_ref() { break track }
+                }
+            }
+        }
     }
 
     pub fn get_status(&self) -> StatusSync {
