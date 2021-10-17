@@ -84,13 +84,14 @@ impl Player {
     }
 
     fn start(&self) {
-        if let Some(track) = &self.status.read().unwrap().track {
+        let reader = self.status.read().unwrap().track.as_ref().map(|t| t.get_reader());
+        if let Some(reader) = reader {
             let state = self.state.clone();
             let active = self.active.clone();
             let status = self.status.clone();
 
             let src = Done::new(
-                Decoder::new(track.get_reader())
+                Decoder::new(reader)
                     .unwrap()
                     .amplify(1.0)
                     .pausable(false)
