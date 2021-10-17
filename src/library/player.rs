@@ -112,6 +112,7 @@ impl Player {
             self.stream_handle.play_raw(src).unwrap();
             self.state.stop.store(false, ORD);
             self.active.store(1, ORD);
+            self.status.write().unwrap().playing = true;
         }
     }
 
@@ -124,9 +125,10 @@ impl Player {
     pub fn play(&self) {
         if self.state.stop.load(ORD) {
             self.start();
+        } else {
+            self.status.write().unwrap().playing = true;
         }
         self.state.pause.store(false, ORD);
-        self.status.write().unwrap().playing = true; // TODO: something tells me this will break if no track
     }
     pub fn stop(&self) {
         self.state.stop.store(true, ORD);

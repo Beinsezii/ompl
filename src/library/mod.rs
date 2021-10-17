@@ -29,7 +29,11 @@ pub type StatusSync = Arc<RwLock<Status>>;
 
 impl Status {
     pub fn new(playing: bool, track: Option<Track>, volume: f32) -> Self {
-        Self { playing, track, volume}
+        Self {
+            playing,
+            track,
+            volume,
+        }
     }
     pub fn new_sync(playing: bool, track: Option<Track>, volume: f32) -> StatusSync {
         Arc::new(RwLock::new(Self::new(playing, track, volume)))
@@ -38,10 +42,16 @@ impl Status {
 
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{} {:?} {:.3}", match self.playing {
-            true => "playing",
-            false => "stopped",
-        }, self.track, self.volume)
+        write!(
+            f,
+            "{} {:?} {:.3}",
+            match self.playing {
+                true => "playing",
+                false => "stopped",
+            },
+            self.track,
+            self.volume
+        )
     }
 }
 

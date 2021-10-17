@@ -75,7 +75,8 @@ impl Track {
                 // 'custom text' handling
                 if id == "TXXX" {
                     if let id3::Content::ExtendedText(text) = content {
-                        self.tags.insert(text.description.clone(), text.value.clone());
+                        self.tags
+                            .insert(text.description.clone(), text.value.clone());
                     }
                 }
                 // id3 standard tag strings

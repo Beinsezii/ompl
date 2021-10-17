@@ -6,6 +6,9 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 mod library;
 use library::Library;
 
+const ID: &str = "OMPL SERVER 0.1.0";
+const PORT: u16 = 18346;
+
 #[derive(Debug)]
 enum Instance {
     Main(TcpListener),
@@ -57,16 +60,12 @@ struct MainArgs {
     now: bool,
 }
 
-const ID: &str = "OMPL SERVER 0.1.0";
-
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
 
     let now = std::time::Instant::now();
     let library = Library::new(&main_args.library);
     println!("Library loading in {:?}", std::time::Instant::now() - now);
-
-    assert!(!library.tracks.is_empty());
 
     if main_args.now {
         library.play()
@@ -166,7 +165,7 @@ fn instance_sub(mut stream: TcpStream) {
 fn main() {
     // I want the port to be change-able but don't know a good way to without buggering the
     // sub & main args
-    let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 18346);
+    let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), PORT);
 
     let instance = match TcpListener::bind(socket) {
         Ok(v) => Instance::Main(v),
