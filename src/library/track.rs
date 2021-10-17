@@ -47,7 +47,7 @@ const TAG_IDS: &[(&'static str, &'static str)] = &[
     ("TYER", "Year"),
 ];
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {
     path: PathBuf,
     // meta: Option<symphonia::core::meta::MetadataRevision>,
