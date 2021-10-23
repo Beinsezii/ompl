@@ -1,4 +1,4 @@
-use clap::Clap;
+use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -15,7 +15,7 @@ enum Instance {
     Sub(TcpStream),
 }
 
-#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 enum VolumeCmd {
     Get,
     Add { amount: f32 },
@@ -23,13 +23,13 @@ enum VolumeCmd {
     Set { amount: f32 },
 }
 
-#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 enum PrintCmd {
     Status,
     Playing { format_string: String },
 }
 
-#[derive(Clap, Debug, Clone, Serialize, Deserialize)]
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 enum Action {
     Play,
     Pause,
@@ -43,15 +43,15 @@ enum Action {
     Print(PrintCmd),
 }
 
-#[derive(Debug, Clone, Clap, Serialize, Deserialize)]
-#[clap(name = "ompl", version = "0.1.0", author = "Beinsezii")]
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+#[clap(author, about, version)]
 struct SubArgs {
     #[clap(subcommand)]
     action: Action,
 }
 
-#[derive(Debug, Clone, Clap)]
-#[clap(name = "ompl", version = "0.1.0", author = "Beinsezii")]
+#[derive(Parser, Debug, Clone)]
+#[clap(author, about, version)]
 struct MainArgs {
     /// Path to music libary folder
     library: std::path::PathBuf,
