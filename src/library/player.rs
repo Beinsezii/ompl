@@ -8,8 +8,8 @@ use std::time::Duration;
 use rodio::{source::Done, Decoder, OutputStream, OutputStreamHandle, Source};
 
 use super::StatusSync;
-use super::POLL_MS;
 
+static POLL_MS: u64 = 5;
 static ORD: Ordering = Ordering::SeqCst;
 pub static TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
 

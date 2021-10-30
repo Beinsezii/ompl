@@ -85,7 +85,7 @@ impl Track {
                         if t_id == &id {
                             if let id3::Content::Text(t) = content {
                                 // lets you search for either the id3 ID or the 'pretty' name
-                                self.tags.insert(t_str.to_string(), t.to_string());
+                                self.tags.insert(t_str.to_ascii_lowercase().to_string(), t.to_string());
                                 self.tags.insert(t_id.to_string(), t.to_string());
                             }
                             break;
@@ -95,10 +95,10 @@ impl Track {
             }
         }
         // use file stem if no title tag
-        if !self.tags.contains_key("Title") {
+        if !self.tags.contains_key("title") {
             if let Some(path_title) = self.path.file_stem().map(|os_s| os_s.to_str()).flatten() {
                 self.tags
-                    .insert("Title".to_string(), path_title.to_string());
+                    .insert("title".to_string(), path_title.to_string());
             }
         }
     }

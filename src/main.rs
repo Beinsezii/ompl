@@ -58,14 +58,65 @@ struct MainArgs {
     #[clap(long)]
     /// Play immediately
     now: bool,
+    #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
+    filters: Vec<library::Filter>,
+}
+
+#[rustfmt::skip] // it adds a whole lot of lines
+fn parse_filter(s: &str) -> Result<library::Filter, String> {
+    let mut i = s.chars();
+
+    let mut tag = String::new();
+    let mut items = Vec::new();
+
+    let mut switch = false;
+    let mut item_buff = String::new();
+
+    let mut pos = 1;
+
+    loop {
+        match i.next() {
+            Some('\\') => if let Some(c) = i.next() {
+                    if switch { item_buff.push(c) }
+                    else { tag.push(c) };
+                    pos += 1
+            },
+            Some('=') => match switch {
+                false => switch = true,
+                true => return Err(format!(
+                        "Inappropriate equals @ position {} of \"{}\"",
+                        pos, s
+                    ))
+            },
+            Some(',') => match item_buff.is_empty() && switch {
+                false => {
+                    items.push(item_buff);
+                    item_buff = String::new();
+                }
+                true => return Err(format!(
+                        "Inappropriate comma @ position {} of \"{}\"",
+                        pos, s
+                    ))
+            },
+            Some(c) =>
+                if switch { item_buff.push(c) }
+                else { tag.push(c) },
+            None => break,
+        }
+        pos += 1;
+    }
+
+    if !item_buff.is_empty() { items.push(item_buff) }
+
+    Ok(library::Filter { tag, items })
 }
 
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
 
     let now = std::time::Instant::now();
-    let library = Library::new(&main_args.library);
-    println!("Library loading in {:?}", std::time::Instant::now() - now);
+    let library = Library::new(&main_args.library, Some(main_args.filters));
+    println!("Library load in {:?}", std::time::Instant::now() - now);
 
     if main_args.now {
         library.play()
@@ -84,14 +135,14 @@ fn instance_main(listener: TcpListener) {
                 // exchange size
                 let mut data = [0u8; std::mem::size_of::<usize>()];
                 if s.read_exact(&mut data).is_err() {
-                    continue
+                    continue;
                 };
                 let size: usize = usize::from_be_bytes(data);
 
                 // exchange args
                 let mut data = vec![0u8; size];
                 if s.read_exact(&mut data).is_err() {
-                    continue
+                    continue;
                 };
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
@@ -117,18 +168,23 @@ fn instance_main(listener: TcpListener) {
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
                             Action::Print(print_cmd) => match print_cmd {
-                                PrintCmd::Status => response = format!("{}", library.get_status().read().unwrap()),
+                                PrintCmd::Status => {
+                                    response = format!("{}", library.get_status().read().unwrap())
+                                }
                                 PrintCmd::Playing { format_string } => {
                                     response = format!("Unimplemented!\n{}", format_string)
                                 }
                             },
                         };
                     }
-                    Err(e) => response = format!("Could not deserialize args\n{}\nOMPL version mismatch?", e),
+                    Err(e) => {
+                        response =
+                            format!("Could not deserialize args\n{}\nOMPL version mismatch?", e)
+                    }
                 };
                 // finalize response
                 if s.write_all(response.as_bytes()).is_err() {
-                    continue
+                    continue;
                 };
             }
             Err(e) => panic!("Listener panic: {}", e),
