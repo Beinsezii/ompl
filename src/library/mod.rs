@@ -19,7 +19,7 @@ use crate::{l1, l2, log, LOG_LEVEL};
 
 // ## FILTER ## {{{
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub struct Filter {
     pub tag: String,
     pub items: Vec<String>,

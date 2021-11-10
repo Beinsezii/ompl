@@ -137,6 +137,13 @@ enum Action {
     Volume(VolumeCmd),
     #[clap(subcommand)]
     Print(PrintCmd),
+    Filter {
+        #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
+        filters: Vec<library::Filter>,
+        /// Play next track immediately
+        #[clap(long)]
+        now: bool,
+    },
 }
 
 // ### SHARED }}}
@@ -226,13 +233,17 @@ fn instance_main(listener: TcpListener) {
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
                             Action::Print(print_cmd) => match print_cmd {
-                                PrintCmd::Status => {
-                                    response = format!("{:?}", library.track_get())
-                                }
+                                PrintCmd::Status => response = format!("{:?}", library.track_get()),
                                 PrintCmd::Playing { format_string } => {
                                     response = format!("Unimplemented!\n{}", format_string)
                                 }
                             },
+                            Action::Filter { now, filters } => {
+                                library.set_filters(filters);
+                                if now {
+                                    library.next()
+                                }
+                            }
                         };
                     }
                     Err(e) => {
