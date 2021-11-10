@@ -12,53 +12,10 @@ use walkdir::WalkDir;
 mod player;
 mod track;
 
-pub use player::Player;
+pub use player::{Player, TYPES};
 pub use track::Track;
 
 use crate::{l1, l2, log, LOG_LEVEL};
-
-// ## STATUS ## {{{
-//
-#[derive(Clone, Debug)]
-pub struct Status {
-    playing: bool,
-    // playtime. not implemented in player yet.
-    // time: f32,
-    track: Option<Arc<Track>>,
-    volume: f32,
-}
-
-pub type StatusSync = Arc<RwLock<Status>>;
-
-impl Status {
-    pub fn new(playing: bool, track: Option<Arc<Track>>, volume: f32) -> Self {
-        Self {
-            playing,
-            track,
-            volume,
-        }
-    }
-    pub fn new_sync(playing: bool, track: Option<Arc<Track>>, volume: f32) -> StatusSync {
-        Arc::new(RwLock::new(Self::new(playing, track, volume)))
-    }
-}
-
-impl std::fmt::Display for Status {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(
-            f,
-            "{} {:?} {:.3}",
-            match self.playing {
-                true => "playing",
-                false => "stopped",
-            },
-            self.track,
-            self.volume
-        )
-    }
-}
-
-// ## STATUS }}}
 
 // ## FILTER ## {{{
 
@@ -113,7 +70,7 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
                 .to_str()
                 .map(|s| {
                     let mut res = false;
-                    for t in player::TYPES.into_iter() {
+                    for t in TYPES.into_iter() {
                         if s.ends_with(t) {
                             res = true;
                             break;
@@ -139,7 +96,6 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
 pub struct Library {
     pub tracks: Vec<Arc<Track>>,
     player: Player,
-    status: StatusSync,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
 }
 
@@ -162,12 +118,10 @@ impl Library {
 
         let tracks: Vec<Arc<Track>> = tracks.into_iter().map(|t| Arc::new(t)).collect();
 
-        let status = Status::new_sync(false, None, 0.5f32.powi(3));
 
         let (next_s, next_r) = mpsc::channel();
         let result = Arc::new(Self {
-            player: Player::new(status.clone(), Some(next_s)),
-            status,
+            player: Player::new(None, Some(next_s)),
             tracks,
             filtered_tree: RwLock::new(Vec::new()),
         });
@@ -175,7 +129,8 @@ impl Library {
         if let Some(f) = initial_filters {
             result.set_filters(f)
         }
-        result.status.write().unwrap().track = result.get_random();
+        result.player.track_set(result.get_random());
+        result.volume_set(0.5);
 
         let result_c = result.clone();
 
@@ -198,30 +153,32 @@ impl Library {
         self.player.stop()
     }
     pub fn play_pause(&self) {
-        // matching on the read will hold the lock that pause/play need
-        let playing = self.status.read().unwrap().playing;
-        match playing {
+        match self.player.active() {
             true => self.pause(),
             false => self.play(),
         }
     }
     pub fn next(&self) {
         self.stop();
-        self.status.write().unwrap().track = self.get_random();
+        self.player.track_set(self.get_random());
         self.play();
     }
 
     pub fn volume_get(&self) -> f32 {
-        self.status.read().unwrap().volume.cbrt()
+        self.player.volume_get()
     }
-    pub fn volume_set(&self, amount: f32) {
-        self.status.write().unwrap().volume = 0.0f32.max(1.0f32.min(amount.powi(3)));
+    pub fn volume_set(&self, volume: f32) {
+        self.player.volume_set(volume);
     }
     pub fn volume_add(&self, amount: f32) {
         self.volume_set(self.volume_get() + amount);
     }
     pub fn volume_sub(&self, amount: f32) {
         self.volume_set(self.volume_get() - amount);
+    }
+
+    pub fn track_get(&self) -> Option<Arc<Track>> {
+        self.player.track_get()
     }
 
     // ## CONTROLS ## }}}
@@ -285,15 +242,11 @@ impl Library {
             1 => Some(tracks[0].clone()),
             _ => loop {
                 let track = Some(&tracks[random::<usize>() % tracks.len()]);
-                if track != self.status.read().unwrap().track.as_ref() {
+                if track != self.track_get().as_ref() {
                     break track.cloned();
                 }
             },
         }
-    }
-
-    pub fn get_status(&self) -> StatusSync {
-        self.status.clone()
     }
 
     // ## GET/SET ## }}}

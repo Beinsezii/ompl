@@ -227,7 +227,7 @@ fn instance_main(listener: TcpListener) {
                             },
                             Action::Print(print_cmd) => match print_cmd {
                                 PrintCmd::Status => {
-                                    response = format!("{}", library.get_status().read().unwrap())
+                                    response = format!("{:?}", library.track_get())
                                 }
                                 PrintCmd::Playing { format_string } => {
                                     response = format!("Unimplemented!\n{}", format_string)

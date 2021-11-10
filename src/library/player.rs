@@ -1,35 +1,30 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender, SyncSender};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rodio::{source::Done, Decoder, OutputStream, OutputStreamHandle, Source};
+use rodio::{OutputStream, OutputStreamHandle, Sink};
 
-use super::StatusSync;
+use super::track::Track;
 
-use crate::{l1, l2, l4, log, LOG_LEVEL};
+use crate::{l1, l2, log, LOG_LEVEL};
 
-static PLAYBACK_DEBUG: AtomicUsize = AtomicUsize::new(0);
 const POLL_MS: u64 = 5;
-const ORD: Ordering = Ordering::SeqCst;
 pub const TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
-
-struct State {
-    pause: AtomicBool,
-    stop: AtomicBool,
-    drop: AtomicBool,
-}
 
 // ### BG TASKS ### {{{
 
-fn track_ender(state: Arc<State>, active: Arc<AtomicUsize>, signal_next: Sender<()>) {
+fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: Sender<()>) {
     l2!("Track Ender start");
-    while !state.drop.load(ORD) {
-        if active.load(ORD) == 0 && !state.stop.load(ORD) {
-            if let Err(_) = signal_next.send(()) {
-                break;
+    loop {
+        if let Some(sink) = &*sink.read().unwrap() {
+            if sink.empty() {
+                if let Err(_) = signal_next.send(()) {
+                    break;
+                } else {
+                    l2!("Next track!");
+                }
             }
         }
 
@@ -51,23 +46,20 @@ fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
 pub struct Player {
     stream_handle: OutputStreamHandle,
     stm_ex_s: SyncSender<()>,
-
-    active: Arc<AtomicUsize>,
-    state: Arc<State>,
-
-    status: StatusSync,
+    volume_retained: RwLock<f32>,
+    sink: Arc<RwLock<Option<Sink>>>,
+    track: RwLock<Option<Arc<Track>>>,
 }
 
 impl Drop for Player {
     fn drop(&mut self) {
-        self.state.drop.store(true, ORD);
         self.stm_ex_s.send(()).unwrap();
     }
 }
 
 impl Player {
     // # new # {{{
-    pub fn new(status: StatusSync, signal_next: Option<Sender<()>>) -> Self {
+    pub fn new(track: Option<Arc<Track>>, signal_next: Option<Sender<()>>) -> Self {
         l2!("Constructing Player...");
         let now = Instant::now();
 
@@ -76,25 +68,19 @@ impl Player {
         thread::spawn(|| stream(han_ch_s, stm_ex_r));
         let stream_handle = han_ch_r.recv().unwrap();
 
-        let active = Arc::new(AtomicUsize::new(0));
-        let state = Arc::new(State {
-            pause: AtomicBool::new(false),
-            stop: AtomicBool::new(true),
-            drop: AtomicBool::new(false),
-        });
+        let sink = Arc::new(RwLock::new(None));
 
         if let Some(sig) = signal_next {
-            let thread_state = state.clone();
-            let thread_active = active.clone();
-            thread::spawn(move || track_ender(thread_state, thread_active, sig));
+            let thread_sink = sink.clone();
+            thread::spawn(move || track_ender(thread_sink, sig));
         }
 
         let player = Self {
             stm_ex_s,
             stream_handle,
-            active,
-            state,
-            status,
+            volume_retained: RwLock::new(1.0f32),
+            sink,
+            track: RwLock::new(track),
         };
 
         l1!(format!("Player built in {:?}", Instant::now() - now));
@@ -103,102 +89,86 @@ impl Player {
     }
     // # new # }}}
 
-    // # start # {{{
+    // ## PLAYBACK ## {{{
+
     fn start(&self) {
-        let reader = self
-            .status
+        if let Some(reader) = self
+            .track
             .read()
             .unwrap()
-            .track
             .as_ref()
-            .map(|t| t.get_reader());
-        if let Some(reader) = reader {
-            PLAYBACK_DEBUG.store(0, ORD);
-            let state = self.state.clone();
-            let active = self.active.clone();
-            let status = self.status.clone();
-            let title = status
-                .read()
-                .unwrap()
-                .track
-                .as_ref()
-                .unwrap()
-                .tags()
-                .get("title")
-                .unwrap_or(&"???".to_string())
-                .clone();
-            l2!(format!("Starting track \"{}\"...", &title));
-
-            let src = Done::new(
-                Decoder::new(reader)
-                    .unwrap()
-                    .amplify(1.0)
-                    .pausable(false)
-                    .stoppable()
-                    .periodic_access(Duration::from_millis(POLL_MS), move |src| {
-                        if state.stop.load(ORD) {
-                            src.stop();
-                        } else {
-                            src.inner_mut()
-                                .inner_mut()
-                                .set_factor(status.read().unwrap().volume);
-                            src.inner_mut().set_paused(state.pause.load(ORD));
-                        }
-                        let iters = PLAYBACK_DEBUG.fetch_add(1, ORD);
-                        if iters > 100 {
-                            l4!("100 playback iterations!!!");
-                            PLAYBACK_DEBUG.store(0, ORD);
-                        }
-                    })
-                    .convert_samples(),
-                active,
-            );
-
-            self.stream_handle.play_raw(src).unwrap();
-            self.state.stop.store(false, ORD);
-            self.active.store(1, ORD);
-            self.status.write().unwrap().playing = true;
+            .map(|t| t.get_reader())
+        {
+            match self.stream_handle.play_once(reader) {
+                Ok(sink) => {
+                    sink.set_volume(*self.volume_retained.read().unwrap());
+                    *self.sink.write().unwrap() = Some(sink);
+                }
+                Err(e) => panic!("{}", e),
+            };
         }
     }
-    // # start # }}}
 
-    // ## PLAYBACK ## {{{
     pub fn pause(&self) {
         l2!("Pausing...");
-        if !self.state.stop.load(ORD) {
-            self.state.pause.store(true, ORD);
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            sink.pause()
         }
-        self.status.write().unwrap().playing = false;
         l2!("Paused");
     }
 
     pub fn play(&self) {
         l2!("Starting playback...");
-        if self.state.stop.load(ORD) {
-            self.start();
-        } else {
-            self.status.write().unwrap().playing = true;
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            if sink.is_paused() && !sink.empty() {
+                sink.play();
+                return;
+            } else if !sink.empty() {
+                // theoretically should be playing???
+                return;
+            }
         }
-        self.state.pause.store(false, ORD);
-        l2!("Playing");
+        self.start();
+        println!("Playing");
     }
 
     pub fn stop(&self) {
         l2!("Stopping...");
-        self.state.stop.store(true, ORD);
-        self.state.pause.store(false, ORD);
-        // sometimes Done doesn't fire. Idk why.
-        let mut breaker = 0;
-        while self.active.load(ORD) != 0 {
-            thread::sleep(Duration::from_millis(POLL_MS));
-            if breaker > 500 / POLL_MS {
-                l2!("Harsh stop!");
-                break;
-            }
-            breaker += 1;
-        }
-        self.status.write().unwrap().playing = false;
+        *self.sink.write().unwrap() = None;
         l2!("Stopped");
     }
     // ## PLAYBACK ## }}}
+
+    // ## GET/SET ## {{{
+
+    pub fn volume_get(&self) -> f32 {
+        self.volume_retained.read().unwrap().cbrt()
+    }
+    pub fn volume_set(&self, volume: f32) {
+        let volume = 0.0f32.max(1.0f32.min(volume.powi(3)));
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            sink.set_volume(volume)
+        }
+        *self.volume_retained.write().unwrap() = volume;
+    }
+
+    pub fn track_set(&self, track: Option<Arc<Track>>) {
+        *self.track.write().unwrap() = track;
+    }
+    pub fn track_get(&self) -> Option<Arc<Track>> {
+        self.track.read().unwrap().as_ref().cloned()
+    }
+
+    // ## GET/SET ## }}}
+
+    // ## STATUS ## {{{
+
+    pub fn active(&self) -> bool {
+        match &*self.sink.read().unwrap() {
+            Some(sink) => !sink.empty() && !sink.is_paused(),
+            None => false,
+        }
+    }
+
+    // ## STATUS ## }}}
 }
