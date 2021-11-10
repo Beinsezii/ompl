@@ -17,6 +17,8 @@ pub use track::Track;
 
 use crate::{l1, l2, log, LOG_LEVEL};
 
+// ## STATUS ## {{{
+//
 #[derive(Clone, Debug)]
 pub struct Status {
     playing: bool,
@@ -56,6 +58,10 @@ impl std::fmt::Display for Status {
     }
 }
 
+// ## STATUS }}}
+
+// ## FILTER ## {{{
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Filter {
     pub tag: String,
@@ -67,6 +73,10 @@ pub struct FilteredTracks {
     pub filter: Filter,
     pub tracks: Vec<Arc<Track>>,
 }
+
+// ## FILTER ## }}}
+
+// ### FNs ### {{{
 
 fn track_nexter(library: &Arc<Library>, next_r: Receiver<()>) {
     l2!("Track Nexter start");
@@ -124,6 +134,8 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
+// ### FNs ### }}}
+
 pub struct Library {
     pub tracks: Vec<Arc<Track>>,
     player: Player,
@@ -132,6 +144,7 @@ pub struct Library {
 }
 
 impl Library {
+    // # new # {{{
     pub fn new<T: AsRef<Path>>(path: T, initial_filters: Option<Vec<Filter>>) -> Arc<Self> {
         l2!("Constructing library...");
         let lib_now = Instant::now();
@@ -172,7 +185,9 @@ impl Library {
 
         result
     }
+    // # new # }}}
 
+    // ## CONTROLS ## {{{
     pub fn play(&self) {
         self.player.play()
     }
@@ -209,6 +224,9 @@ impl Library {
         self.volume_set(self.volume_get() - amount);
     }
 
+    // ## CONTROLS ## }}}
+
+    // # set_filters # {{{
     pub fn set_filters(&self, filters: Vec<Filter>) {
         l2!("Updating filters...");
         let now = Instant::now();
@@ -247,6 +265,9 @@ impl Library {
         *self.filtered_tree.write().unwrap() = filtered_tree;
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
+    // # set_filters # }}}
+
+    // ## GET/SET ## {{{
 
     pub fn get_random(&self) -> Option<Arc<Track>> {
         l2!("Getting random track...");
@@ -274,4 +295,6 @@ impl Library {
     pub fn get_status(&self) -> StatusSync {
         self.status.clone()
     }
+
+    // ## GET/SET ## }}}
 }

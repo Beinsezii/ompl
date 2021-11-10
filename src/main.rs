@@ -9,64 +9,7 @@ use library::Library;
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
 
-#[derive(Debug)]
-enum Instance {
-    Main(TcpListener),
-    Sub(TcpStream),
-}
-
-#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum VolumeCmd {
-    Get,
-    Add { amount: f32 },
-    Sub { amount: f32 },
-    Set { amount: f32 },
-}
-
-#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum PrintCmd {
-    Status,
-    Playing { format_string: String },
-}
-
-#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum Action {
-    Play,
-    Pause,
-    Stop,
-    PlayPause,
-    Next,
-    Exit,
-    #[clap(subcommand)]
-    Volume(VolumeCmd),
-    #[clap(subcommand)]
-    Print(PrintCmd),
-}
-
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-#[clap(author, about, version)]
-struct SubArgs {
-    #[clap(subcommand)]
-    action: Action,
-}
-
-#[derive(Parser, Debug, Clone)]
-#[clap(author, about, version)]
-struct MainArgs {
-    /// Path to music libary folder
-    library: std::path::PathBuf,
-    #[clap(long)]
-
-    /// Play immediately
-    now: bool,
-
-    #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
-    filters: Vec<library::Filter>,
-
-    /// Verbosity level. Pass multiple times to get more verbose (spammy).
-    #[clap(long, short, multiple_occurrences(true), parse(from_occurrences))]
-    verbosity: u8,
-}
+// ### LOGGING ### {{{
 
 /// Easy logging across modules
 static LOG_LEVEL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
@@ -104,6 +47,10 @@ macro_rules! l3 {
 macro_rules! l4 {
     ($($info:expr),*) => {log!(4, $($info)*)}
 }
+
+// ### LOGGING ### }}}
+
+// ### PARSERS ### {{{
 
 #[rustfmt::skip] // it adds a whole lot of lines
 fn parse_filter(s: &str) -> Result<library::Filter, String> {
@@ -154,6 +101,66 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
     Ok(library::Filter { tag, items })
 }
 
+// ### PARSERS ### }}}
+
+// ### SHARED {{{
+
+#[derive(Debug)]
+enum Instance {
+    Main(TcpListener),
+    Sub(TcpStream),
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+enum VolumeCmd {
+    Get,
+    Add { amount: f32 },
+    Sub { amount: f32 },
+    Set { amount: f32 },
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+enum PrintCmd {
+    Status,
+    Playing { format_string: String },
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+enum Action {
+    Play,
+    Pause,
+    Stop,
+    PlayPause,
+    Next,
+    Exit,
+    #[clap(subcommand)]
+    Volume(VolumeCmd),
+    #[clap(subcommand)]
+    Print(PrintCmd),
+}
+
+// ### SHARED }}}
+
+// ### SERVER ### {{{
+
+#[derive(Parser, Debug, Clone)]
+#[clap(author, about, version)]
+struct MainArgs {
+    /// Path to music libary folder
+    library: std::path::PathBuf,
+    #[clap(long)]
+
+    /// Play immediately
+    now: bool,
+
+    #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
+    filters: Vec<library::Filter>,
+
+    /// Verbosity level. Pass multiple times to get more verbose (spammy).
+    #[clap(long, short, multiple_occurrences(true), parse(from_occurrences))]
+    verbosity: u8,
+}
+
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
     LOG_LEVEL.store(main_args.verbosity, std::sync::atomic::Ordering::Relaxed);
@@ -171,6 +178,7 @@ fn instance_main(listener: TcpListener) {
         l2!("Found client");
         match stream {
             Ok(mut s) => {
+                // # Get Data # {{{
                 // confirmation ID
                 if s.write_all(ID.as_bytes()).is_err() {
                     continue;
@@ -190,6 +198,9 @@ fn instance_main(listener: TcpListener) {
                 if s.read_exact(&mut data).is_err() {
                     continue;
                 };
+                // # Get Data # }}}
+
+                // # Process # {{{
                 l2!("Processing command...");
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
@@ -229,6 +240,8 @@ fn instance_main(listener: TcpListener) {
                             format!("Could not deserialize args\n{}\nOMPL version mismatch?", e)
                     }
                 };
+                // # Process # }}}
+
                 // finalize response
                 if s.write_all(response.as_bytes()).is_err() {
                     continue;
@@ -239,6 +252,17 @@ fn instance_main(listener: TcpListener) {
         l2!("End client connection");
     }
     l2!("Exiting");
+}
+
+// ### SERVER ### }}}
+
+// ### CLIENT ### {{{
+
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+#[clap(author, about, version)]
+struct SubArgs {
+    #[clap(subcommand)]
+    action: Action,
 }
 
 fn instance_sub(mut stream: TcpStream) {
@@ -267,6 +291,9 @@ fn instance_sub(mut stream: TcpStream) {
     }
 }
 
+// ### CLIENT ### }}}
+
+// ### MAIN ### {{{
 fn main() {
     // I want the port to be change-able but don't know a good way to without buggering the
     // sub & main args
@@ -285,3 +312,4 @@ fn main() {
         Instance::Sub(s) => instance_sub(s),
     }
 }
+// ### MAIN ### }}}

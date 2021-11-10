@@ -22,6 +22,8 @@ struct State {
     drop: AtomicBool,
 }
 
+// ### BG TASKS ### {{{
+
 fn track_ender(state: Arc<State>, active: Arc<AtomicUsize>, signal_next: Sender<()>) {
     l2!("Track Ender start");
     while !state.drop.load(ORD) {
@@ -44,6 +46,8 @@ fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
     l2!("Stream end");
 }
 
+// ### BG TASKS ### }}}
+
 pub struct Player {
     stream_handle: OutputStreamHandle,
     stm_ex_s: SyncSender<()>,
@@ -62,6 +66,7 @@ impl Drop for Player {
 }
 
 impl Player {
+    // # new # {{{
     pub fn new(status: StatusSync, signal_next: Option<Sender<()>>) -> Self {
         l2!("Constructing Player...");
         let now = Instant::now();
@@ -96,7 +101,9 @@ impl Player {
 
         player
     }
+    // # new # }}}
 
+    // # start # {{{
     fn start(&self) {
         let reader = self
             .status
@@ -153,7 +160,9 @@ impl Player {
             self.status.write().unwrap().playing = true;
         }
     }
+    // # start # }}}
 
+    // ## PLAYBACK ## {{{
     pub fn pause(&self) {
         l2!("Pausing...");
         if !self.state.stop.load(ORD) {
@@ -162,6 +171,7 @@ impl Player {
         self.status.write().unwrap().playing = false;
         l2!("Paused");
     }
+
     pub fn play(&self) {
         l2!("Starting playback...");
         if self.state.stop.load(ORD) {
@@ -172,6 +182,7 @@ impl Player {
         self.state.pause.store(false, ORD);
         l2!("Playing");
     }
+
     pub fn stop(&self) {
         l2!("Stopping...");
         self.state.stop.store(true, ORD);
@@ -189,4 +200,5 @@ impl Player {
         self.status.write().unwrap().playing = false;
         l2!("Stopped");
     }
+    // ## PLAYBACK ## }}}
 }
