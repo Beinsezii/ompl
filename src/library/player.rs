@@ -129,7 +129,7 @@ impl Player {
             }
         }
         self.start();
-        println!("Playing");
+        l2!("Playing");
     }
 
     pub fn stop(&self) {
