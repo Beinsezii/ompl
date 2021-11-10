@@ -3,6 +3,7 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
+use std::time::Instant;
 
 use rand::random;
 use rayon::prelude::*;
@@ -13,6 +14,8 @@ mod track;
 
 pub use player::Player;
 pub use track::Track;
+
+use crate::{l1, l2, log, LOG_LEVEL};
 
 #[derive(Clone, Debug)]
 pub struct Status {
@@ -66,6 +69,7 @@ pub struct FilteredTracks {
 }
 
 fn track_nexter(library: &Arc<Library>, next_r: Receiver<()>) {
+    l2!("Track Nexter start");
     let library = Arc::downgrade(&library);
     loop {
         match next_r.recv() {
@@ -77,10 +81,14 @@ fn track_nexter(library: &Arc<Library>, next_r: Receiver<()>) {
             Err(_) => break,
         }
     }
+    l2!("Track Nexter end");
 }
 
 pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
-    WalkDir::new(path)
+    l2!("Finding tracks...");
+    let now = Instant::now();
+
+    let tracks: Vec<Track> = WalkDir::new(path)
         .max_depth(10)
         .into_iter()
         .filter_entry(|e| {
@@ -106,7 +114,14 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
                 .unwrap_or(false)
         })
         .map(|e| Track::new(e.path()))
-        .collect()
+        .collect();
+
+    l1!(format!(
+        "Found {} tracks in {:?}",
+        tracks.len(),
+        Instant::now() - now
+    ));
+    tracks
 }
 
 pub struct Library {
@@ -118,14 +133,19 @@ pub struct Library {
 
 impl Library {
     pub fn new<T: AsRef<Path>>(path: T, initial_filters: Option<Vec<Filter>>) -> Arc<Self> {
+        l2!("Constructing library...");
+        let lib_now = Instant::now();
         let mut tracks: Vec<Track> = get_tracks(path);
 
+        l2!("Fetching metadata...");
+        let met_now = Instant::now();
         // rayon cuts this down by about 3x on my 4-core machine.
         // *should* be good enough for most cases. Assuming you have a recent computer, it'd take
         // no more than a couple secs for a 10,000 track library. Could probably be optimized
         // further using a unique solution a la my gimp plugin PixelBuster v2.
         // Also, WalkDir hits pretty hard. Accounts for 1/3 of runtime after rayon.
         tracks.par_iter_mut().for_each(|track| track.load_meta());
+        l1!(format!("Metadata loaded in {:?}", Instant::now() - met_now));
 
         let tracks: Vec<Arc<Track>> = tracks.into_iter().map(|t| Arc::new(t)).collect();
 
@@ -139,12 +159,16 @@ impl Library {
             filtered_tree: RwLock::new(Vec::new()),
         });
 
-        if let Some(f) = initial_filters { result.set_filters(f) }
+        if let Some(f) = initial_filters {
+            result.set_filters(f)
+        }
         result.status.write().unwrap().track = result.get_random();
 
         let result_c = result.clone();
 
         thread::spawn(move || track_nexter(&result_c, next_r));
+
+        l1!(format!("Library built in {:?}", Instant::now() - lib_now));
 
         result
     }
@@ -186,6 +210,8 @@ impl Library {
     }
 
     pub fn set_filters(&self, filters: Vec<Filter>) {
+        l2!("Updating filters...");
+        let now = Instant::now();
         let mut cache = true;
         let mut filtered_tree = Vec::<FilteredTracks>::new();
 
@@ -219,9 +245,11 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
+        l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
 
     pub fn get_random(&self) -> Option<Arc<Track>> {
+        l2!("Getting random track...");
         let mut tracks = self.tracks.clone();
 
         for ft in self.filtered_tree.read().unwrap().iter().rev() {

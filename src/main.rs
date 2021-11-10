@@ -56,10 +56,53 @@ struct MainArgs {
     /// Path to music libary folder
     library: std::path::PathBuf,
     #[clap(long)]
+
     /// Play immediately
     now: bool,
+
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
+
+    /// Verbosity level. Pass multiple times to get more verbose (spammy).
+    #[clap(long, short, multiple_occurrences(true), parse(from_occurrences))]
+    verbosity: u8,
+}
+
+/// Easy logging across modules
+static LOG_LEVEL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+#[macro_export]
+macro_rules! log {
+    ($v:expr, $($info:expr),*) => {
+        if LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) >= $v {
+            $(
+                print!("{} ", $info);
+                )*
+            println!();
+        }
+    };
+}
+
+// Must build individually: https://github.com/rust-lang/rust/issues/35853
+#[macro_export]
+/// Level 1 is more intended for performance metrics
+macro_rules! l1 {
+    ($($info:expr),*) => {log!(1, $($info)*)}
+}
+#[macro_export]
+/// Level 2 is the 'rubber duck' level that walks you through the program
+macro_rules! l2 {
+    ($($info:expr),*) => {log!(2, $($info)*)}
+}
+#[macro_export]
+/// Level 3 is for dumping various bits of information
+macro_rules! l3 {
+    ($($info:expr),*) => {log!(3, $($info)*)}
+}
+#[macro_export]
+/// Level 4 is for spamming the shit out of your terminal in a last-resort attempt at debugging
+macro_rules! l4 {
+    ($($info:expr),*) => {log!(4, $($info)*)}
 }
 
 #[rustfmt::skip] // it adds a whole lot of lines
@@ -113,16 +156,19 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
 
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
+    LOG_LEVEL.store(main_args.verbosity, std::sync::atomic::Ordering::Relaxed);
 
-    let now = std::time::Instant::now();
+    l2!("Starting main...");
+
     let library = Library::new(&main_args.library, Some(main_args.filters));
-    println!("Library load in {:?}", std::time::Instant::now() - now);
 
     if main_args.now {
         library.play()
     }
 
+    l2!(format!("Listening on port {}", PORT));
     for stream in listener.incoming() {
+        l2!("Found client");
         match stream {
             Ok(mut s) => {
                 // confirmation ID
@@ -144,6 +190,7 @@ fn instance_main(listener: TcpListener) {
                 if s.read_exact(&mut data).is_err() {
                     continue;
                 };
+                l2!("Processing command...");
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
                         match sub_args.action {
@@ -189,7 +236,9 @@ fn instance_main(listener: TcpListener) {
             }
             Err(e) => panic!("Listener panic: {}", e),
         }
+        l2!("End client connection");
     }
+    l2!("Exiting");
 }
 
 fn instance_sub(mut stream: TcpStream) {
