@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::sync::atomic::{Ordering, AtomicU8};
 
 mod library;
 use library::Library;
@@ -12,11 +13,13 @@ const PORT: u16 = 18346;
 // ### LOGGING ### {{{
 
 /// Easy logging across modules
-static LOG_LEVEL: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+static LOG_LEVEL: AtomicU8 = AtomicU8::new(0);
+const LOG_ORD: Ordering = Ordering::Relaxed;
 
 #[macro_export]
 macro_rules! log {
     ($v:expr, $($info:expr),*) => {
+        // ???
         if LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) >= $v {
             $(
                 print!("{} ", $info);
@@ -144,6 +147,7 @@ enum Action {
         #[clap(long)]
         now: bool,
     },
+    Verbosity{verbosity: u8},
 }
 
 // ### SHARED }}}
@@ -170,7 +174,7 @@ struct MainArgs {
 
 fn instance_main(listener: TcpListener) {
     let main_args = MainArgs::parse();
-    LOG_LEVEL.store(main_args.verbosity, std::sync::atomic::Ordering::Relaxed);
+    LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
     l2!("Starting main...");
 
@@ -244,6 +248,7 @@ fn instance_main(listener: TcpListener) {
                                     library.next()
                                 }
                             }
+                            Action::Verbosity{verbosity} => LOG_LEVEL.store(verbosity, LOG_ORD)
                         };
                     }
                     Err(e) => {
