@@ -1,6 +1,4 @@
 use std::path::Path;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Instant;
@@ -8,6 +6,9 @@ use std::time::Instant;
 use rand::random;
 use rayon::prelude::*;
 use walkdir::WalkDir;
+
+use crossbeam::channel;
+use crossbeam::channel::{Receiver, Sender};
 
 mod player;
 mod track;
@@ -150,7 +151,7 @@ impl Library {
 
         let tracks: Vec<Arc<Track>> = tracks.into_iter().map(|t| Arc::new(t)).collect();
 
-        let (next_s, next_r) = mpsc::channel();
+        let (next_s, next_r) = channel::bounded(1);
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
             tracks,
@@ -178,8 +179,8 @@ impl Library {
         initial_filters: Option<Vec<Filter>>,
     ) -> (Sender<Command>, Receiver<Response>) {
         let library = Self::new(path, initial_filters);
-        let (com_send, com_recv) = mpsc::channel::<Command>();
-        let (resp_send, resp_recv) = mpsc::channel::<Response>();
+        let (com_send, com_recv) = channel::bounded::<Command>(1);
+        let (resp_send, resp_recv) = channel::bounded::<Response>(1);
 
         thread::spawn(move || loop {
             match com_recv.recv() {

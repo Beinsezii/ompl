@@ -6,15 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rodio = "0.14"
-id3 = "0.6"
-clap = "3.0.0-beta.5"
-serde = { version = "1", features = ["derive"] }
 bincode = "1"
-walkdir = "2"
+clap = "3.0.0-beta.5"
+crossbeam = "0.8"
+crossterm = "0.22"
+id3 = "0.6"
 rand = "0.8"
 rayon = "1"
-# crossterm = "0.21"
+rodio = "0.14"
+serde = { version = "1", features = ["derive"] }
+walkdir = "2"
 
 [profile.dev]
 opt-level = 1

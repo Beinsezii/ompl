@@ -113,9 +113,9 @@ impl Track {
         &self.tags
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
+    // pub fn path(&self) -> &PathBuf {
+    //     &self.path
+    // }
 
     // ## GET / SET ## }}}
 }

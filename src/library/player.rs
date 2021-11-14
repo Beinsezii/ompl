@@ -1,10 +1,11 @@
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
+
+use crossbeam::channel;
+use crossbeam::channel::{Receiver, Sender};
 
 use super::track::Track;
 
@@ -45,7 +46,7 @@ fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
 
 pub struct Player {
     stream_handle: OutputStreamHandle,
-    stm_ex_s: SyncSender<()>,
+    stm_ex_s: Sender<()>,
     volume_retained: RwLock<f32>,
     sink: Arc<RwLock<Option<Sink>>>,
     track: RwLock<Option<Arc<Track>>>,
@@ -63,8 +64,8 @@ impl Player {
         l2!("Constructing Player...");
         let now = Instant::now();
 
-        let (han_ch_s, han_ch_r) = mpsc::channel();
-        let (stm_ex_s, stm_ex_r) = mpsc::sync_channel(0);
+        let (han_ch_s, han_ch_r) = channel::bounded(1);
+        let (stm_ex_s, stm_ex_r) = channel::bounded(1);
         thread::spawn(|| stream(han_ch_s, stm_ex_r));
         let stream_handle = han_ch_r.recv().unwrap();
 

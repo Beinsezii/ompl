@@ -3,11 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
 mod library;
 use library::{Command, Library, Response};
+mod tui;
+
+use crossbeam::channel;
+use crossbeam::channel::{Receiver, Sender};
 
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
@@ -176,11 +179,16 @@ struct MainArgs {
     verbosity: u8,
 }
 
-fn server(listener: TcpListener, send: Sender<Command>, recv: Receiver<Response>) {
-    let snd = |com: Command| send.send(com).unwrap();
+fn server(
+    listener: TcpListener,
+    lib_send: Sender<Command>,
+    lib_recv: Receiver<Response>,
+    cli_send: Sender<()>,
+) {
+    let snd = |com: Command| lib_send.send(com).unwrap();
     let sndrec = |com: Command| {
-        send.send(com).unwrap();
-        recv.recv().unwrap()
+        lib_send.send(com).unwrap();
+        lib_recv.recv().unwrap()
     };
 
     l2!(format!("Listening on port {}", PORT));
@@ -259,6 +267,8 @@ fn server(listener: TcpListener, send: Sender<Command>, recv: Receiver<Response>
                 };
                 // # Process # }}}
 
+                cli_send.send(()).ok();
+
                 // finalize response
                 if s.write_all(response.as_bytes()).is_err() {
                     continue;
@@ -276,18 +286,20 @@ fn instance_main(listener: TcpListener) {
     LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
     l2!("Starting main...");
-    let (send, recv) = Library::spawn(&main_args.library, Some(main_args.filters));
+    let (lib_send, lib_recv) = Library::spawn(&main_args.library, Some(main_args.filters));
     if main_args.now {
-        send.send(Command::Play).unwrap();
+        lib_send.send(Command::Play).unwrap();
     }
 
-    let jh = thread::spawn(move || server(listener, send, recv));
+    let (cli_send, cli_recv) = channel::bounded::<()>(1);
+
+    let server_lib_send = lib_send.clone();
+    let server_lib_recv = lib_recv.clone();
+    thread::spawn(move || server(listener, server_lib_send, server_lib_recv, cli_send));
 
     l2!("Main server started");
 
-    l2!("PUT GUI HERE!");
-
-    jh.join().unwrap();
+    tui::tui(lib_send, lib_recv, cli_recv);
 
     l2!("Exiting");
 }
