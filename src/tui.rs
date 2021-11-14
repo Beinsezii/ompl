@@ -65,7 +65,7 @@ Ctrl+c - Exit
 a - Play/Pause
 x - Stop
 n - Next
-V/v - Volume Increase/Decrease
+v/V - Volume Increase/Decrease
 ";
 
 struct FilterPane {
@@ -184,8 +184,8 @@ pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Re
                     km!('x') => snd(Command::Stop),
                     km!('n') => snd(Command::Next),
                     // KM!('p') => snd(Command::Previous),
-                    km!('V') => snd(Command::VolumeAdd(0.05)),
-                    km!('v') => snd(Command::VolumeSub(0.05)),
+                    km!('v') => snd(Command::VolumeAdd(0.05)),
+                    km!('V') => snd(Command::VolumeSub(0.05)),
                     _ => (),
                 }
                 break 'poller;
