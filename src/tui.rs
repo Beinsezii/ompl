@@ -4,77 +4,26 @@ use std::time::Duration;
 use crate::library::{Command, Response};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
-use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
 
 use crossterm::{
     cursor, event,
-    event::{poll, read, Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent},
-    execute, queue, style, terminal, ExecutableCommand, QueueableCommand,
+    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent},
+    queue, terminal, ExecutableCommand, QueueableCommand,
 };
 
-type Row = Vec<char>;
-type Buff = Vec<Row>;
-
-/// build main UI
-fn build(columns: u16, rows: u16) -> Buff {
-    let row = vec!['R'; columns.into()].into_iter().collect::<Row>();
-    let row_alt = vec!['r'; columns.into()].into_iter().collect::<Row>();
-    let mut buff = Buff::new();
-    for x in 0..rows {
-        if x % 2 == 0 {
-            buff.push(row.clone());
-        } else {
-            buff.push(row_alt.clone())
-        }
-    }
-    buff
-}
-
-/// draw buff to source
-fn draw<T: Write>(source: &mut T, buff: &Buff, cols: u16, rows: u16) {
-    queue!(
-        source,
-        terminal::Clear(terminal::ClearType::All),
-        cursor::SavePosition
-    )
-    .unwrap();
-
-    for (rnum, row) in buff.iter().enumerate() {
-        if rnum >= rows.into() {
-            break;
-        };
-        let row: String = row.into_iter().collect();
-        let row_view = &row[0..std::cmp::min(cols.into(), row.len())];
-        queue!(
-            source,
-            cursor::MoveTo(0, rnum as u16),
-            style::Print(row_view)
-        )
-        .unwrap();
-    }
-
-    source
-        .queue(cursor::RestorePosition)
-        .unwrap()
-        .flush()
-        .unwrap();
-}
-
-/// draw &str to source by converting it to a Buff
-fn draw_str<T: Write>(source: &mut T, text: &str, cols: u16, rows: u16) {
-    draw(
-        source,
-        &text
-            .split('\n')
-            .collect::<Vec<&str>>()
-            .iter()
-            .map(|row| row.chars().collect::<Row>())
-            .collect::<Buff>(),
-        cols,
-        rows,
-    )
-}
+use tui::backend::CrosstermBackend;
+use tui::layout;
+use tui::layout::{Layout, Rect};
+use tui::style;
+use tui::style::{Color, Modifier, Style};
+use tui::text;
+use tui::widgets;
+use tui::widgets::{
+    BarChart, Block, Borders, Chart, Clear, Gauge, List, ListItem, Paragraph, Sparkline, Table,
+    Tabs,
+};
+use tui::Terminal;
 
 /// easy matching key events
 macro_rules! km {
@@ -100,17 +49,18 @@ macro_rules! km_c {
 fn get_event(duration: Option<Duration>) -> Option<Event> {
     match duration {
         Some(delay) => {
-            if poll(delay).unwrap() {
-                Some(read().unwrap())
+            if event::poll(delay).unwrap() {
+                Some(event::read().unwrap())
             } else {
                 None
             }
         }
-        None => Some(read().unwrap()),
+        None => Some(event::read().unwrap()),
     }
 }
 
 pub const HELP: &str = &"\
+QUEUE GO HERE
 Ctrl+c - Exit
 a - Play/Pause
 x - Stop
@@ -118,27 +68,106 @@ n - Next
 V/v - Volume Increase/Decrease
 ";
 
+struct FilterPane {
+    tag: String,
+    items: Vec<String>,
+    selected: Vec<usize>,
+}
+
 pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Receiver<()>) {
+    l2!("Entering interactive terminal...");
+    let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
+
     let snd = |com: Command| lib_send.send(com).unwrap();
     let sndrec = |com: Command| {
         lib_send.send(com).unwrap();
         lib_recv.recv().unwrap()
     };
-    l2!("Entering interactive terminal...");
-    let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
+
     terminal::enable_raw_mode().unwrap();
-    let (mut cols, mut rows) = terminal::size().unwrap();
     let mut stdo = std::io::stdout();
 
     queue!(stdo, terminal::EnterAlternateScreen, cursor::Hide).unwrap();
 
+    let backend = CrosstermBackend::new(stdo);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    let mut filter_panes = Vec::<FilterPane>::new();
+    filter_panes.push(FilterPane {
+        tag: "album".to_string(),
+        items: vec![
+            "Illusions".to_string(),
+            "Sun".to_string(),
+            "Skyworld".to_string(),
+        ],
+        selected: vec![1, 2],
+    });
+
+    filter_panes.push(FilterPane {
+        tag: "artist".to_string(),
+        items: vec![
+            "Thomas Bergersen".to_string(),
+            "Two Steps From Hell".to_string(),
+        ],
+        selected: vec![0],
+    });
+
     let result = std::panic::catch_unwind(move || 'main: loop {
-        draw_str(
-            &mut stdo,
-            &format!("{}\nVol: {}", HELP, sndrec(Command::VolumeGet)),
-            cols,
-            rows,
-        );
+        terminal
+            .draw(|f| {
+                let size = f.size();
+                let zones = Layout::default()
+                    .direction(layout::Direction::Vertical)
+                    .constraints(vec![
+                        layout::Constraint::Length(1),
+                        layout::Constraint::Percentage(50),
+                        layout::Constraint::Percentage(50),
+                    ])
+                    .split(size);
+                let panes = Layout::default()
+                    .direction(layout::Direction::Horizontal)
+                    .constraints(
+                        (0..filter_panes.len())
+                            .map(|_| layout::Constraint::Ratio(1, filter_panes.len() as u32))
+                            .collect::<Vec<layout::Constraint>>(),
+                    )
+                    .split(zones[1]);
+                let queue = zones[2];
+                f.render_widget(Paragraph::new(HELP), queue);
+                let status = zones[0];
+                f.render_widget(
+                    Paragraph::new(format!("Vol: {}", sndrec(Command::VolumeGet))),
+                    status,
+                );
+                for (num, fp) in filter_panes.iter().enumerate() {
+                    f.render_widget(
+                        List::new(
+                            fp.items
+                                .iter()
+                                .enumerate()
+                                .map(|(n, i)| {
+                                    ListItem::new(tui::text::Span {
+                                        content: i.into(),
+                                        style: if fp.selected.contains(&n) {
+                                            Style::default().fg(Color::Black).bg(Color::White)
+                                        } else {
+                                            Style::default()
+                                        },
+                                    })
+                                })
+                                .collect::<Vec<ListItem>>(),
+                        )
+                        .block(
+                            Block::default()
+                                .border_type(widgets::BorderType::Plain)
+                                .borders(Borders::ALL)
+                                .title(format!("{}", &fp.tag)),
+                        ),
+                        panes[num],
+                    );
+                }
+            })
+            .unwrap();
 
         // you *could* implement a proper event-driven system where you have separate threads for
         // key events, cli events, and updating the UI, but that'd mean redoing damn near
@@ -157,11 +186,6 @@ pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Re
                     // KM!('p') => snd(Command::Previous),
                     km!('V') => snd(Command::VolumeAdd(0.05)),
                     km!('v') => snd(Command::VolumeSub(0.05)),
-
-                    Event::Resize(c, r) => {
-                        cols = c;
-                        rows = r;
-                    }
                     _ => (),
                 }
                 break 'poller;
