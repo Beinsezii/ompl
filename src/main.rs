@@ -5,12 +5,12 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::thread;
 
-mod library;
-use library::{Command, Library, Response};
 mod tui;
+mod library;
+use library::Library;
 
 use crossbeam::channel;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::{Sender};
 
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
@@ -152,9 +152,7 @@ enum Action {
         #[clap(long)]
         now: bool,
     },
-    Verbosity {
-        verbosity: u8,
-    },
+    Verbosity{verbosity: u8},
 }
 
 // ### SHARED }}}
@@ -181,16 +179,9 @@ struct MainArgs {
 
 fn server(
     listener: TcpListener,
-    lib_send: Sender<Command>,
-    lib_recv: Receiver<Response>,
+    library: std::sync::Arc<Library>,
     cli_send: Sender<()>,
 ) {
-    let snd = |com: Command| lib_send.send(com).unwrap();
-    let sndrec = |com: Command| {
-        lib_send.send(com).unwrap();
-        lib_recv.recv().unwrap()
-    };
-
     l2!(format!("Listening on port {}", PORT));
     for stream in listener.incoming() {
         l2!("Found client");
@@ -228,36 +219,34 @@ fn server(
                                 if let Err(e) = s.write_all(response.as_bytes()) {
                                     println!("{}", e)
                                 };
-                                snd(Command::Exit);
                                 break;
                             }
-                            Action::Next => snd(Command::Next),
-                            Action::Pause => snd(Command::Pause),
-                            Action::Play => snd(Command::Play),
-                            Action::PlayPause => snd(Command::PlayPause),
-                            Action::Stop => snd(Command::Stop),
+                            Action::Next => library.next(),
+                            Action::Pause => library.pause(),
+                            Action::Play => library.play(),
+                            Action::PlayPause => library.play_pause(),
+                            Action::Stop => library.stop(),
                             Action::Volume(vol_cmd) => match vol_cmd {
                                 VolumeCmd::Get => {
-                                    response = format!("{}", sndrec(Command::VolumeGet));
+                                    response = format!("{:.3}", library.volume_get());
                                 }
-                                VolumeCmd::Add { amount } => snd(Command::VolumeAdd(amount)),
-                                VolumeCmd::Sub { amount } => snd(Command::VolumeSub(amount)),
-                                VolumeCmd::Set { amount } => snd(Command::VolumeSet(amount)),
+                                VolumeCmd::Add { amount } => library.volume_add(amount),
+                                VolumeCmd::Sub { amount } => library.volume_sub(amount),
+                                VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
-                            // Action::Print(print_cmd) => match print_cmd {
-                            //     PrintCmd::Status => response = format!("{:?}", library.track_get()),
-                            //     PrintCmd::Playing { format_string } => {
-                            //         response = format!("Unimplemented!\n{}", format_string)
-                            //     }
-                            // },
-                            Action::Print(_) => unimplemented!(),
+                            Action::Print(print_cmd) => match print_cmd {
+                                PrintCmd::Status => response = format!("{:?}", library.track_get()),
+                                PrintCmd::Playing { format_string } => {
+                                    response = format!("Unimplemented!\n{}", format_string)
+                                }
+                            },
                             Action::Filter { now, filters } => {
-                                snd(Command::SetFilters(filters));
+                                library.set_filters(filters);
                                 if now {
-                                    snd(Command::Next)
+                                    library.next()
                                 }
                             }
-                            Action::Verbosity { verbosity } => LOG_LEVEL.store(verbosity, LOG_ORD),
+                            Action::Verbosity{verbosity} => LOG_LEVEL.store(verbosity, LOG_ORD)
                         };
                     }
                     Err(e) => {
@@ -286,23 +275,21 @@ fn instance_main(listener: TcpListener) {
     LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
     l2!("Starting main...");
-    let (lib_send, lib_recv) = Library::spawn(&main_args.library, Some(main_args.filters));
+    let library = Library::new(&main_args.library, Some(main_args.filters));
     if main_args.now {
-        lib_send.send(Command::Play).unwrap();
+        library.play()
     }
 
     let (cli_send, cli_recv) = channel::bounded::<()>(1);
 
-    let server_lib_send = lib_send.clone();
-    let server_lib_recv = lib_recv.clone();
-    thread::spawn(move || server(listener, server_lib_send, server_lib_recv, cli_send));
+    let server_library = library.clone();
+    thread::spawn(move || server(listener, server_library, cli_send));
 
     l2!("Main server started");
 
-    tui::tui(lib_send, lib_recv, cli_recv);
-
-    l2!("Exiting");
+    tui::tui(library, cli_recv);
 }
+
 
 // ### SERVER ### }}}
 

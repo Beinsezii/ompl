@@ -1,7 +1,6 @@
 use std::io::Write;
 use std::time::Duration;
 
-use crate::library::{Command, Response};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel::{Receiver, Sender};
@@ -74,15 +73,9 @@ struct FilterPane {
     selected: Vec<usize>,
 }
 
-pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Receiver<()>) {
+pub fn tui(library: std::sync::Arc<crate::library::Library>, cli_recv: Receiver<()>) {
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
-
-    let snd = |com: Command| lib_send.send(com).unwrap();
-    let sndrec = |com: Command| {
-        lib_send.send(com).unwrap();
-        lib_recv.recv().unwrap()
-    };
 
     terminal::enable_raw_mode().unwrap();
     let mut stdo = std::io::stdout();
@@ -136,7 +129,7 @@ pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Re
                 f.render_widget(Paragraph::new(HELP), queue);
                 let status = zones[0];
                 f.render_widget(
-                    Paragraph::new(format!("Vol: {}", sndrec(Command::VolumeGet))),
+                    Paragraph::new(format!("Vol: {}", library.volume_get())),
                     status,
                 );
                 for (num, fp) in filter_panes.iter().enumerate() {
@@ -176,16 +169,16 @@ pub fn tui(lib_send: Sender<Command>, lib_recv: Receiver<Response>, cli_recv: Re
             if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
                 match ev {
                     km_c!('c') => {
-                        snd(Command::Exit);
+                        drop(library);
                         break 'main;
                     }
 
-                    km!('a') => snd(Command::PlayPause),
-                    km!('x') => snd(Command::Stop),
-                    km!('n') => snd(Command::Next),
-                    // KM!('p') => snd(Command::Previous),
-                    km!('v') => snd(Command::VolumeAdd(0.05)),
-                    km!('V') => snd(Command::VolumeSub(0.05)),
+                    km!('a') => library.play_pause(),
+                    km!('x') => library.stop(),
+                    km!('n') => library.next(),
+                    // KM!('p') => library.previous(),
+                    km!('v') => library.volume_add(0.05),
+                    km!('V') => library.volume_sub(0.05),
                     _ => (),
                 }
                 break 'poller;

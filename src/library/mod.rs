@@ -34,38 +34,6 @@ pub struct FilteredTracks {
 
 // ## FILTER ## }}}
 
-// ## COMMAND/RESPONSE ## {{{
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Command {
-    Exit,
-    Play,
-    Pause,
-    Stop,
-    PlayPause,
-    Next,
-    VolumeGet,
-    VolumeSet(f32),
-    VolumeAdd(f32),
-    VolumeSub(f32),
-    SetFilters(Vec<Filter>),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Response {
-    Volume(f32),
-}
-
-impl std::fmt::Display for Response {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Response::Volume(v) => write!(f, "{:.3}", v),
-        }
-    }
-}
-
-// ## COMMAND ## }}}
-
 // ### FNs ### {{{
 
 fn track_nexter(library: &Arc<Library>, next_r: Receiver<()>) {
@@ -174,38 +142,6 @@ impl Library {
     }
     // # new # }}}
 
-    pub fn spawn<T: AsRef<Path>>(
-        path: T,
-        initial_filters: Option<Vec<Filter>>,
-    ) -> (Sender<Command>, Receiver<Response>) {
-        let library = Self::new(path, initial_filters);
-        let (com_send, com_recv) = channel::bounded::<Command>(1);
-        let (resp_send, resp_recv) = channel::bounded::<Response>(1);
-
-        thread::spawn(move || loop {
-            match com_recv.recv() {
-                Ok(com) => match com {
-                    Command::Exit => break,
-                    Command::Play => library.play(),
-                    Command::Pause => library.pause(),
-                    Command::Stop => library.stop(),
-                    Command::PlayPause => library.play_pause(),
-                    Command::Next => library.next(),
-                    Command::VolumeGet => resp_send
-                        .send(Response::Volume(library.volume_get()))
-                        .unwrap(),
-                    Command::VolumeSet(v) => library.volume_set(v),
-                    Command::VolumeAdd(v) => library.volume_add(v),
-                    Command::VolumeSub(v) => library.volume_sub(v),
-                    Command::SetFilters(f) => library.set_filters(f),
-                },
-                Err(_) => break,
-            }
-        });
-
-        (com_send, resp_recv)
-    }
-
     // ## CONTROLS ## {{{
     pub fn play(&self) {
         self.player.play()
@@ -247,7 +183,7 @@ impl Library {
 
     // ## CONTROLS ## }}}
 
-    // # set_filters # {{{)
+    // # set_filters # {{{
     pub fn set_filters(&self, filters: Vec<Filter>) {
         l2!("Updating filters...");
         let now = Instant::now();
