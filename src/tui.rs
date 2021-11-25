@@ -182,7 +182,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
             if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
                 match ev {
                     km_c!('c') => {
-                        drop(library);
                         break 'main;
                     }
 
