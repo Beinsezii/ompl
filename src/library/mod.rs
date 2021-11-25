@@ -36,13 +36,14 @@ pub struct FilteredTracks {
 
 // ### FNs ### {{{
 
-fn track_nexter(library: &Arc<Library>, next_r: Receiver<()>) {
+fn track_nexter(library: Arc<Library>, next_r: Receiver<()>) {
     l2!("Track Nexter start");
-    let library = Arc::downgrade(&library);
+    let library_weak = Arc::downgrade(&library);
+    drop(library);
     loop {
         match next_r.recv() {
             Ok(_) => {
-                if let Some(l) = library.upgrade() {
+                if let Some(l) = library_weak.upgrade() {
                     l.next()
                 }
             }
@@ -134,7 +135,7 @@ impl Library {
 
         let result_c = result.clone();
 
-        thread::spawn(move || track_nexter(&result_c, next_r));
+        thread::spawn(move || track_nexter(result_c, next_r));
 
         l1!(format!("Library built in {:?}", Instant::now() - lib_now));
 

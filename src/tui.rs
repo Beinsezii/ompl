@@ -1,5 +1,6 @@
 use std::io::Write;
 use std::time::Duration;
+use std::sync::Arc;
 
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
@@ -73,7 +74,9 @@ struct FilterPane {
     selected: Vec<usize>,
 }
 
-pub fn tui(library: std::sync::Arc<crate::library::Library>, cli_recv: Receiver<()>) {
+pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
+    let library_weak = Arc::downgrade(&library);
+    drop(library);
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
 
@@ -106,6 +109,11 @@ pub fn tui(library: std::sync::Arc<crate::library::Library>, cli_recv: Receiver<
     });
 
     let result = std::panic::catch_unwind(move || 'main: loop {
+        let library = match library_weak.upgrade() {
+            Some(l) => l,
+            None => break 'main,
+        };
+
         terminal
             .draw(|f| {
                 let size = f.size();
@@ -129,7 +137,7 @@ pub fn tui(library: std::sync::Arc<crate::library::Library>, cli_recv: Receiver<
                 f.render_widget(Paragraph::new(HELP), queue);
                 let status = zones[0];
                 f.render_widget(
-                    Paragraph::new(format!("Vol: {}", library.volume_get())),
+                    Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
                     status,
                 );
                 for (num, fp) in filter_panes.iter().enumerate() {
@@ -161,11 +169,16 @@ pub fn tui(library: std::sync::Arc<crate::library::Library>, cli_recv: Receiver<
                 }
             })
             .unwrap();
+        drop(library);
 
         // you *could* implement a proper event-driven system where you have separate threads for
         // key events, cli events, and updating the UI, but that'd mean redoing damn near
         // everything here to avoid deadlocks
         'poller: loop {
+            let library = match library_weak.upgrade() {
+                Some(l) => l,
+                None => break 'main,
+            };
             if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
                 match ev {
                     km_c!('c') => {
