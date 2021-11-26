@@ -1,4 +1,4 @@
-use std::cmp::{max, min};
+use std::cmp::min;
 use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;

@@ -170,9 +170,7 @@ impl Library {
         }
     }
     pub fn next(&self) {
-        self.stop();
-        self.player.track_set(self.get_random());
-        self.play();
+        self.play_track(self.get_random());
     }
 
     pub fn volume_get(&self) -> f32 {
@@ -186,6 +184,12 @@ impl Library {
     }
     pub fn volume_sub(&self, amount: f32) {
         self.volume_set(self.volume_get() - amount);
+    }
+
+    pub fn play_track(&self, track: Option<Arc<Track>>) {
+        self.stop();
+        self.player.track_set(track);
+        self.play();
     }
 
     pub fn track_get(&self) -> Option<Arc<Track>> {
@@ -244,15 +248,7 @@ impl Library {
 
     pub fn get_random(&self) -> Option<Arc<Track>> {
         l2!("Getting random track...");
-        let mut tracks = self.tracks.clone();
-
-        for ft in self.filtered_tree.read().unwrap().iter().rev() {
-            if !ft.tracks.is_empty() {
-                tracks = ft.tracks.clone();
-                break;
-            }
-        }
-
+        let tracks = self.get_queue();
         match tracks.len() {
             0 => None,
             1 => Some(tracks[0].clone()),
@@ -271,6 +267,18 @@ impl Library {
 
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
         self.tracks.clone()
+    }
+
+    pub fn get_queue(&self) -> Vec<Arc<Track>> {
+        let mut tracks = self.tracks.clone();
+
+        for ft in self.filtered_tree.read().unwrap().iter().rev() {
+            if !ft.tracks.is_empty() {
+                tracks = ft.tracks.clone();
+                break;
+            }
+        }
+        tracks
     }
 
     // ## GET/SET ## }}}
