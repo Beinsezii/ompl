@@ -10,7 +10,7 @@ use crossbeam::channel::Receiver;
 
 use crossterm::{
     cursor, event,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent},
+    event::{Event, KeyCode, KeyEvent, KeyModifiers /* MouseButton, MouseEvent */},
     queue, terminal,
 };
 
