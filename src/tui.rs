@@ -89,46 +89,69 @@ struct UI {
 
 impl UI {
     fn from_library(library: &Arc<Library>) -> Self {
-        let filter_tree = library.get_filter_tree();
-        Self {
+        let mut result = Self {
             panes_index: 0,
             queue_sel: false,
             queue_pos: 0,
-            panes: filter_tree
-                .iter()
-                .enumerate()
-                .map(|(n, f)| {
-                    let tracks = if n == 0 {
-                        library.get_tracks()
-                    } else {
-                        filter_tree[n - 1].tracks.clone()
-                    };
-                    let items = crate::library::tags_from_tracks(&f.filter.tag, &tracks);
-                    FilterPane {
-                        tag: f.filter.tag.clone(),
-                        index: 0,
-                        selected: items
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(n, i)| {
-                                if f.filter.items.contains(i) {
-                                    Some(n)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect(),
-                        items,
-                    }
-                })
-                .collect(),
-        }
+            panes: Vec::new(),
+        };
+        result.update_from_library(library);
+        result
+    }
+
+    fn update_from_library(&mut self, library: &Arc<Library>) {
+        let filter_tree = library.get_filter_tree();
+        let old_indicies = self.panes.iter().map(|p| p.index).collect::<Vec<usize>>();
+        self.panes = filter_tree
+            .iter()
+            .enumerate()
+            .map(|(n, f)| {
+                let tracks = if n == 0 {
+                    library.get_tracks()
+                } else {
+                    filter_tree[n - 1].tracks.clone()
+                };
+                let items = crate::library::tags_from_tracks(&f.filter.tag, &tracks);
+                FilterPane {
+                    tag: f.filter.tag.clone(),
+                    index: min(
+                        *old_indicies.get(n).unwrap_or(&0),
+                        items.len().saturating_sub(1),
+                    ),
+                    selected: items
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(n, i)| {
+                            if f.filter.items.contains(i) {
+                                Some(n)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect(),
+                    items,
+                }
+            })
+            .collect();
+    }
+
+    fn rebuild_filters(&self) -> Vec<Filter> {
+        self.panes
+            .iter()
+            .map(|p| Filter {
+                tag: p.tag.clone(),
+                items: p
+                    .selected
+                    .iter()
+                    .map(|s| p.items[*s].clone())
+                    .collect::<Vec<String>>(),
+            })
+            .collect::<Vec<Filter>>()
     }
 
     fn active_pane(&self) -> &FilterPane {
         &self.panes[self.panes_index]
     }
-
     fn active_pane_mut(&mut self) -> &mut FilterPane {
         &mut self.panes[self.panes_index]
     }
@@ -253,7 +276,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
         // ## Layout ## }}}
 
-
         // you *could* implement a proper event-driven system where you have separate threads for
         // key events, cli events, and updating the UI, but that'd mean redoing damn near
         // everything here to avoid deadlocks
@@ -300,6 +322,17 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         } else {
                             ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1)
                         }
+                    }
+
+                    km!('s') => {
+                        let pane = ui.active_pane_mut();
+                        match pane.selected.iter().position(|i| i == &pane.index) {
+                            Some(p) => drop(pane.selected.remove(p)),
+                            None => pane.selected.push(pane.index),
+                        }
+                        library.set_filters(ui.rebuild_filters());
+                        ui.update_from_library(&library);
+                        break 'poller;
                     }
 
                     km!('a') => library.play_pause(),
