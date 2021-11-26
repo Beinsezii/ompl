@@ -160,7 +160,7 @@ pub enum Action {
 // ### SERVER ### {{{
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, about, version)]
+#[clap(author, about, version, after_help(tui::HELP))]
 struct MainArgs {
     /// Path to music libary folder
     library: std::path::PathBuf,
@@ -295,7 +295,7 @@ fn instance_main(listener: TcpListener) {
 // ### CLIENT ### {{{
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-#[clap(author, about, version)]
+#[clap(author, about, version, after_help(tui::HELP))]
 struct SubArgs {
     #[clap(subcommand)]
     action: Action,

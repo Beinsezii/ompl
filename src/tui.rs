@@ -106,14 +106,15 @@ fn build_list<'a>(
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
-Ctrl+c - Exit
-a - Play/Pause
-x - Stop
-n - Next
-v/V - Volume Increase/Decrease
-h/j/k/l - left/down/up/right
-f - [De]select active item
-Tab - [De]select queue
+TUI Controls:
+* Ctrl+c - Exit
+* a - Play/Pause
+* x - Stop
+* n - Next
+* v/V - Volume Increase/Decrease
+* h/j/k/l - left/down/up/right
+* f - [De]select active item
+* Tab - [De]select queue
 ";
 
 // ### UI ### {{{
