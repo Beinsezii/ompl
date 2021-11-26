@@ -114,6 +114,7 @@ TUI Controls:
 * v/V - Volume Increase/Decrease
 * h/j/k/l - left/down/up/right
 * f - [De]select active item
+* Ctrl+f - [De]select all
 * Tab - [De]select queue
 ";
 
@@ -382,6 +383,18 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                             ui.queue_pos = ui.queue_pos.saturating_sub(1)
                         } else {
                             ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1)
+                        }
+                    }
+
+                    km_c!('f') => {
+                        if !ui.queue_sel {
+                            match ui.active_pane().selected.is_empty() {
+                                true => {
+                                    ui.active_pane_mut().selected =
+                                        (0..ui.active_pane().items.len()).collect()
+                                }
+                                false => ui.active_pane_mut().selected = Vec::new(),
+                            }
                         }
                     }
 
