@@ -228,7 +228,9 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
                     status,
                 );
-                let pane_height = panes .get(0) .map_or(0, |p| p.height.saturating_sub(2) as usize);
+                let pane_height = panes
+                    .get(0)
+                    .map_or(0, |p| p.height.saturating_sub(2) as usize);
                 for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
                         List::new(
@@ -337,14 +339,18 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     }
 
                     km!('f') => {
-                        let pane = ui.active_pane_mut();
-                        match pane.selected.iter().position(|i| i == &pane.index) {
-                            Some(p) => drop(pane.selected.remove(p)),
-                            None => pane.selected.push(pane.index),
+                        if ui.queue_sel {
+                            ()
+                        } else {
+                            let pane = ui.active_pane_mut();
+                            match pane.selected.iter().position(|i| i == &pane.index) {
+                                Some(p) => drop(pane.selected.remove(p)),
+                                None => pane.selected.push(pane.index),
+                            }
+                            library.set_filters(ui.rebuild_filters());
+                            ui.update_from_library(&library);
+                            break 'poller;
                         }
-                        library.set_filters(ui.rebuild_filters());
-                        ui.update_from_library(&library);
-                        break 'poller;
                     }
 
                     km!('a') => library.play_pause(),
