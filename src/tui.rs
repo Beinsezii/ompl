@@ -68,6 +68,7 @@ x - Stop
 n - Next
 v/V - Volume Increase/Decrease
 h/j/k/l - left/down/up/right
+s - [De]select active item
 Tab - [De]select queue
 ";
 
