@@ -67,7 +67,7 @@ x - Stop
 n - Next
 v/V - Volume Increase/Decrease
 h/j/k/l - left/down/up/right
-s - [De]select active item
+f - [De]select active item
 Tab - [De]select queue
 ";
 
@@ -228,12 +228,17 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
                     status,
                 );
+                let pane_height = panes .get(0) .map_or(0, |p| p.height.saturating_sub(2) as usize);
                 for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
                         List::new(
                             fp.items
                                 .iter()
                                 .enumerate()
+                                .skip(min(
+                                    fp.index.saturating_sub(pane_height / 2),
+                                    fp.items.len().saturating_sub(pane_height),
+                                ))
                                 .map(|(n, i)| {
                                     let mut style = if num == ui.panes_index && !ui.queue_sel {
                                         if fp.selected.contains(&n) {
@@ -331,7 +336,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         }
                     }
 
-                    km!('s') => {
+                    km!('f') => {
                         let pane = ui.active_pane_mut();
                         match pane.selected.iter().position(|i| i == &pane.index) {
                             Some(p) => drop(pane.selected.remove(p)),
