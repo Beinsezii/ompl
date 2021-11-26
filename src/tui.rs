@@ -58,6 +58,51 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
     }
 }
 
+fn build_list<'a>(
+    items: &'a Vec<String>,
+    index: usize,
+    selected: &'a Vec<usize>,
+    active: bool,
+    pane_height: usize,
+    theme: Theme,
+) -> List<'a> {
+    List::new(
+        items
+            .iter()
+            .enumerate()
+            .skip(min(
+                index.saturating_sub(pane_height / 2),
+                items.len().saturating_sub(pane_height),
+            ))
+            .map(|(n, i)| {
+                let mut style = if active {
+                    if selected.contains(&n) {
+                        theme.active_hi
+                    } else {
+                        theme.active
+                    }
+                } else {
+                    if selected.contains(&n) {
+                        theme.base_hi
+                    } else {
+                        theme.base
+                    }
+                };
+                if n == index {
+                    style = style.patch(theme.mod_select);
+                    if active {
+                        style = style.patch(theme.mod_select_active)
+                    }
+                }
+                ListItem::new(text::Span {
+                    content: i.into(),
+                    style,
+                })
+            })
+            .collect::<Vec<ListItem>>(),
+    )
+}
+
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
@@ -73,6 +118,7 @@ Tab - [De]select queue
 
 // ### UI ### {{{
 
+#[derive(Clone, Debug, PartialEq)]
 struct FilterPane {
     tag: String,
     items: Vec<String>,
@@ -80,9 +126,34 @@ struct FilterPane {
     selected: Vec<usize>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Theme {
+    base: Style,
+    base_hi: Style,
+    active: Style,
+    active_hi: Style,
+    mod_select: Style,
+    mod_select_active: Style,
+}
+
+impl Theme {
+    fn new(accent: Color) -> Self {
+        Self {
+            base: Style::default(),
+            base_hi: Style::default().fg(Color::Black).bg(Color::White),
+            active: Style::default().fg(accent),
+            active_hi: Style::default().fg(Color::Black).bg(accent),
+            mod_select: Style::default().add_modifier(Modifier::UNDERLINED),
+            mod_select_active: Style::default().add_modifier(Modifier::BOLD),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 struct UI {
     panes: Vec<FilterPane>,
     panes_index: usize,
+    queue: Vec<String>,
     queue_sel: bool,
     queue_pos: usize,
 }
@@ -90,10 +161,11 @@ struct UI {
 impl UI {
     fn from_library(library: &Arc<Library>) -> Self {
         let mut result = Self {
+            panes: Vec::new(),
             panes_index: 0,
+            queue: Vec::new(),
             queue_sel: false,
             queue_pos: 0,
-            panes: Vec::new(),
         };
         result.update_from_library(library);
         result
@@ -133,6 +205,9 @@ impl UI {
                 }
             })
             .collect();
+        if let Some(ft) = filter_tree.iter().last() {
+            self.queue = crate::library::tags_from_tracks("title", &ft.tracks);
+        }
     }
 
     fn rebuild_filters(&self) -> Vec<Filter> {
@@ -174,11 +249,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let backend = CrosstermBackend::new(stdo);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let accent = Color::Yellow;
-    let style_base = Style::default();
-    let style_base_hi = Style::default().fg(Color::Black).bg(Color::White);
-    let style_active = Style::default().fg(accent);
-    let style_active_hi = Style::default().fg(Color::Black).bg(accent);
+    let theme = Theme::new(Color::Yellow);
 
     let result = std::panic::catch_unwind(move || 'main: loop {
         // ## Layout ## {{{
@@ -209,18 +280,20 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     .split(zones[1]);
                 let queue = zones[2];
                 f.render_widget(
-                    Paragraph::new(HELP)
-                        .style(if ui.queue_sel {
-                            style_active
-                        } else {
-                            style_base
-                        })
-                        .block(
-                            Block::default()
-                                .border_type(widgets::BorderType::Plain)
-                                .borders(Borders::ALL)
-                                .title("Queue"),
-                        ),
+                    build_list(
+                        &ui.queue,
+                        ui.queue_pos,
+                        &Vec::new(),
+                        ui.queue_sel,
+                        queue.height.saturating_sub(2) as usize,
+                        theme,
+                    )
+                    .block(
+                        Block::default()
+                            .border_type(widgets::BorderType::Plain)
+                            .borders(Borders::ALL)
+                            .title("Queue"),
+                    ),
                     queue,
                 );
                 let status = zones[0];
@@ -233,40 +306,13 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     .map_or(0, |p| p.height.saturating_sub(2) as usize);
                 for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
-                        List::new(
-                            fp.items
-                                .iter()
-                                .enumerate()
-                                .skip(min(
-                                    fp.index.saturating_sub(pane_height / 2),
-                                    fp.items.len().saturating_sub(pane_height),
-                                ))
-                                .map(|(n, i)| {
-                                    let mut style = if num == ui.panes_index && !ui.queue_sel {
-                                        if fp.selected.contains(&n) {
-                                            style_active_hi
-                                        } else {
-                                            style_active
-                                        }
-                                    } else {
-                                        if fp.selected.contains(&n) {
-                                            style_base_hi
-                                        } else {
-                                            style_base
-                                        }
-                                    };
-                                    if n == fp.index {
-                                        style = style.add_modifier(Modifier::UNDERLINED);
-                                        if num == ui.panes_index && !ui.queue_sel {
-                                            style = style.add_modifier(Modifier::BOLD);
-                                        }
-                                    }
-                                    ListItem::new(text::Span {
-                                        content: i.into(),
-                                        style,
-                                    })
-                                })
-                                .collect::<Vec<ListItem>>(),
+                        build_list(
+                            &fp.items,
+                            fp.index,
+                            &fp.selected,
+                            num == ui.panes_index && !ui.queue_sel,
+                            pane_height,
+                            theme,
                         )
                         .block(
                             Block::default()
@@ -275,9 +321,9 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                 .title(text::Span {
                                     content: fp.tag.as_str().into(),
                                     style: if fp.selected.is_empty() {
-                                        style_base_hi
+                                        theme.base_hi
                                     } else {
-                                        style_base
+                                        theme.base
                                     },
                                 }),
                         ),
@@ -322,7 +368,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     }
                     km!('j') => {
                         if ui.queue_sel {
-                            ui.queue_pos = max(ui.queue_pos + 1, 5)
+                            ui.queue_pos = min(ui.queue_pos + 1, ui.queue.len().saturating_sub(1))
                         } else {
                             ui.active_pane_mut().index = min(
                                 ui.active_pane().index + 1,
