@@ -8,7 +8,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crossbeam::channel;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Receiver;
 
 mod player;
 mod track;
@@ -91,6 +91,16 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
         Instant::now() - now
     ));
     tracks
+}
+
+pub fn tags_from_tracks(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
+    let mut result = tracks
+        .iter()
+        .filter_map(|t| t.tags().get(tag).cloned())
+        .collect::<Vec<String>>();
+    result.sort();
+    result.dedup();
+    result
 }
 
 // ### FNs ### }}}
@@ -208,15 +218,20 @@ impl Library {
                 filtered_tree[i - 1].tracks.iter()
             };
 
-            let mut tracks = Vec::<Arc<Track>>::new();
-            for t in iter {
-                let tags = t.tags();
-                if let Some(val) = tags.get(&f.tag.to_ascii_lowercase()) {
-                    if f.items.contains(val) {
-                        tracks.push(t.clone())
+            let tracks = if !f.items.is_empty() {
+                let mut tracks_f = Vec::new();
+                for t in iter {
+                    let tags = t.tags();
+                    if let Some(val) = tags.get(&f.tag.to_ascii_lowercase()) {
+                        if f.items.contains(val) {
+                            tracks_f.push(t.clone())
+                        }
                     }
                 }
-            }
+                tracks_f
+            } else {
+                iter.map(|t| t.clone()).collect()
+            };
             filtered_tree.push(FilteredTracks { filter: f, tracks })
         }
 
@@ -248,6 +263,14 @@ impl Library {
                 }
             },
         }
+    }
+
+    pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
+        self.filtered_tree.read().unwrap().clone()
+    }
+
+    pub fn get_tracks(&self) -> Vec<Arc<Track>> {
+        self.tracks.clone()
     }
 
     // ## GET/SET ## }}}

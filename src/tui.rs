@@ -1,29 +1,28 @@
+use std::cmp::{max, min};
 use std::io::Write;
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
-use crate::{l2, log, LOG_LEVEL, LOG_ORD};
+use crate::library::{Filter, Library};
+use crate::{l2, log, Action, LOG_LEVEL, LOG_ORD};
 
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Receiver;
 
 use crossterm::{
     cursor, event,
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent},
-    queue, terminal, ExecutableCommand, QueueableCommand,
+    queue, terminal,
 };
 
 use tui::backend::CrosstermBackend;
-use tui::layout;
-use tui::layout::{Layout, Rect};
-use tui::style;
+use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
 use tui::text;
 use tui::widgets;
-use tui::widgets::{
-    BarChart, Block, Borders, Chart, Clear, Gauge, List, ListItem, Paragraph, Sparkline, Table,
-    Tabs,
-};
+use tui::widgets::{Block, Borders, List, ListItem, Paragraph};
 use tui::Terminal;
+
+// ### FNs ### {{{
 
 /// easy matching key events
 macro_rules! km {
@@ -59,6 +58,8 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
     }
 }
 
+// ### FNs ### }}}
+
 pub const HELP: &str = &"\
 QUEUE GO HERE
 Ctrl+c - Exit
@@ -66,15 +67,77 @@ a - Play/Pause
 x - Stop
 n - Next
 v/V - Volume Increase/Decrease
+h/j/k/l - left/down/up/right
+Tab - [De]select queue
 ";
+
+// ### UI ### {{{
 
 struct FilterPane {
     tag: String,
     items: Vec<String>,
+    index: usize,
     selected: Vec<usize>,
 }
 
-pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
+struct UI {
+    panes: Vec<FilterPane>,
+    panes_index: usize,
+    queue_sel: bool,
+    queue_pos: usize,
+}
+
+impl UI {
+    fn from_library(library: &Arc<Library>) -> Self {
+        let filter_tree = library.get_filter_tree();
+        Self {
+            panes_index: 0,
+            queue_sel: false,
+            queue_pos: 0,
+            panes: filter_tree
+                .iter()
+                .enumerate()
+                .map(|(n, f)| {
+                    let tracks = if n == 0 {
+                        library.get_tracks()
+                    } else {
+                        filter_tree[n - 1].tracks.clone()
+                    };
+                    let items = crate::library::tags_from_tracks(&f.filter.tag, &tracks);
+                    FilterPane {
+                        tag: f.filter.tag.clone(),
+                        index: 0,
+                        selected: items
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(n, i)| {
+                                if f.filter.items.contains(i) {
+                                    Some(n)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect(),
+                        items,
+                    }
+                })
+                .collect(),
+        }
+    }
+
+    fn active_pane(&self) -> &FilterPane {
+        &self.panes[self.panes_index]
+    }
+
+    fn active_pane_mut(&mut self) -> &mut FilterPane {
+        &mut self.panes[self.panes_index]
+    }
+}
+
+// ### UI ### }}}
+
+pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
+    let mut ui = UI::from_library(&library);
     let library_weak = Arc::downgrade(&library);
     drop(library);
     l2!("Entering interactive terminal...");
@@ -88,27 +151,15 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
     let backend = CrosstermBackend::new(stdo);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let mut filter_panes = Vec::<FilterPane>::new();
-    filter_panes.push(FilterPane {
-        tag: "album".to_string(),
-        items: vec![
-            "Illusions".to_string(),
-            "Sun".to_string(),
-            "Skyworld".to_string(),
-        ],
-        selected: vec![1, 2],
-    });
-
-    filter_panes.push(FilterPane {
-        tag: "artist".to_string(),
-        items: vec![
-            "Thomas Bergersen".to_string(),
-            "Two Steps From Hell".to_string(),
-        ],
-        selected: vec![0],
-    });
+    let accent = Color::Yellow;
+    let style_base = Style::default();
+    let style_base_hi = Style::default().fg(Color::Black).bg(Color::White);
+    let style_active = Style::default().fg(accent);
+    let style_active_hi = Style::default().fg(Color::Black).bg(accent);
 
     let result = std::panic::catch_unwind(move || 'main: loop {
+        // ## Layout ## {{{
+
         let library = match library_weak.upgrade() {
             Some(l) => l,
             None => break 'main,
@@ -118,42 +169,64 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
             .draw(|f| {
                 let size = f.size();
                 let zones = Layout::default()
-                    .direction(layout::Direction::Vertical)
+                    .direction(Direction::Vertical)
                     .constraints(vec![
-                        layout::Constraint::Length(1),
-                        layout::Constraint::Percentage(50),
-                        layout::Constraint::Percentage(50),
+                        Constraint::Length(1),
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(50),
                     ])
                     .split(size);
                 let panes = Layout::default()
-                    .direction(layout::Direction::Horizontal)
+                    .direction(Direction::Horizontal)
                     .constraints(
-                        (0..filter_panes.len())
-                            .map(|_| layout::Constraint::Ratio(1, filter_panes.len() as u32))
-                            .collect::<Vec<layout::Constraint>>(),
+                        (0..ui.panes.len())
+                            .map(|_| Constraint::Ratio(1, ui.panes.len() as u32))
+                            .collect::<Vec<Constraint>>(),
                     )
                     .split(zones[1]);
                 let queue = zones[2];
-                f.render_widget(Paragraph::new(HELP), queue);
+                f.render_widget(
+                    Paragraph::new(HELP).style(if ui.queue_sel {
+                        style_active
+                    } else {
+                        style_base
+                    }),
+                    queue,
+                );
                 let status = zones[0];
                 f.render_widget(
                     Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
                     status,
                 );
-                for (num, fp) in filter_panes.iter().enumerate() {
+                for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
                         List::new(
                             fp.items
                                 .iter()
                                 .enumerate()
                                 .map(|(n, i)| {
-                                    ListItem::new(tui::text::Span {
-                                        content: i.into(),
-                                        style: if fp.selected.contains(&n) {
-                                            Style::default().fg(Color::Black).bg(Color::White)
+                                    let mut style = if num == ui.panes_index && !ui.queue_sel {
+                                        if fp.selected.contains(&n) {
+                                            style_active_hi
                                         } else {
-                                            Style::default()
-                                        },
+                                            style_active
+                                        }
+                                    } else {
+                                        if fp.selected.contains(&n) {
+                                            style_base_hi
+                                        } else {
+                                            style_base
+                                        }
+                                    };
+                                    if n == fp.index {
+                                        style = style.add_modifier(Modifier::UNDERLINED);
+                                        if num == ui.panes_index && !ui.queue_sel {
+                                            style = style.add_modifier(Modifier::BOLD);
+                                        }
+                                    }
+                                    ListItem::new(text::Span {
+                                        content: i.into(),
+                                        style,
                                     })
                                 })
                                 .collect::<Vec<ListItem>>(),
@@ -162,7 +235,14 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
                             Block::default()
                                 .border_type(widgets::BorderType::Plain)
                                 .borders(Borders::ALL)
-                                .title(format!("{}", &fp.tag)),
+                                .title(text::Span {
+                                    content: fp.tag.as_str().into(),
+                                    style: if fp.selected.is_empty() {
+                                        style_base_hi
+                                    } else {
+                                        style_base
+                                    },
+                                }),
                         ),
                         panes[num],
                     );
@@ -171,9 +251,14 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
             .unwrap();
         drop(library);
 
+        // ## Layout ## }}}
+
+
         // you *could* implement a proper event-driven system where you have separate threads for
         // key events, cli events, and updating the UI, but that'd mean redoing damn near
         // everything here to avoid deadlocks
+
+        // ## Event Loop ## {{{
         'poller: loop {
             let library = match library_weak.upgrade() {
                 Some(l) => l,
@@ -183,6 +268,38 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
                 match ev {
                     km_c!('c') => {
                         break 'main;
+                    }
+
+                    Event::Key(KeyEvent {
+                        code: KeyCode::Tab, ..
+                    }) => ui.queue_sel = !ui.queue_sel,
+                    km!('h') => {
+                        if !ui.queue_sel {
+                            ui.panes_index = ui.panes_index.saturating_sub(1)
+                        }
+                    }
+                    km!('l') => {
+                        if !ui.queue_sel {
+                            ui.panes_index =
+                                min(ui.panes_index + 1, ui.panes.len().saturating_sub(1))
+                        }
+                    }
+                    km!('j') => {
+                        if ui.queue_sel {
+                            ui.queue_pos = max(ui.queue_pos + 1, 5)
+                        } else {
+                            ui.active_pane_mut().index = min(
+                                ui.active_pane().index + 1,
+                                ui.active_pane().items.len().saturating_sub(1),
+                            )
+                        }
+                    }
+                    km!('k') => {
+                        if ui.queue_sel {
+                            ui.queue_pos = ui.queue_pos.saturating_sub(1)
+                        } else {
+                            ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1)
+                        }
                     }
 
                     km!('a') => library.play_pause(),
@@ -195,10 +312,16 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<()>) {
                 }
                 break 'poller;
             }
-            if let Ok(_) = cli_recv.try_recv() {
+            if let Ok(action) = cli_recv.try_recv() {
+                match action {
+                    Action::Volume { .. } => (),
+                    Action::Filter { .. } => ui = UI::from_library(&library),
+                    _ => continue,
+                }
                 break 'poller;
             }
         }
+        // ## Event Loop ## }}}
     });
 
     let mut stdo = std::io::stdout();

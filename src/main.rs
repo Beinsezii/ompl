@@ -10,7 +10,7 @@ mod library;
 use library::Library;
 
 use crossbeam::channel;
-use crossbeam::channel::{Sender};
+use crossbeam::channel::Sender;
 
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
@@ -120,7 +120,7 @@ enum Instance {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum VolumeCmd {
+pub enum VolumeCmd {
     Get,
     Add { amount: f32 },
     Sub { amount: f32 },
@@ -128,13 +128,13 @@ enum VolumeCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum PrintCmd {
+pub enum PrintCmd {
     Status,
     Playing { format_string: String },
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-enum Action {
+pub enum Action {
     Play,
     Pause,
     Stop,
@@ -180,7 +180,7 @@ struct MainArgs {
 fn server(
     listener: TcpListener,
     library: std::sync::Arc<Library>,
-    cli_send: Sender<()>,
+    cli_send: Sender<Action>,
 ) {
     l2!(format!("Listening on port {}", PORT));
     for stream in listener.incoming() {
@@ -213,7 +213,7 @@ fn server(
                 l2!("Processing command...");
                 match bincode::deserialize::<SubArgs>(&data) {
                     Ok(sub_args) => {
-                        match sub_args.action {
+                        match sub_args.action.clone() {
                             Action::Exit => {
                                 // finalize response 2
                                 if let Err(e) = s.write_all(response.as_bytes()) {
@@ -248,6 +248,7 @@ fn server(
                             }
                             Action::Verbosity{verbosity} => LOG_LEVEL.store(verbosity, LOG_ORD)
                         };
+                        cli_send.send(sub_args.action).ok();
                     }
                     Err(e) => {
                         response =
@@ -255,8 +256,6 @@ fn server(
                     }
                 };
                 // # Process # }}}
-
-                cli_send.send(()).ok();
 
                 // finalize response
                 if s.write_all(response.as_bytes()).is_err() {
@@ -280,7 +279,7 @@ fn instance_main(listener: TcpListener) {
         library.play()
     }
 
-    let (cli_send, cli_recv) = channel::bounded::<()>(1);
+    let (cli_send, cli_recv) = channel::bounded::<Action>(1);
 
     let server_library = library.clone();
     thread::spawn(move || server(listener, server_library, cli_send));
