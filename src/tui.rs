@@ -61,7 +61,6 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
-QUEUE GO HERE
 Ctrl+c - Exit
 a - Play/Pause
 x - Stop
@@ -210,11 +209,18 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     .split(zones[1]);
                 let queue = zones[2];
                 f.render_widget(
-                    Paragraph::new(HELP).style(if ui.queue_sel {
-                        style_active
-                    } else {
-                        style_base
-                    }),
+                    Paragraph::new(HELP)
+                        .style(if ui.queue_sel {
+                            style_active
+                        } else {
+                            style_base
+                        })
+                        .block(
+                            Block::default()
+                                .border_type(widgets::BorderType::Plain)
+                                .borders(Borders::ALL)
+                                .title("Queue"),
+                        ),
                     queue,
                 );
                 let status = zones[0];
