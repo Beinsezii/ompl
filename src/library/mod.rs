@@ -1,8 +1,8 @@
+use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Instant;
-use std::cmp::Ordering;
 
 use rand::random;
 use rayon::prelude::*;
@@ -123,13 +123,14 @@ pub fn sort_by_tag(tag: &str, tracks: &mut Vec<Arc<Track>>) {
                 None => Ordering::Less,
             }
         }
-    } )
+    })
 }
 
 // ### FNs ### }}}
 
 pub struct Library {
     pub tracks: Vec<Arc<Track>>,
+    history: RwLock<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
 }
@@ -157,6 +158,7 @@ impl Library {
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
             tracks,
+            history: RwLock::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
         });
 
@@ -195,6 +197,11 @@ impl Library {
     pub fn next(&self) {
         self.play_track(self.get_random());
     }
+    pub fn previous(&self) {
+        self.stop();
+        self.player.track_set(self.history.write().unwrap().pop());
+        self.play();
+    }
 
     pub fn volume_get(&self) -> f32 {
         self.player.volume_get()
@@ -210,6 +217,9 @@ impl Library {
     }
 
     pub fn play_track(&self, track: Option<Arc<Track>>) {
+        if let Some(track) = self.player.track_get() {
+            self.history.write().unwrap().push(track)
+        }
         self.stop();
         self.player.track_set(track);
         self.play();

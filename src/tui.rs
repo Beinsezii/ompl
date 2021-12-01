@@ -111,6 +111,7 @@ TUI Controls:
 * a - Play/Pause
 * x - Stop
 * n - Next
+* p - Previous
 * v/V - Volume Increase/Decrease
 * h/j/k/l - left/down/up/right
 * f - [De]select active item
@@ -417,7 +418,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     km!('a') => library.play_pause(),
                     km!('x') => library.stop(),
                     km!('n') => library.next(),
-                    // KM!('p') => library.previous(),
+                    km!('p') => library.previous(),
                     km!('v') => library.volume_add(0.05),
                     km!('V') => library.volume_sub(0.05),
                     _ => (),

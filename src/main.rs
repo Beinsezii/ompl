@@ -140,6 +140,7 @@ pub enum Action {
     Stop,
     PlayPause,
     Next,
+    Previous,
     Exit,
     #[clap(subcommand)]
     Volume(VolumeCmd),
@@ -222,6 +223,7 @@ fn server(
                                 break;
                             }
                             Action::Next => library.next(),
+                            Action::Previous => library.previous(),
                             Action::Pause => library.pause(),
                             Action::Play => library.play(),
                             Action::PlayPause => library.play_pause(),
