@@ -2,6 +2,7 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Instant;
+use std::cmp::Ordering;
 
 use rand::random;
 use rayon::prelude::*;
@@ -105,6 +106,24 @@ pub fn get_all_tag_sort(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
     result.sort();
     result.dedup();
     result
+}
+
+pub fn sort_by_tag(tag: &str, tracks: &mut Vec<Arc<Track>>) {
+    tracks.sort_by(|a, b| {
+        let a = a.tags().get(tag);
+        let b = b.tags().get(tag);
+        if a.is_none() && b.is_none() {
+            Ordering::Equal
+        } else {
+            match a {
+                Some(a) => match b {
+                    Some(b) => a.cmp(b),
+                    None => Ordering::Greater,
+                },
+                None => Ordering::Less,
+            }
+        }
+    } )
 }
 
 // ### FNs ### }}}

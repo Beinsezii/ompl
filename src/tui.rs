@@ -209,6 +209,7 @@ impl UI {
             .collect();
         if let Some(_ft) = filter_tree.iter().last() {
             self.queue = library.get_queue();
+            crate::library::sort_by_tag("title", &mut self.queue)
         }
     }
 
