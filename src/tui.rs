@@ -3,7 +3,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::library::{Filter, Library};
+use crate::library::{Filter, Library, Track};
 use crate::{l2, log, Action, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel::Receiver;
@@ -155,7 +155,7 @@ impl Theme {
 struct UI {
     panes: Vec<FilterPane>,
     panes_index: usize,
-    queue: Vec<String>,
+    queue: Vec<Arc<Track>>,
     queue_sel: bool,
     queue_pos: usize,
 }
@@ -185,7 +185,7 @@ impl UI {
                 } else {
                     filter_tree[n - 1].tracks.clone()
                 };
-                let items = crate::library::tags_from_tracks(&f.filter.tag, &tracks);
+                let items = crate::library::get_all_tag_sort(&f.filter.tag, &tracks);
                 FilterPane {
                     tag: f.filter.tag.clone(),
                     index: min(
@@ -207,8 +207,8 @@ impl UI {
                 }
             })
             .collect();
-        if let Some(ft) = filter_tree.iter().last() {
-            self.queue = crate::library::tags_from_tracks("title", &ft.tracks);
+        if let Some(_ft) = filter_tree.iter().last() {
+            self.queue = library.get_queue();
         }
     }
 
@@ -283,7 +283,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                 let queue = zones[2];
                 f.render_widget(
                     build_list(
-                        &ui.queue,
+                        &crate::library::get_all_tag("title", &ui.queue),
                         ui.queue_pos,
                         &Vec::new(),
                         ui.queue_sel,
@@ -400,7 +400,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
                     km!('f') => {
                         if ui.queue_sel {
-                            ()
+                            library.play_track(ui.queue.get(ui.queue_pos).cloned())
                         } else {
                             let pane = ui.active_pane_mut();
                             match pane.selected.iter().position(|i| i == &pane.index) {

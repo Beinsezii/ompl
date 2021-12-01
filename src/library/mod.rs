@@ -93,11 +93,15 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
-pub fn tags_from_tracks(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
-    let mut result = tracks
+pub fn get_all_tag(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
+    tracks
         .iter()
         .filter_map(|t| t.tags().get(tag).cloned())
-        .collect::<Vec<String>>();
+        .collect::<Vec<String>>()
+}
+
+pub fn get_all_tag_sort(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
+    let mut result = get_all_tag(tag, tracks);
     result.sort();
     result.dedup();
     result
