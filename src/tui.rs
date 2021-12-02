@@ -83,6 +83,7 @@ struct FilterPane {
     index: usize,
     selected: Vec<usize>,
     rect: Rect,
+    view: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -188,6 +189,7 @@ impl UI {
                         .collect(),
                     items,
                     rect: Rect::default(),
+                    view: 0,
                 }
             })
             .collect();
@@ -223,43 +225,66 @@ impl UI {
     // ## UI Layout FNs {{{
 
     fn lock_view(&mut self, pane: Pane) {
-        match pane {
-            Pane::Queue => {
-                self.queue_view = min(
-                    self.queue_pos
-                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize / 2),
-                    self.queue
-                        .len()
-                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
-                )
-            }
-            Pane::Panes(_i) => (),
-        }
+        let (index, height, len, view) = match pane {
+            Pane::Queue => (
+                self.queue_pos,
+                self.queue_rect.height,
+                self.queue.len(),
+                &mut self.queue_view,
+            ),
+            Pane::Panes(i) => (
+                self.panes[i].index,
+                self.panes[i].rect.height,
+                self.panes[i].items.len(),
+                &mut self.panes[i].view,
+            ),
+        };
+
+        *view = min(
+            index.saturating_sub(height.saturating_sub(2) as usize / 2),
+            len.saturating_sub(height.saturating_sub(2) as usize),
+        )
     }
     fn scroll_view_down(&mut self, pane: Pane) {
-        match pane {
-            Pane::Queue => {
-                let offset = self.queue_rect.height.saturating_sub(2) as usize / 2;
-                self.queue_view = min(
-                    self.queue_view + offset,
-                    self.queue
-                        .len()
-                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
-                );
-                self.queue_pos = min(self.queue_pos + offset, self.queue.len() - 1)
-            }
-            Pane::Panes(_i) => (),
-        }
+        let (height, len, view) = match pane {
+            Pane::Queue => (
+                self.queue_rect.height,
+                self.queue.len(),
+                &mut self.queue_view,
+            ),
+            Pane::Panes(i) => (
+                self.panes[i].rect.height,
+                self.panes[i].items.len(),
+                &mut self.panes[i].view,
+            ),
+        };
+        let offset = height.saturating_sub(2) as usize / 2;
+        *view = min(
+            *view + offset,
+            len.saturating_sub(height.saturating_sub(2) as usize),
+        );
+
+        // Rust doesn't allow mutable references to separate fields at once
+        let index = match pane {
+            Pane::Queue => &mut self.queue_pos,
+            Pane::Panes(i) => &mut self.panes[i].index,
+        };
+        *index = min(*index + offset, len - 1);
     }
     fn scroll_view_up(&mut self, pane: Pane) {
-        match pane {
-            Pane::Queue => {
-                let offset = self.queue_rect.height.saturating_sub(2) as usize / 2;
-                self.queue_view = self.queue_view.saturating_sub(offset);
-                self.queue_pos = self.queue_pos.saturating_sub(offset)
-            }
-            Pane::Panes(_i) => (),
-        }
+        let (height, index) = match pane {
+            Pane::Queue => (self.queue_rect.height, &mut self.queue_pos),
+            Pane::Panes(i) => (self.panes[i].rect.height, &mut self.panes[i].index),
+        };
+        let offset = height.saturating_sub(2) as usize / 2;
+        *index = index.saturating_sub(offset);
+
+        // Rust doesn't allow mutable references to separate fields at once
+        let view = match pane {
+            Pane::Queue => &mut self.queue_view,
+            Pane::Panes(i) => &mut self.panes[i].view,
+        };
+        *view = view.saturating_sub(offset);
     }
 
     fn build_list<'a>(&self, pane: Pane, theme: Theme) -> List<'a> {
@@ -273,7 +298,7 @@ impl UI {
             ),
             Pane::Panes(i) => (
                 self.panes[i].items.clone(),
-                0,
+                self.panes[i].view,
                 self.panes[i].index,
                 !self.queue_sel && i == self.panes_index,
                 self.panes[i].selected.clone(),
@@ -480,7 +505,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                             ui.active_pane_mut().index = min(
                                 ui.active_pane().index + 1,
                                 ui.active_pane().items.len().saturating_sub(1),
-                            )
+                            );
+                            ui.lock_view(Pane::Panes(ui.panes_index));
                         }
                     }
                     km!('k') => {
@@ -488,7 +514,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                             ui.queue_pos = ui.queue_pos.saturating_sub(1);
                             ui.lock_view(Pane::Queue);
                         } else {
-                            ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1)
+                            ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1);
+                            ui.lock_view(Pane::Panes(ui.panes_index));
                         }
                     }
 
@@ -548,13 +575,24 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                 MouseEventKind::ScrollUp => ui.scroll_view_up(Pane::Queue),
                                 _ => (),
                             },
-                            ZoneEventType::Panes { .. } => (),
+                            ZoneEventType::Panes { pane, .. } => match kind {
+                                MouseEventKind::Down(button) => match button {
+                                    MouseButton::Left => (),
+                                    MouseButton::Right => (),
+                                    MouseButton::Middle => (),
+                                },
+                                MouseEventKind::ScrollDown => {
+                                    ui.scroll_view_down(Pane::Panes(pane))
+                                }
+                                MouseEventKind::ScrollUp => ui.scroll_view_up(Pane::Panes(pane)),
+                                _ => continue,
+                            },
                             ZoneEventType::None => continue,
                         },
                     },
 
                     Event::Resize(..) => break 'poller,
-                    _ => (),
+                    _ => continue,
                 }
                 break 'poller;
             }
