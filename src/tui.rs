@@ -563,13 +563,13 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                 MouseEventKind::Down(button) => match button {
                                     MouseButton::Left => {
                                         ui.queue_sel = true;
-                                        if let Some(track) = index
-                                            .checked_sub(1)
-                                            .map(|i| ui.queue.get(i + ui.queue_view))
-                                            .flatten()
+                                        if index > 0
+                                            && index <= ui.queue_rect.height as usize - 2
+                                            && index < ui.queue.len()
                                         {
-                                            library.play_track(Some(track.clone()));
-                                            ui.queue_pos = index.saturating_sub(1) + ui.queue_view;
+                                            let index = index - 1 + ui.queue_view;
+                                            library.play_track(ui.queue.get(index).cloned());
+                                            ui.queue_pos = index;
                                         }
                                     }
                                     MouseButton::Right => (),
@@ -590,15 +590,16 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     MouseButton::Left => {
                                         ui.queue_sel = false;
                                         ui.panes_index = pane;
-                                        let mut selected = Vec::new();
-                                        if let Some(i) = index
-                                            .checked_sub(1)
-                                            .map(|i| i + ui.panes[pane].view)
-                                            .filter(|i| ui.panes[pane].items.get(*i).is_some())
+                                        if index == 0 {
+                                            ui.panes[pane].selected = vec![];
+                                        } else if index <= ui.panes[pane].rect.height as usize - 2
+                                            && index <= ui.panes[pane].items.len()
                                         {
-                                            selected.push(i)
+                                            ui.panes[pane].selected =
+                                                vec![index - 1 + ui.panes[pane].view];
+                                        } else {
+                                            continue;
                                         }
-                                        ui.panes[pane].selected = selected;
                                         library.set_filters(ui.rebuild_filters());
                                         ui.update_from_library(&library);
                                     }
