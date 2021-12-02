@@ -421,6 +421,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     km!('p') => library.previous(),
                     km!('v') => library.volume_add(0.05),
                     km!('V') => library.volume_sub(0.05),
+
+                    Event::Resize(..) => break 'poller,
                     _ => (),
                 }
                 break 'poller;
