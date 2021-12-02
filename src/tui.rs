@@ -10,12 +10,12 @@ use crossbeam::channel::Receiver;
 
 use crossterm::{
     cursor, event,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers /* MouseButton, MouseEvent */},
+    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
     queue, terminal,
 };
 
 use tui::backend::CrosstermBackend;
-use tui::layout::{Constraint, Direction, Layout};
+use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::text;
 use tui::widgets;
@@ -58,51 +58,6 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
     }
 }
 
-fn build_list<'a>(
-    items: &'a Vec<String>,
-    index: usize,
-    selected: &'a Vec<usize>,
-    active: bool,
-    pane_height: usize,
-    theme: Theme,
-) -> List<'a> {
-    List::new(
-        items
-            .iter()
-            .enumerate()
-            .skip(min(
-                index.saturating_sub(pane_height / 2),
-                items.len().saturating_sub(pane_height),
-            ))
-            .map(|(n, i)| {
-                let mut style = if active {
-                    if selected.contains(&n) {
-                        theme.active_hi
-                    } else {
-                        theme.active
-                    }
-                } else {
-                    if selected.contains(&n) {
-                        theme.base_hi
-                    } else {
-                        theme.base
-                    }
-                };
-                if n == index {
-                    style = style.patch(theme.mod_select);
-                    if active {
-                        style = style.patch(theme.mod_select_active)
-                    }
-                }
-                ListItem::new(text::Span {
-                    content: i.into(),
-                    style,
-                })
-            })
-            .collect::<Vec<ListItem>>(),
-    )
-}
-
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
@@ -127,6 +82,7 @@ struct FilterPane {
     items: Vec<String>,
     index: usize,
     selected: Vec<usize>,
+    rect: Rect,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -152,6 +108,26 @@ impl Theme {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ZoneEventType {
+    Queue(usize),
+    Panes { pane: usize, index: usize },
+    None,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ZoneEvent {
+    kind: MouseEventKind,
+    mods: KeyModifiers,
+    event: ZoneEventType,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pane {
+    Queue,
+    Panes(usize),
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct UI {
     panes: Vec<FilterPane>,
@@ -159,6 +135,8 @@ struct UI {
     queue: Vec<Arc<Track>>,
     queue_sel: bool,
     queue_pos: usize,
+    queue_rect: Rect,
+    queue_view: usize,
 }
 
 impl UI {
@@ -169,10 +147,14 @@ impl UI {
             queue: Vec::new(),
             queue_sel: false,
             queue_pos: 0,
+            queue_rect: Rect::default(),
+            queue_view: 0,
         };
         result.update_from_library(library);
         result
     }
+
+    // UI Data FNs {{{
 
     fn update_from_library(&mut self, library: &Arc<Library>) {
         let filter_tree = library.get_filter_tree();
@@ -205,6 +187,7 @@ impl UI {
                         })
                         .collect(),
                     items,
+                    rect: Rect::default(),
                 }
             })
             .collect();
@@ -234,6 +217,133 @@ impl UI {
     fn active_pane_mut(&mut self) -> &mut FilterPane {
         &mut self.panes[self.panes_index]
     }
+
+    // UI Data FNs }}}
+
+    // ## UI Layout FNs {{{
+
+    fn lock_view(&mut self, pane: Pane) {
+        match pane {
+            Pane::Queue => {
+                self.queue_view = min(
+                    self.queue_pos
+                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize / 2),
+                    self.queue
+                        .len()
+                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
+                )
+            }
+            Pane::Panes(_i) => (),
+        }
+    }
+    fn scroll_view_down(&mut self, pane: Pane) {
+        match pane {
+            Pane::Queue => {
+                let offset = self.queue_rect.height.saturating_sub(2) as usize / 2;
+                self.queue_view = min(
+                    self.queue_view + offset,
+                    self.queue
+                        .len()
+                        .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
+                );
+                self.queue_pos = min(self.queue_pos + offset, self.queue.len() - 1)
+            }
+            Pane::Panes(_i) => (),
+        }
+    }
+    fn scroll_view_up(&mut self, pane: Pane) {
+        match pane {
+            Pane::Queue => {
+                let offset = self.queue_rect.height.saturating_sub(2) as usize / 2;
+                self.queue_view = self.queue_view.saturating_sub(offset);
+                self.queue_pos = self.queue_pos.saturating_sub(offset)
+            }
+            Pane::Panes(_i) => (),
+        }
+    }
+
+    fn build_list<'a>(&self, pane: Pane, theme: Theme) -> List<'a> {
+        let (items, skip, index, active, selected) = match pane {
+            Pane::Queue => (
+                crate::library::get_all_tag("title", &self.queue),
+                self.queue_view,
+                self.queue_pos,
+                self.queue_sel,
+                Vec::new(),
+            ),
+            Pane::Panes(i) => (
+                self.panes[i].items.clone(),
+                0,
+                self.panes[i].index,
+                !self.queue_sel && i == self.panes_index,
+                self.panes[i].selected.clone(),
+            ),
+        };
+        List::new(
+            items
+                .into_iter()
+                .enumerate()
+                .skip(skip)
+                .map(|(n, i)| {
+                    let mut style = if active {
+                        if selected.contains(&n) {
+                            theme.active_hi
+                        } else {
+                            theme.active
+                        }
+                    } else {
+                        if selected.contains(&n) {
+                            theme.base_hi
+                        } else {
+                            theme.base
+                        }
+                    };
+                    if n == index {
+                        style = style.patch(theme.mod_select);
+                        if active {
+                            style = style.patch(theme.mod_select_active)
+                        }
+                    }
+                    ListItem::new(text::Span {
+                        content: i.into(),
+                        style,
+                    })
+                })
+                .collect::<Vec<ListItem>>(),
+        )
+    }
+    // ## UI Layout FNs }}}
+
+    // ## UI Event FNs {{{
+    fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
+        let point = Rect {
+            x: event.column,
+            y: event.row,
+            height: 1,
+            width: 1,
+        };
+        ZoneEvent {
+            kind: event.kind,
+            mods: event.modifiers,
+            event: if self.queue_rect.intersects(point) {
+                ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
+            } else {
+                let mut result = ZoneEventType::None;
+                for (num, pane) in self.panes.iter().enumerate() {
+                    if pane.rect.intersects(point) {
+                        result = ZoneEventType::Panes {
+                            pane: num,
+                            index: event.row.into(),
+                        };
+                        break;
+                    }
+                }
+                result
+            },
+        }
+    }
+
+    // ## UI Event FNs }}}
 }
 
 // ### UI ### }}}
@@ -248,7 +358,13 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     terminal::enable_raw_mode().unwrap();
     let mut stdo = std::io::stdout();
 
-    queue!(stdo, terminal::EnterAlternateScreen, cursor::Hide).unwrap();
+    queue!(
+        stdo,
+        terminal::EnterAlternateScreen,
+        event::EnableMouseCapture,
+        cursor::Hide
+    )
+    .unwrap();
 
     let backend = CrosstermBackend::new(stdo);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -274,51 +390,37 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         Constraint::Percentage(50),
                     ])
                     .split(size);
-                let panes = Layout::default()
+                for (n, r) in Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(
                         (0..ui.panes.len())
                             .map(|_| Constraint::Ratio(1, ui.panes.len() as u32))
                             .collect::<Vec<Constraint>>(),
                     )
-                    .split(zones[1]);
-                let queue = zones[2];
+                    .split(zones[1])
+                    .into_iter()
+                    .enumerate()
+                {
+                    ui.panes[n].rect = r;
+                }
+                ui.queue_rect = zones[2];
                 f.render_widget(
-                    build_list(
-                        &crate::library::get_all_tag("title", &ui.queue),
-                        ui.queue_pos,
-                        &Vec::new(),
-                        ui.queue_sel,
-                        queue.height.saturating_sub(2) as usize,
-                        theme,
-                    )
-                    .block(
+                    ui.build_list(Pane::Queue, theme).block(
                         Block::default()
                             .border_type(widgets::BorderType::Plain)
                             .borders(Borders::ALL)
                             .title("Queue"),
                     ),
-                    queue,
+                    ui.queue_rect,
                 );
                 let status = zones[0];
                 f.render_widget(
                     Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
                     status,
                 );
-                let pane_height = panes
-                    .get(0)
-                    .map_or(0, |p| p.height.saturating_sub(2) as usize);
                 for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
-                        build_list(
-                            &fp.items,
-                            fp.index,
-                            &fp.selected,
-                            num == ui.panes_index && !ui.queue_sel,
-                            pane_height,
-                            theme,
-                        )
-                        .block(
+                        ui.build_list(Pane::Panes(num), theme).block(
                             Block::default()
                                 .border_type(widgets::BorderType::Plain)
                                 .borders(Borders::ALL)
@@ -331,7 +433,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     },
                                 }),
                         ),
-                        panes[num],
+                        ui.panes[num].rect,
                     );
                 }
             })
@@ -372,7 +474,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     }
                     km!('j') => {
                         if ui.queue_sel {
-                            ui.queue_pos = min(ui.queue_pos + 1, ui.queue.len().saturating_sub(1))
+                            ui.queue_pos = min(ui.queue_pos + 1, ui.queue.len().saturating_sub(1));
+                            ui.lock_view(Pane::Queue);
                         } else {
                             ui.active_pane_mut().index = min(
                                 ui.active_pane().index + 1,
@@ -382,7 +485,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     }
                     km!('k') => {
                         if ui.queue_sel {
-                            ui.queue_pos = ui.queue_pos.saturating_sub(1)
+                            ui.queue_pos = ui.queue_pos.saturating_sub(1);
+                            ui.lock_view(Pane::Queue);
                         } else {
                             ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1)
                         }
@@ -422,6 +526,33 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     km!('v') => library.volume_add(0.05),
                     km!('V') => library.volume_sub(0.05),
 
+                    Event::Mouse(event) => match ui.convert_event(event) {
+                        ZoneEvent { kind, event, .. } => match event {
+                            ZoneEventType::Queue(index) => match kind {
+                                MouseEventKind::Down(button) => match button {
+                                    MouseButton::Left => {
+                                        ui.queue_sel = true;
+                                        if let Some(track) = index
+                                            .checked_sub(1)
+                                            .map(|i| ui.queue.get(i + ui.queue_view))
+                                            .flatten()
+                                        {
+                                            library.play_track(Some(track.clone()));
+                                            ui.queue_pos = index.saturating_sub(1) + ui.queue_view;
+                                        }
+                                    }
+                                    MouseButton::Right => (),
+                                    MouseButton::Middle => (),
+                                },
+                                MouseEventKind::ScrollDown => ui.scroll_view_down(Pane::Queue),
+                                MouseEventKind::ScrollUp => ui.scroll_view_up(Pane::Queue),
+                                _ => (),
+                            },
+                            ZoneEventType::Panes { .. } => (),
+                            ZoneEventType::None => continue,
+                        },
+                    },
+
                     Event::Resize(..) => break 'poller,
                     _ => (),
                 }
@@ -440,7 +571,13 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     });
 
     let mut stdo = std::io::stdout();
-    queue!(stdo, terminal::LeaveAlternateScreen, cursor::Show).unwrap();
+    queue!(
+        stdo,
+        terminal::LeaveAlternateScreen,
+        event::DisableMouseCapture,
+        cursor::Show
+    )
+    .unwrap();
     stdo.flush().unwrap();
     terminal::disable_raw_mode().unwrap();
 
