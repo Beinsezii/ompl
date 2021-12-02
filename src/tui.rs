@@ -363,7 +363,7 @@ impl UI {
                     if pane.rect.intersects(point) {
                         result = ZoneEventType::Panes {
                             pane: num,
-                            index: event.row.into(),
+                            index: event.row.saturating_sub(pane.rect.y).into(),
                         };
                         break;
                     }
@@ -585,9 +585,23 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                 }
                                 _ => (),
                             },
-                            ZoneEventType::Panes { pane, .. } => match kind {
+                            ZoneEventType::Panes { pane, index } => match kind {
                                 MouseEventKind::Down(button) => match button {
-                                    MouseButton::Left => (),
+                                    MouseButton::Left => {
+                                        ui.queue_sel = false;
+                                        ui.panes_index = pane;
+                                        let mut selected = Vec::new();
+                                        if let Some(i) = index
+                                            .checked_sub(1)
+                                            .map(|i| i + ui.panes[pane].view)
+                                            .filter(|i| ui.panes[pane].items.get(*i).is_some())
+                                        {
+                                            selected.push(i)
+                                        }
+                                        ui.panes[pane].selected = selected;
+                                        library.set_filters(ui.rebuild_filters());
+                                        ui.update_from_library(&library);
+                                    }
                                     MouseButton::Right => (),
                                     MouseButton::Middle => (),
                                 },
