@@ -575,8 +575,14 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     MouseButton::Right => (),
                                     MouseButton::Middle => (),
                                 },
-                                MouseEventKind::ScrollDown => ui.scroll_view_down(Pane::Queue),
-                                MouseEventKind::ScrollUp => ui.scroll_view_up(Pane::Queue),
+                                MouseEventKind::ScrollDown => {
+                                    ui.scroll_view_down(Pane::Queue);
+                                    ui.queue_sel = true;
+                                }
+                                MouseEventKind::ScrollUp => {
+                                    ui.scroll_view_up(Pane::Queue);
+                                    ui.queue_sel = true;
+                                }
                                 _ => (),
                             },
                             ZoneEventType::Panes { pane, .. } => match kind {
@@ -586,9 +592,15 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     MouseButton::Middle => (),
                                 },
                                 MouseEventKind::ScrollDown => {
-                                    ui.scroll_view_down(Pane::Panes(pane))
+                                    ui.scroll_view_down(Pane::Panes(pane));
+                                    ui.queue_sel = false;
+                                    ui.panes_index = pane;
                                 }
-                                MouseEventKind::ScrollUp => ui.scroll_view_up(Pane::Panes(pane)),
+                                MouseEventKind::ScrollUp => {
+                                    ui.scroll_view_up(Pane::Panes(pane));
+                                    ui.queue_sel = false;
+                                    ui.panes_index = pane;
+                                }
                                 _ => continue,
                             },
                             ZoneEventType::None => continue,
