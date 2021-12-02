@@ -547,7 +547,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                             }
                             library.set_filters(ui.rebuild_filters());
                             ui.update_from_library(&library);
-                            break 'poller;
                         }
                     }
 
