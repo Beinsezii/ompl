@@ -160,6 +160,8 @@ impl UI {
     fn update_from_library(&mut self, library: &Arc<Library>) {
         let filter_tree = library.get_filter_tree();
         let old_indicies = self.panes.iter().map(|p| p.index).collect::<Vec<usize>>();
+        let old_views = self.panes.iter().map(|p| p.view).collect::<Vec<usize>>();
+        let height = self.panes.first().map(|p| p.rect.height).unwrap_or(0) as usize;
         self.panes = filter_tree
             .iter()
             .enumerate()
@@ -176,6 +178,10 @@ impl UI {
                         *old_indicies.get(n).unwrap_or(&0),
                         items.len().saturating_sub(1),
                     ),
+                    view: min(
+                        *old_views.get(n).unwrap_or(&0),
+                        items.len().saturating_sub(height.saturating_sub(2) / 2),
+                    ),
                     selected: items
                         .iter()
                         .enumerate()
@@ -189,7 +195,6 @@ impl UI {
                         .collect(),
                     items,
                     rect: Rect::default(),
-                    view: 0,
                 }
             })
             .collect();
