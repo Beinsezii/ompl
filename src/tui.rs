@@ -133,12 +133,16 @@ struct ZoneEvent {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Bar {
     parent: Rect,
+    help: Rect,
+    vol_div: Rect,
     vol_stat: Rect,
     vol_sub: Rect,
     vol_add: Rect,
+    control_div: Rect,
     prev: Rect,
     play_pause: Rect,
     next: Rect,
+    track_div: Rect,
     track: Rect,
 }
 
@@ -147,29 +151,35 @@ impl Bar {
         let s = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
+                Constraint::Length(2), // help
+                Constraint::Length(3), // vol_div
                 Constraint::Length(8), // vol_stat
                 Constraint::Length(1),
                 Constraint::Length(1), // vol_sub
                 Constraint::Length(1), // vol_add
-                Constraint::Length(2),
+                Constraint::Length(3), // control_div
                 Constraint::Length(2), // prev
                 Constraint::Length(1),
                 Constraint::Length(2), // play_pause
                 Constraint::Length(1),
                 Constraint::Length(2), // next
-                Constraint::Length(1),
-                Constraint::Min(4), // track
+                Constraint::Length(3), // track_div
+                Constraint::Min(0), // track
             ])
             .split(rect);
         Self {
             parent: rect,
-            vol_stat: s[0],
-            vol_sub: s[2],
-            vol_add: s[3],
-            prev: s[5],
-            play_pause: s[7],
-            next: s[9],
-            track: s[11],
+            help: s[0],
+            vol_div: s[1],
+            vol_stat: s[2],
+            vol_sub: s[4],
+            vol_add: s[5],
+            control_div: s[6],
+            prev: s[7],
+            play_pause: s[9],
+            next: s[11],
+            track_div: s[12],
+            track: s[13],
         }
     }
     pub fn draw<T: tui::backend::Backend>(
@@ -177,15 +187,19 @@ impl Bar {
         frame: &mut tui::terminal::Frame<T>,
         library: &Arc<Library>,
     ) {
+        frame.render_widget(Paragraph::new(" ?"), self.help);
+        frame.render_widget(Paragraph::new(" | "), self.vol_div);
         frame.render_widget(
             Paragraph::new(format!("Vol {:.2}", library.volume_get())),
             self.vol_stat,
         );
         frame.render_widget(Paragraph::new("-"), self.vol_sub);
         frame.render_widget(Paragraph::new("+"), self.vol_add);
-        frame.render_widget(Paragraph::new("|<"), self.prev);
+        frame.render_widget(Paragraph::new(" | "), self.control_div);
+        frame.render_widget(Paragraph::new(":<"), self.prev);
         frame.render_widget(Paragraph::new("#>"), self.play_pause);
-        frame.render_widget(Paragraph::new(">|"), self.next);
+        frame.render_widget(Paragraph::new(">:"), self.next);
+        frame.render_widget(Paragraph::new(" | "), self.track_div);
         frame.render_widget(
             Paragraph::new(
                 library
@@ -495,6 +509,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     queue!(
         stdo,
         terminal::EnterAlternateScreen,
+        terminal::Clear(terminal::ClearType::All),
         event::EnableMouseCapture,
         cursor::Hide
     )
@@ -750,6 +765,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let mut stdo = std::io::stdout();
     queue!(
         stdo,
+        terminal::Clear(terminal::ClearType::All),
+        cursor::MoveTo(0, 0),
         terminal::LeaveAlternateScreen,
         event::DisableMouseCapture,
         cursor::Show
