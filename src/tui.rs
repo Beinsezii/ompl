@@ -113,6 +113,7 @@ enum ZoneEventType {
     VolAdd,
     VolSub,
     Next,
+    Stop,
     PlayPause,
     Prev,
 
@@ -140,6 +141,7 @@ struct Bar {
     vol_add: Rect,
     control_div: Rect,
     prev: Rect,
+    stop: Rect,
     play_pause: Rect,
     next: Rect,
     track_div: Rect,
@@ -153,14 +155,15 @@ impl Bar {
             .constraints([
                 Constraint::Length(2), // help
                 Constraint::Length(3), // vol_div
-                Constraint::Length(8), // vol_stat
-                Constraint::Length(1),
+                Constraint::Length(9), // vol_stat
                 Constraint::Length(1), // vol_sub
                 Constraint::Length(1), // vol_add
                 Constraint::Length(3), // control_div
                 Constraint::Length(2), // prev
                 Constraint::Length(1),
-                Constraint::Length(2), // play_pause
+                Constraint::Length(1), // stop
+                Constraint::Length(1),
+                Constraint::Length(3), // play_pause
                 Constraint::Length(1),
                 Constraint::Length(2), // next
                 Constraint::Length(3), // track_div
@@ -172,14 +175,15 @@ impl Bar {
             help: s[0],
             vol_div: s[1],
             vol_stat: s[2],
-            vol_sub: s[4],
-            vol_add: s[5],
-            control_div: s[6],
-            prev: s[7],
-            play_pause: s[9],
-            next: s[11],
-            track_div: s[12],
-            track: s[13],
+            vol_sub: s[3],
+            vol_add: s[4],
+            control_div: s[5],
+            prev: s[6],
+            stop: s[8],
+            play_pause: s[10],
+            next: s[12],
+            track_div: s[13],
+            track: s[14],
         }
     }
     pub fn draw<T: tui::backend::Backend>(
@@ -190,14 +194,15 @@ impl Bar {
         frame.render_widget(Paragraph::new(" ?"), self.help);
         frame.render_widget(Paragraph::new(" | "), self.vol_div);
         frame.render_widget(
-            Paragraph::new(format!("Vol {:.2}", library.volume_get())),
+            Paragraph::new(format!("Vol {:.2} ", library.volume_get())),
             self.vol_stat,
         );
         frame.render_widget(Paragraph::new("-"), self.vol_sub);
         frame.render_widget(Paragraph::new("+"), self.vol_add);
         frame.render_widget(Paragraph::new(" | "), self.control_div);
         frame.render_widget(Paragraph::new(":<"), self.prev);
-        frame.render_widget(Paragraph::new("#>"), self.play_pause);
+        frame.render_widget(Paragraph::new("#"), self.stop);
+        frame.render_widget(Paragraph::new("::>"), self.play_pause);
         frame.render_widget(Paragraph::new(">:"), self.next);
         frame.render_widget(Paragraph::new(" | "), self.track_div);
         frame.render_widget(
@@ -468,6 +473,8 @@ impl UI {
                     ZoneEventType::VolAdd
                 } else if self.bar.prev.intersects(point) {
                     ZoneEventType::Prev
+                } else if self.bar.stop.intersects(point) {
+                    ZoneEventType::Stop
                 } else if self.bar.play_pause.intersects(point) {
                     ZoneEventType::PlayPause
                 } else if self.bar.next.intersects(point) {
@@ -708,6 +715,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     ZoneEventType::VolSub => library.volume_sub(0.05),
                                     ZoneEventType::VolAdd => library.volume_add(0.05),
                                     ZoneEventType::Prev => library.previous(),
+                                    ZoneEventType::Stop => library.stop(),
                                     ZoneEventType::PlayPause => library.play_pause(),
                                     ZoneEventType::Next => library.next(),
                                     ZoneEventType::None => (),
