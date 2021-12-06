@@ -76,15 +76,7 @@ TUI Controls:
 
 // ### UI ### {{{
 
-#[derive(Clone, Debug, PartialEq)]
-struct FilterPane {
-    tag: String,
-    items: Vec<String>,
-    index: usize,
-    selected: Vec<usize>,
-    rect: Rect,
-    view: usize,
-}
+// ## Theme ## {{{
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Theme {
@@ -109,10 +101,21 @@ impl Theme {
     }
 }
 
+// ## Theme ## }}}
+
+// ## Events ## {{{
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZoneEventType {
     Queue(usize),
     Panes { pane: usize, index: usize },
+
+    VolAdd,
+    VolSub,
+    Next,
+    PlayPause,
+    Prev,
+
     None,
 }
 
@@ -121,6 +124,91 @@ struct ZoneEvent {
     kind: MouseEventKind,
     mods: KeyModifiers,
     event: ZoneEventType,
+}
+
+// ## Events ## }}}
+
+// ## Bar ## {{{
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Bar {
+    parent: Rect,
+    vol_stat: Rect,
+    vol_sub: Rect,
+    vol_add: Rect,
+    prev: Rect,
+    play_pause: Rect,
+    next: Rect,
+    track: Rect,
+}
+
+impl Bar {
+    pub fn from_rect(rect: Rect) -> Self {
+        let s = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(8), // vol_stat
+                Constraint::Length(1),
+                Constraint::Length(1), // vol_sub
+                Constraint::Length(1), // vol_add
+                Constraint::Length(2),
+                Constraint::Length(2), // prev
+                Constraint::Length(1),
+                Constraint::Length(2), // play_pause
+                Constraint::Length(1),
+                Constraint::Length(2), // next
+                Constraint::Length(1),
+                Constraint::Min(4), // track
+            ])
+            .split(rect);
+        Self {
+            parent: rect,
+            vol_stat: s[0],
+            vol_sub: s[2],
+            vol_add: s[3],
+            prev: s[5],
+            play_pause: s[7],
+            next: s[9],
+            track: s[11],
+        }
+    }
+    pub fn draw<T: tui::backend::Backend>(
+        &self,
+        frame: &mut tui::terminal::Frame<T>,
+        library: &Arc<Library>,
+    ) {
+        frame.render_widget(
+            Paragraph::new(format!("Vol {:.2}", library.volume_get())),
+            self.vol_stat,
+        );
+        frame.render_widget(Paragraph::new("-"), self.vol_sub);
+        frame.render_widget(Paragraph::new("+"), self.vol_add);
+        frame.render_widget(Paragraph::new("|<"), self.prev);
+        frame.render_widget(Paragraph::new("#>"), self.play_pause);
+        frame.render_widget(Paragraph::new(">|"), self.next);
+        frame.render_widget(
+            Paragraph::new(
+                library
+                    .track_get()
+                    .map(|t| t.tags().get("title").cloned())
+                    .flatten()
+                    .unwrap_or("???".to_owned()),
+            ),
+            self.track,
+        )
+    }
+}
+
+// ## Bar ## }}}
+
+#[derive(Clone, Debug, PartialEq)]
+struct FilterPane {
+    tag: String,
+    items: Vec<String>,
+    index: usize,
+    selected: Vec<usize>,
+    rect: Rect,
+    view: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,6 +226,7 @@ struct UI {
     queue_pos: usize,
     queue_rect: Rect,
     queue_view: usize,
+    bar: Bar,
 }
 
 impl UI {
@@ -150,6 +239,7 @@ impl UI {
             queue_pos: 0,
             queue_rect: Rect::default(),
             queue_view: 0,
+            bar: Bar::default(),
         };
         result.update_from_library(library);
         result
@@ -357,6 +447,20 @@ impl UI {
             mods: event.modifiers,
             event: if self.queue_rect.intersects(point) {
                 ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
+            } else if self.bar.parent.intersects(point) {
+                if self.bar.vol_sub.intersects(point) {
+                    ZoneEventType::VolSub
+                } else if self.bar.vol_add.intersects(point) {
+                    ZoneEventType::VolAdd
+                } else if self.bar.prev.intersects(point) {
+                    ZoneEventType::Prev
+                } else if self.bar.play_pause.intersects(point) {
+                    ZoneEventType::PlayPause
+                } else if self.bar.next.intersects(point) {
+                    ZoneEventType::Next
+                } else {
+                    ZoneEventType::None
+                }
             } else {
                 let mut result = ZoneEventType::None;
                 for (num, pane) in self.panes.iter().enumerate() {
@@ -443,11 +547,8 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     ),
                     ui.queue_rect,
                 );
-                let status = zones[0];
-                f.render_widget(
-                    Paragraph::new(format!("Vol: {:.2}", library.volume_get())),
-                    status,
-                );
+                ui.bar = Bar::from_rect(zones[0]);
+                ui.bar.draw(f, &library);
                 for (num, fp) in ui.panes.iter().enumerate() {
                     f.render_widget(
                         ui.build_list(Pane::Panes(num), theme).block(
@@ -618,7 +719,32 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                 }
                                 _ => continue,
                             },
-                            ZoneEventType::None => continue,
+                            ZoneEventType::VolSub
+                                if kind == MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                library.volume_sub(0.05)
+                            }
+                            ZoneEventType::VolAdd
+                                if kind == MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                library.volume_add(0.05)
+                            }
+                            ZoneEventType::Prev
+                                if kind == MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                library.previous()
+                            }
+                            ZoneEventType::PlayPause
+                                if kind == MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                library.play_pause()
+                            }
+                            ZoneEventType::Next
+                                if kind == MouseEventKind::Down(MouseButton::Left) =>
+                            {
+                                library.next()
+                            }
+                            _ => continue,
                         },
                     },
 
