@@ -5,8 +5,8 @@ use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::thread;
 
-mod tui;
 mod library;
+mod tui;
 use library::Library;
 
 use crossbeam::channel;
@@ -153,7 +153,9 @@ pub enum Action {
         #[clap(long)]
         now: bool,
     },
-    Verbosity{verbosity: u8},
+    Verbosity {
+        verbosity: u8,
+    },
 }
 
 // ### SHARED }}}
@@ -163,10 +165,11 @@ pub enum Action {
 #[derive(Parser, Debug, Clone)]
 #[clap(author, about, version, after_help(tui::HELP))]
 struct MainArgs {
+    #[clap(short, long)]
     /// Path to music libary folder
     library: std::path::PathBuf,
-    #[clap(long)]
 
+    #[clap(long)]
     /// Play immediately
     now: bool,
 
@@ -178,11 +181,7 @@ struct MainArgs {
     verbosity: u8,
 }
 
-fn server(
-    listener: TcpListener,
-    library: std::sync::Arc<Library>,
-    cli_send: Sender<Action>,
-) {
+fn server(listener: TcpListener, library: std::sync::Arc<Library>, cli_send: Sender<Action>) {
     l2!(format!("Listening on port {}", PORT));
     for stream in listener.incoming() {
         l2!("Found client");
@@ -248,7 +247,7 @@ fn server(
                                     library.next()
                                 }
                             }
-                            Action::Verbosity{verbosity} => LOG_LEVEL.store(verbosity, LOG_ORD)
+                            Action::Verbosity { verbosity } => LOG_LEVEL.store(verbosity, LOG_ORD),
                         };
                         cli_send.send(sub_args.action).ok();
                     }
@@ -290,7 +289,6 @@ fn instance_main(listener: TcpListener) {
 
     tui::tui(library, cli_recv);
 }
-
 
 // ### SERVER ### }}}
 
