@@ -659,10 +659,11 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     km!('V') => library.volume_sub(0.05),
 
                     Event::Mouse(event) => match ui.convert_event(event) {
-                        ZoneEvent { kind, event, .. } => match event {
-                            ZoneEventType::Queue(index) => match kind {
-                                MouseEventKind::Down(button) => match button {
-                                    MouseButton::Left => {
+                        ZoneEvent { kind, event, .. } => match kind {
+                            MouseEventKind::Down(button) => match button {
+
+                                MouseButton::Left => match event {
+                                    ZoneEventType::Queue(index) => {
                                         ui.queue_sel = true;
                                         if index > 0
                                             && index <= ui.queue_rect.height as usize - 2
@@ -673,22 +674,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                             ui.queue_pos = index;
                                         }
                                     }
-                                    MouseButton::Right => (),
-                                    MouseButton::Middle => (),
-                                },
-                                MouseEventKind::ScrollDown => {
-                                    ui.scroll_view_down(Pane::Queue);
-                                    ui.queue_sel = true;
-                                }
-                                MouseEventKind::ScrollUp => {
-                                    ui.scroll_view_up(Pane::Queue);
-                                    ui.queue_sel = true;
-                                }
-                                _ => (),
-                            },
-                            ZoneEventType::Panes { pane, index } => match kind {
-                                MouseEventKind::Down(button) => match button {
-                                    MouseButton::Left => {
+                                    ZoneEventType::Panes { pane, index } => {
                                         ui.queue_sel = false;
                                         ui.panes_index = pane;
                                         if index == 0 {
@@ -704,46 +690,42 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                         library.set_filters(ui.rebuild_filters());
                                         ui.update_from_library(&library);
                                     }
-                                    MouseButton::Right => (),
-                                    MouseButton::Middle => (),
+                                    ZoneEventType::VolSub => library.volume_sub(0.05),
+                                    ZoneEventType::VolAdd => library.volume_add(0.05),
+                                    ZoneEventType::Prev => library.previous(),
+                                    ZoneEventType::PlayPause => library.play_pause(),
+                                    ZoneEventType::Next => library.next(),
+                                    ZoneEventType::None => (),
                                 },
-                                MouseEventKind::ScrollDown => {
+                                MouseButton::Right => (),
+                                MouseButton::Middle => (),
+                            },
+
+                            MouseEventKind::ScrollDown => match event {
+                                ZoneEventType::Queue(_index) => {
+                                    ui.scroll_view_down(Pane::Queue);
+                                    ui.queue_sel = true;
+                                }
+                                ZoneEventType::Panes { pane, .. } => {
                                     ui.scroll_view_down(Pane::Panes(pane));
                                     ui.queue_sel = false;
                                     ui.panes_index = pane;
                                 }
-                                MouseEventKind::ScrollUp => {
+                                _ => (),
+                            },
+                            MouseEventKind::ScrollUp => match event {
+                                ZoneEventType::Queue(_index) => {
+                                    ui.scroll_view_up(Pane::Queue);
+                                    ui.queue_sel = true;
+                                }
+                                ZoneEventType::Panes { pane, .. } => {
                                     ui.scroll_view_up(Pane::Panes(pane));
                                     ui.queue_sel = false;
                                     ui.panes_index = pane;
                                 }
-                                _ => continue,
+                                _ => (),
                             },
-                            ZoneEventType::VolSub
-                                if kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                library.volume_sub(0.05)
-                            }
-                            ZoneEventType::VolAdd
-                                if kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                library.volume_add(0.05)
-                            }
-                            ZoneEventType::Prev
-                                if kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                library.previous()
-                            }
-                            ZoneEventType::PlayPause
-                                if kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                library.play_pause()
-                            }
-                            ZoneEventType::Next
-                                if kind == MouseEventKind::Down(MouseButton::Left) =>
-                            {
-                                library.next()
-                            }
+
                             _ => continue,
                         },
                     },
