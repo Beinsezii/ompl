@@ -173,6 +173,10 @@ struct MainArgs {
     /// Play immediately
     now: bool,
 
+    #[clap(long, short)]
+    /// [D]aemon / no-gui mode.
+    daemon: bool,
+
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
 
@@ -283,11 +287,14 @@ fn instance_main(listener: TcpListener) {
     let (cli_send, cli_recv) = channel::bounded::<Action>(1);
 
     let server_library = library.clone();
-    thread::spawn(move || server(listener, server_library, cli_send));
+    let jh = thread::spawn(move || server(listener, server_library, cli_send));
 
     l2!("Main server started");
-
-    tui::tui(library, cli_recv);
+    if main_args.daemon {
+        jh.join().unwrap();
+    } else {
+        tui::tui(library, cli_recv);
+    }
 }
 
 // ### SERVER ### }}}
