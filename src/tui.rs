@@ -29,17 +29,25 @@ macro_rules! km {
     ($ch:expr) => {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
-            modifiers: _,
+            modifiers: KeyModifiers::NONE,
         })
     };
 }
 
-/// Can't assign modifiers with $mod for some reason
+// Can't assign modifiers with $mod for some reason
 macro_rules! km_c {
     ($ch:expr) => {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::CONTROL,
+        })
+    };
+}
+macro_rules! km_s {
+    ($ch:expr) => {
+        Event::Key(KeyEvent {
+            code: KeyCode::Char($ch),
+            modifiers: KeyModifiers::SHIFT,
         })
     };
 }
@@ -647,18 +655,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         }
                     }
 
-                    km_c!('f') => {
-                        if !ui.queue_sel {
-                            match ui.active_pane().selected.is_empty() {
-                                true => {
-                                    ui.active_pane_mut().selected =
-                                        (0..ui.active_pane().items.len()).collect()
-                                }
-                                false => ui.active_pane_mut().selected = Vec::new(),
-                            }
-                        }
-                    }
-
                     km!('f') => {
                         if ui.queue_sel {
                             library.play_track(ui.queue.get(ui.queue_pos).cloned())
@@ -673,12 +669,24 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         }
                     }
 
+                    km_c!('f') => {
+                        if !ui.queue_sel {
+                            match ui.active_pane().selected.is_empty() {
+                                true => {
+                                    ui.active_pane_mut().selected =
+                                        (0..ui.active_pane().items.len()).collect()
+                                }
+                                false => ui.active_pane_mut().selected = Vec::new(),
+                            }
+                        }
+                    }
+
                     km!('a') => library.play_pause(),
                     km!('x') => library.stop(),
                     km!('n') => library.next(),
                     km!('p') => library.previous(),
                     km!('v') => library.volume_add(0.05),
-                    km!('V') => library.volume_sub(0.05),
+                    km_s!('V') => library.volume_sub(0.05),
 
                     Event::Mouse(event) => match ui.convert_event(event) {
                         ZoneEvent {
