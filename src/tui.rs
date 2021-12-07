@@ -238,6 +238,7 @@ enum Pane {
 
 #[derive(Clone, Debug, PartialEq)]
 struct UI {
+    bar: Bar,
     panes: Vec<FilterPane>,
     panes_index: usize,
     queue: Vec<Arc<Track>>,
@@ -245,12 +246,13 @@ struct UI {
     queue_pos: usize,
     queue_rect: Rect,
     queue_view: usize,
-    bar: Bar,
+    theme: Theme,
 }
 
 impl UI {
-    fn from_library(library: &Arc<Library>) -> Self {
+    fn from_library(library: &Arc<Library>, theme: Theme) -> Self {
         let mut result = Self {
+            bar: Bar::default(),
             panes: Vec::new(),
             panes_index: 0,
             queue: Vec::new(),
@@ -258,7 +260,7 @@ impl UI {
             queue_pos: 0,
             queue_rect: Rect::default(),
             queue_view: 0,
-            bar: Bar::default(),
+            theme,
         };
         result.update_from_library(library);
         result
@@ -458,7 +460,6 @@ impl UI {
         &mut self,
         library: &Arc<Library>,
         terminal: &mut Terminal<T>,
-        theme: Theme,
     ) {
         terminal
             .draw(|f| {
@@ -486,7 +487,7 @@ impl UI {
                 }
                 self.queue_rect = zones[2];
                 f.render_widget(
-                    self.build_list(Pane::Queue, theme).block(
+                    self.build_list(Pane::Queue, self.theme).block(
                         Block::default()
                             .border_type(widgets::BorderType::Plain)
                             .borders(Borders::ALL)
@@ -498,16 +499,16 @@ impl UI {
                 self.bar.draw(f, library);
                 for (num, fp) in self.panes.iter().enumerate() {
                     f.render_widget(
-                        self.build_list(Pane::Panes(num), theme).block(
+                        self.build_list(Pane::Panes(num), self.theme).block(
                             Block::default()
                                 .border_type(widgets::BorderType::Plain)
                                 .borders(Borders::ALL)
                                 .title(text::Span {
                                     content: fp.tag.as_str().into(),
                                     style: if fp.selected.is_empty() {
-                                        theme.base_hi
+                                        self.theme.base_hi
                                     } else {
-                                        theme.base
+                                        self.theme.base
                                     },
                                 }),
                         ),
@@ -570,7 +571,7 @@ impl UI {
 // ### UI ### }}}
 
 pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
-    let mut ui = UI::from_library(&library);
+    let mut ui = UI::from_library(&library, Theme::new(Color::Yellow));
     let library_weak = Arc::downgrade(&library);
     drop(library);
     l2!("Entering interactive terminal...");
@@ -591,11 +592,9 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let backend = CrosstermBackend::new(stdo);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    let theme = Theme::new(Color::Yellow);
-
     let result = std::panic::catch_unwind(move || 'main: loop {
         match library_weak.upgrade() {
-            Some(l) => ui.draw(&l, &mut terminal, theme),
+            Some(l) => ui.draw(&l, &mut terminal),
             None => break 'main,
         };
 
@@ -785,7 +784,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
             if let Ok(action) = cli_recv.try_recv() {
                 match action {
                     Action::Volume { .. } => (),
-                    Action::Filter { .. } => ui = UI::from_library(&library),
+                    Action::Filter { .. } => ui.update_from_library(&library),
                     _ => continue,
                 }
                 break 'poller;
