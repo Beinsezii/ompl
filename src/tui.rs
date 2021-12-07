@@ -527,6 +527,178 @@ impl<T: Backend> UI<T> {
     }
     // ## draw ## }}}
 
+    // ## process_event ## {{{
+    fn process_event(&mut self, event: Event, library: &Arc<Library>) {
+        match event {
+            Event::Key(KeyEvent {
+                code: KeyCode::Tab, ..
+            }) => self.queue_sel = !self.queue_sel,
+            km!('h') => {
+                if !self.queue_sel {
+                    self.panes_index = self.panes_index.saturating_sub(1)
+                }
+            }
+            km!('l') => {
+                if !self.queue_sel {
+                    self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1))
+                }
+            }
+            km!('j') => {
+                if self.queue_sel {
+                    self.queue_pos = min(self.queue_pos + 1, self.queue.len().saturating_sub(1));
+                    self.lock_view(Pane::Queue);
+                } else {
+                    self.active_pane_mut().index = min(
+                        self.active_pane().index + 1,
+                        self.active_pane().items.len().saturating_sub(1),
+                    );
+                    self.lock_view(Pane::Panes(self.panes_index));
+                }
+            }
+            km!('k') => {
+                if self.queue_sel {
+                    self.queue_pos = self.queue_pos.saturating_sub(1);
+                    self.lock_view(Pane::Queue);
+                } else {
+                    self.active_pane_mut().index = self.active_pane().index.saturating_sub(1);
+                    self.lock_view(Pane::Panes(self.panes_index));
+                }
+            }
+
+            km!('f') => {
+                if self.queue_sel {
+                    library.play_track(self.queue.get(self.queue_pos).cloned())
+                } else {
+                    let pane = self.active_pane_mut();
+                    match pane.selected.iter().position(|i| i == &pane.index) {
+                        Some(p) => drop(pane.selected.remove(p)),
+                        None => pane.selected.push(pane.index),
+                    }
+                    library.set_filters(self.rebuild_filters());
+                    self.update_from_library(&library);
+                }
+            }
+
+            km_c!('f') => {
+                if !self.queue_sel {
+                    match self.active_pane().selected.is_empty() {
+                        true => {
+                            self.active_pane_mut().selected =
+                                (0..self.active_pane().items.len()).collect()
+                        }
+                        false => self.active_pane_mut().selected = Vec::new(),
+                    }
+                }
+            }
+
+            km!('a') => library.play_pause(),
+            km!('x') => library.stop(),
+            km!('n') => library.next(),
+            km!('p') => library.previous(),
+            km!('v') => library.volume_add(0.05),
+            km_s!('V') => library.volume_sub(0.05),
+
+            Event::Mouse(event) => match self.convert_event(event) {
+                ZoneEvent {
+                    kind,
+                    event,
+                    mods: KeyModifiers::NONE,
+                } => match kind {
+                    MouseEventKind::Down(button) => match button {
+                        MouseButton::Left => match event {
+                            ZoneEventType::Queue(index) => {
+                                self.queue_sel = true;
+                                if index > 0
+                                    && index <= self.queue_rect.height as usize - 2
+                                    && index < self.queue.len()
+                                {
+                                    let index = index - 1 + self.queue_view;
+                                    library.play_track(self.queue.get(index).cloned());
+                                    self.queue_pos = index;
+                                }
+                            }
+                            ZoneEventType::Panes { pane, index } => {
+                                self.queue_sel = false;
+                                self.panes_index = pane;
+                                if index == 0 {
+                                    self.panes[pane].selected = vec![];
+                                } else if index <= self.panes[pane].rect.height as usize - 2
+                                    && index <= self.panes[pane].items.len()
+                                {
+                                    self.panes[pane].selected =
+                                        vec![index - 1 + self.panes[pane].view];
+                                } else {
+                                    return;
+                                }
+                                library.set_filters(self.rebuild_filters());
+                                self.update_from_library(&library);
+                            }
+                            ZoneEventType::VolSub => library.volume_sub(0.05),
+                            ZoneEventType::VolAdd => library.volume_add(0.05),
+                            ZoneEventType::Prev => library.previous(),
+                            ZoneEventType::Stop => library.stop(),
+                            ZoneEventType::PlayPause => library.play_pause(),
+                            ZoneEventType::Next => library.next(),
+                            ZoneEventType::None => return,
+                        },
+                        MouseButton::Right => match event {
+                            ZoneEventType::Panes { pane, index } => {
+                                self.queue_sel = false;
+                                self.panes_index = pane;
+                                if index > 0 && index <= self.panes[pane].rect.height as usize - 2 {
+                                    let sel = index - 1 + self.panes[pane].view;
+                                    if let Some(pos) =
+                                        self.panes[pane].selected.iter().position(|x| *x == sel)
+                                    {
+                                        self.panes[pane].selected.remove(pos);
+                                    } else {
+                                        self.panes[pane].selected.push(sel);
+                                    }
+                                }
+                            }
+                            ZoneEventType::Queue(_) => self.queue_sel = true,
+                            _ => return,
+                        },
+                        MouseButton::Middle => return,
+                    },
+
+                    MouseEventKind::ScrollDown => match event {
+                        ZoneEventType::Queue(_index) => {
+                            self.scroll_view_down(Pane::Queue);
+                            self.queue_sel = true;
+                        }
+                        ZoneEventType::Panes { pane, .. } => {
+                            self.scroll_view_down(Pane::Panes(pane));
+                            self.queue_sel = false;
+                            self.panes_index = pane;
+                        }
+                        _ => return,
+                    },
+                    MouseEventKind::ScrollUp => match event {
+                        ZoneEventType::Queue(_index) => {
+                            self.scroll_view_up(Pane::Queue);
+                            self.queue_sel = true;
+                        }
+                        ZoneEventType::Panes { pane, .. } => {
+                            self.scroll_view_up(Pane::Panes(pane));
+                            self.queue_sel = false;
+                            self.panes_index = pane;
+                        }
+                        _ => return,
+                    },
+
+                    _ => return,
+                },
+                _ => return,
+            },
+
+            Event::Resize(..) => (),
+            _ => return,
+        }
+        self.draw(library)
+    }
+    // ## process_event ## }}}
+
     // ## UI Event FNs {{{
     fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
         let point = Rect {
@@ -601,205 +773,28 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     );
     drop(library);
 
-    let result = std::panic::catch_unwind(move || 'main: loop {
-        match library_weak.upgrade() {
-            Some(l) => ui.draw(&l),
-            None => break 'main,
+    let result = std::panic::catch_unwind(move || loop {
+        let library = match library_weak.upgrade() {
+            Some(l) => l,
+            None => break,
         };
-
-        // ## Event Loop ## {{{
-        'poller: loop {
-            let library = match library_weak.upgrade() {
-                Some(l) => l,
-                None => break 'main,
-            };
-            if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
-                match ev {
-                    km_c!('c') => {
-                        break 'main;
-                    }
-
-                    Event::Key(KeyEvent {
-                        code: KeyCode::Tab, ..
-                    }) => ui.queue_sel = !ui.queue_sel,
-                    km!('h') => {
-                        if !ui.queue_sel {
-                            ui.panes_index = ui.panes_index.saturating_sub(1)
-                        }
-                    }
-                    km!('l') => {
-                        if !ui.queue_sel {
-                            ui.panes_index =
-                                min(ui.panes_index + 1, ui.panes.len().saturating_sub(1))
-                        }
-                    }
-                    km!('j') => {
-                        if ui.queue_sel {
-                            ui.queue_pos = min(ui.queue_pos + 1, ui.queue.len().saturating_sub(1));
-                            ui.lock_view(Pane::Queue);
-                        } else {
-                            ui.active_pane_mut().index = min(
-                                ui.active_pane().index + 1,
-                                ui.active_pane().items.len().saturating_sub(1),
-                            );
-                            ui.lock_view(Pane::Panes(ui.panes_index));
-                        }
-                    }
-                    km!('k') => {
-                        if ui.queue_sel {
-                            ui.queue_pos = ui.queue_pos.saturating_sub(1);
-                            ui.lock_view(Pane::Queue);
-                        } else {
-                            ui.active_pane_mut().index = ui.active_pane().index.saturating_sub(1);
-                            ui.lock_view(Pane::Panes(ui.panes_index));
-                        }
-                    }
-
-                    km!('f') => {
-                        if ui.queue_sel {
-                            library.play_track(ui.queue.get(ui.queue_pos).cloned())
-                        } else {
-                            let pane = ui.active_pane_mut();
-                            match pane.selected.iter().position(|i| i == &pane.index) {
-                                Some(p) => drop(pane.selected.remove(p)),
-                                None => pane.selected.push(pane.index),
-                            }
-                            library.set_filters(ui.rebuild_filters());
-                            ui.update_from_library(&library);
-                        }
-                    }
-
-                    km_c!('f') => {
-                        if !ui.queue_sel {
-                            match ui.active_pane().selected.is_empty() {
-                                true => {
-                                    ui.active_pane_mut().selected =
-                                        (0..ui.active_pane().items.len()).collect()
-                                }
-                                false => ui.active_pane_mut().selected = Vec::new(),
-                            }
-                        }
-                    }
-
-                    km!('a') => library.play_pause(),
-                    km!('x') => library.stop(),
-                    km!('n') => library.next(),
-                    km!('p') => library.previous(),
-                    km!('v') => library.volume_add(0.05),
-                    km_s!('V') => library.volume_sub(0.05),
-
-                    Event::Mouse(event) => match ui.convert_event(event) {
-                        ZoneEvent {
-                            kind,
-                            event,
-                            mods: KeyModifiers::NONE,
-                        } => match kind {
-                            MouseEventKind::Down(button) => match button {
-                                MouseButton::Left => match event {
-                                    ZoneEventType::Queue(index) => {
-                                        ui.queue_sel = true;
-                                        if index > 0
-                                            && index <= ui.queue_rect.height as usize - 2
-                                            && index < ui.queue.len()
-                                        {
-                                            let index = index - 1 + ui.queue_view;
-                                            library.play_track(ui.queue.get(index).cloned());
-                                            ui.queue_pos = index;
-                                        }
-                                    }
-                                    ZoneEventType::Panes { pane, index } => {
-                                        ui.queue_sel = false;
-                                        ui.panes_index = pane;
-                                        if index == 0 {
-                                            ui.panes[pane].selected = vec![];
-                                        } else if index <= ui.panes[pane].rect.height as usize - 2
-                                            && index <= ui.panes[pane].items.len()
-                                        {
-                                            ui.panes[pane].selected =
-                                                vec![index - 1 + ui.panes[pane].view];
-                                        } else {
-                                            continue;
-                                        }
-                                        library.set_filters(ui.rebuild_filters());
-                                        ui.update_from_library(&library);
-                                    }
-                                    ZoneEventType::VolSub => library.volume_sub(0.05),
-                                    ZoneEventType::VolAdd => library.volume_add(0.05),
-                                    ZoneEventType::Prev => library.previous(),
-                                    ZoneEventType::Stop => library.stop(),
-                                    ZoneEventType::PlayPause => library.play_pause(),
-                                    ZoneEventType::Next => library.next(),
-                                    ZoneEventType::None => continue,
-                                },
-                                MouseButton::Right => match event {
-                                    ZoneEventType::Panes { pane, index } => {
-                                        ui.queue_sel = false;
-                                        ui.panes_index = pane;
-                                        if index > 0
-                                            && index <= ui.panes[pane].rect.height as usize - 2
-                                        {
-                                            let sel = index - 1 + ui.panes[pane].view;
-                                            if let Some(pos) = ui.panes[pane]
-                                                .selected
-                                                .iter()
-                                                .position(|x| *x == sel)
-                                            {
-                                                ui.panes[pane].selected.remove(pos);
-                                            } else {
-                                                ui.panes[pane].selected.push(sel);
-                                            }
-                                        }
-                                    }
-                                    ZoneEventType::Queue(_) => ui.queue_sel = true,
-                                    _ => continue,
-                                },
-                                MouseButton::Middle => continue,
-                            },
-
-                            MouseEventKind::ScrollDown => match event {
-                                ZoneEventType::Queue(_index) => {
-                                    ui.scroll_view_down(Pane::Queue);
-                                    ui.queue_sel = true;
-                                }
-                                ZoneEventType::Panes { pane, .. } => {
-                                    ui.scroll_view_down(Pane::Panes(pane));
-                                    ui.queue_sel = false;
-                                    ui.panes_index = pane;
-                                }
-                                _ => continue,
-                            },
-                            MouseEventKind::ScrollUp => match event {
-                                ZoneEventType::Queue(_index) => {
-                                    ui.scroll_view_up(Pane::Queue);
-                                    ui.queue_sel = true;
-                                }
-                                ZoneEventType::Panes { pane, .. } => {
-                                    ui.scroll_view_up(Pane::Panes(pane));
-                                    ui.queue_sel = false;
-                                    ui.panes_index = pane;
-                                }
-                                _ => continue,
-                            },
-
-                            _ => continue,
-                        },
-                        _ => continue,
-                    },
-
-                    Event::Resize(..) => (),
-                    _ => continue,
-                }
-                break 'poller;
+        if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
+            if ev == km_c!('c') {
+                break;
             }
-            if let Ok(action) = cli_recv.try_recv() {
-                match action {
-                    Action::Volume { .. } => (),
-                    Action::Filter { .. } => ui.update_from_library(&library),
-                    _ => continue,
-                }
-            }
+            ui.process_event(ev, &library);
         }
-        // ## Event Loop ## }}}
+        if let Ok(action) = cli_recv.try_recv() {
+            match action {
+                Action::Volume { .. } => (),
+                Action::Filter { .. } => ui.update_from_library(&library),
+                _ => continue,
+            }
+            match library_weak.upgrade() {
+                Some(l) => ui.draw(&l),
+                None => break,
+            };
+        }
     });
 
     queue!(
