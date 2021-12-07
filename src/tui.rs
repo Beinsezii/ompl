@@ -167,7 +167,7 @@ impl Bar {
                 Constraint::Length(1),
                 Constraint::Length(2), // next
                 Constraint::Length(3), // track_div
-                Constraint::Min(0), // track
+                Constraint::Min(0),    // track
             ])
             .split(rect);
         Self {
@@ -683,7 +683,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     Event::Mouse(event) => match ui.convert_event(event) {
                         ZoneEvent { kind, event, .. } => match kind {
                             MouseEventKind::Down(button) => match button {
-
                                 MouseButton::Left => match event {
                                     ZoneEventType::Queue(index) => {
                                         ui.queue_sel = true;
@@ -720,7 +719,28 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     ZoneEventType::Next => library.next(),
                                     ZoneEventType::None => (),
                                 },
-                                MouseButton::Right => (),
+                                MouseButton::Right => match event {
+                                    ZoneEventType::Panes { pane, index } => {
+                                        ui.queue_sel = false;
+                                        ui.panes_index = pane;
+                                        if index > 0
+                                            && index <= ui.panes[pane].rect.height as usize - 2
+                                        {
+                                            let sel = index - 1 + ui.panes[pane].view;
+                                            if let Some(pos) = ui.panes[pane]
+                                                .selected
+                                                .iter()
+                                                .position(|x| *x == sel)
+                                            {
+                                                ui.panes[pane].selected.remove(pos);
+                                            } else {
+                                                ui.panes[pane].selected.push(sel);
+                                            }
+                                        }
+                                    }
+                                    ZoneEventType::Queue(_) => ui.queue_sel = true,
+                                    _ => (),
+                                },
                                 MouseButton::Middle => (),
                             },
 
