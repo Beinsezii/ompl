@@ -767,36 +767,53 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     )
     .unwrap();
 
-    let mut ui = UI::from_library(
+    let ui = Arc::new(std::sync::Mutex::new(UI::from_library(
         &library,
         Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
-    );
+    )));
     drop(library);
 
-    let result = std::panic::catch_unwind(move || loop {
-        let library = match library_weak.upgrade() {
-            Some(l) => l,
+    let uiw_cli = Arc::downgrade(&ui);
+    let lw_cli = library_weak.clone();
+
+    let event_jh = std::thread::spawn(move || loop {
+        match library_weak.upgrade() {
+            Some(library) => {
+                if let Some(ev) = get_event(None) {
+                    if ev == km_c!('c') {
+                        break;
+                    }
+                    // process_event will draw for us
+                    ui.lock().unwrap().process_event(ev, &library);
+                }
+            }
             None => break,
         };
-        if let Some(ev) = get_event(Some(Duration::from_millis(50))) {
-            if ev == km_c!('c') {
-                break;
-            }
-            ui.process_event(ev, &library);
-        }
-        if let Ok(action) = cli_recv.try_recv() {
-            match action {
-                Action::Volume { .. } => (),
-                Action::Filter { .. } => ui.update_from_library(&library),
-                _ => continue,
-            }
-            match library_weak.upgrade() {
-                Some(l) => ui.draw(&l),
+    });
+
+    let _cli_jh = std::thread::spawn(move || loop {
+        if let Ok(action) = cli_recv.recv() {
+            match uiw_cli.upgrade() {
+                Some(ui) => match lw_cli.upgrade() {
+                    Some(library) => {
+                        match action {
+                            Action::Volume { .. } => (),
+                            Action::Filter { .. } => {
+                                ui.lock().unwrap().update_from_library(&library)
+                            }
+                            _ => continue,
+                        }
+                        ui.lock().unwrap().draw(&library);
+                    }
+                    None => break,
+                },
                 None => break,
-            };
+            }
         }
     });
+
+    let result_event = event_jh.join();
 
     queue!(
         stdo,
@@ -812,7 +829,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
     LOG_LEVEL.store(log_level, LOG_ORD);
 
-    if let Err(e) = result {
+    if let Err(e) = result_event {
         std::panic::resume_unwind(e)
     };
 }
