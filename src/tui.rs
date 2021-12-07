@@ -717,7 +717,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     ZoneEventType::Stop => library.stop(),
                                     ZoneEventType::PlayPause => library.play_pause(),
                                     ZoneEventType::Next => library.next(),
-                                    ZoneEventType::None => (),
+                                    ZoneEventType::None => continue,
                                 },
                                 MouseButton::Right => match event {
                                     ZoneEventType::Panes { pane, index } => {
@@ -739,9 +739,9 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                         }
                                     }
                                     ZoneEventType::Queue(_) => ui.queue_sel = true,
-                                    _ => (),
+                                    _ => continue,
                                 },
-                                MouseButton::Middle => (),
+                                MouseButton::Middle => continue,
                             },
 
                             MouseEventKind::ScrollDown => match event {
@@ -754,7 +754,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     ui.queue_sel = false;
                                     ui.panes_index = pane;
                                 }
-                                _ => (),
+                                _ => continue,
                             },
                             MouseEventKind::ScrollUp => match event {
                                 ZoneEventType::Queue(_index) => {
@@ -766,7 +766,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                                     ui.queue_sel = false;
                                     ui.panes_index = pane;
                                 }
-                                _ => (),
+                                _ => continue,
                             },
 
                             _ => continue,
