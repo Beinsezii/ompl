@@ -368,6 +368,7 @@ impl<T: Backend> UI<T> {
             len.saturating_sub(height.saturating_sub(2) as usize),
         )
     }
+
     fn scroll_view_down(&mut self, pane: Pane) {
         let (height, len, view) = match pane {
             Pane::Queue => (
@@ -394,6 +395,7 @@ impl<T: Backend> UI<T> {
         };
         *index = min(*index + offset, len - 1);
     }
+
     fn scroll_view_up(&mut self, pane: Pane) {
         let (height, index) = match pane {
             Pane::Queue => (self.queue_rect.height, &mut self.queue_pos),
@@ -526,6 +528,52 @@ impl<T: Backend> UI<T> {
         self.terminal = terminal;
     }
     // ## draw ## }}}
+
+    // ## convert_event ## {{{
+    fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
+        let point = Rect {
+            x: event.column,
+            y: event.row,
+            height: 1,
+            width: 1,
+        };
+        ZoneEvent {
+            kind: event.kind,
+            mods: event.modifiers,
+            event: if self.queue_rect.intersects(point) {
+                ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
+            } else if self.bar.parent.intersects(point) {
+                if self.bar.vol_sub.intersects(point) {
+                    ZoneEventType::VolSub
+                } else if self.bar.vol_add.intersects(point) {
+                    ZoneEventType::VolAdd
+                } else if self.bar.prev.intersects(point) {
+                    ZoneEventType::Prev
+                } else if self.bar.stop.intersects(point) {
+                    ZoneEventType::Stop
+                } else if self.bar.play_pause.intersects(point) {
+                    ZoneEventType::PlayPause
+                } else if self.bar.next.intersects(point) {
+                    ZoneEventType::Next
+                } else {
+                    ZoneEventType::None
+                }
+            } else {
+                let mut result = ZoneEventType::None;
+                for (num, pane) in self.panes.iter().enumerate() {
+                    if pane.rect.intersects(point) {
+                        result = ZoneEventType::Panes {
+                            pane: num,
+                            index: event.row.saturating_sub(pane.rect.y).into(),
+                        };
+                        break;
+                    }
+                }
+                result
+            },
+        }
+    }
+    // ## convert_event ## }}}
 
     // ## process_event ## {{{
     fn process_event(&mut self, event: Event, library: &Arc<Library>) {
@@ -698,53 +746,6 @@ impl<T: Backend> UI<T> {
         self.draw(library)
     }
     // ## process_event ## }}}
-
-    // ## UI Event FNs {{{
-    fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
-        let point = Rect {
-            x: event.column,
-            y: event.row,
-            height: 1,
-            width: 1,
-        };
-        ZoneEvent {
-            kind: event.kind,
-            mods: event.modifiers,
-            event: if self.queue_rect.intersects(point) {
-                ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
-            } else if self.bar.parent.intersects(point) {
-                if self.bar.vol_sub.intersects(point) {
-                    ZoneEventType::VolSub
-                } else if self.bar.vol_add.intersects(point) {
-                    ZoneEventType::VolAdd
-                } else if self.bar.prev.intersects(point) {
-                    ZoneEventType::Prev
-                } else if self.bar.stop.intersects(point) {
-                    ZoneEventType::Stop
-                } else if self.bar.play_pause.intersects(point) {
-                    ZoneEventType::PlayPause
-                } else if self.bar.next.intersects(point) {
-                    ZoneEventType::Next
-                } else {
-                    ZoneEventType::None
-                }
-            } else {
-                let mut result = ZoneEventType::None;
-                for (num, pane) in self.panes.iter().enumerate() {
-                    if pane.rect.intersects(point) {
-                        result = ZoneEventType::Panes {
-                            pane: num,
-                            index: event.row.saturating_sub(pane.rect.y).into(),
-                        };
-                        break;
-                    }
-                }
-                result
-            },
-        }
-    }
-
-    // ## UI Event FNs }}}
 }
 
 // ### UI ### }}}
