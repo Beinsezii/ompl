@@ -14,7 +14,7 @@ use crossterm::{
     queue, terminal,
 };
 
-use tui::backend::CrosstermBackend;
+use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
 use tui::style::{Color, Modifier, Style};
 use tui::text;
@@ -186,11 +186,7 @@ impl Bar {
             track: s[14],
         }
     }
-    pub fn draw<T: tui::backend::Backend>(
-        &self,
-        frame: &mut tui::terminal::Frame<T>,
-        library: &Arc<Library>,
-    ) {
+    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, library: &Arc<Library>) {
         frame.render_widget(Paragraph::new(" ?"), self.help);
         frame.render_widget(Paragraph::new(" | "), self.vol_div);
         frame.render_widget(
@@ -236,8 +232,8 @@ enum Pane {
     Panes(usize),
 }
 
-#[derive(Clone, Debug, PartialEq)]
-struct UI {
+#[derive(Debug)]
+struct UI<T: Backend> {
     bar: Bar,
     panes: Vec<FilterPane>,
     panes_index: usize,
@@ -247,10 +243,11 @@ struct UI {
     queue_rect: Rect,
     queue_view: usize,
     theme: Theme,
+    terminal: Option<Terminal<T>>,
 }
 
-impl UI {
-    fn from_library(library: &Arc<Library>, theme: Theme) -> Self {
+impl<T: Backend> UI<T> {
+    fn from_library(library: &Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
         let mut result = Self {
             bar: Bar::default(),
             panes: Vec::new(),
@@ -261,6 +258,7 @@ impl UI {
             queue_rect: Rect::default(),
             queue_view: 0,
             theme,
+            terminal: Some(terminal),
         };
         result.update_from_library(library);
         result
@@ -313,6 +311,7 @@ impl UI {
             self.queue = library.get_queue();
             crate::library::sort_by_tag("title", &mut self.queue)
         }
+        self.draw(library);
     }
 
     fn rebuild_filters(&self) -> Vec<Filter> {
@@ -403,7 +402,7 @@ impl UI {
         *view = view.saturating_sub(offset);
     }
 
-    fn build_list<'a>(&self, pane: Pane, theme: Theme) -> List<'a> {
+    fn build_list<'a>(&self, pane: Pane) -> List<'a> {
         let (items, skip, index, active, selected) = match pane {
             Pane::Queue => (
                 crate::library::get_all_tag("title", &self.queue),
@@ -428,21 +427,21 @@ impl UI {
                 .map(|(n, i)| {
                     let mut style = if active {
                         if selected.contains(&n) {
-                            theme.active_hi
+                            self.theme.active_hi
                         } else {
-                            theme.active
+                            self.theme.active
                         }
                     } else {
                         if selected.contains(&n) {
-                            theme.base_hi
+                            self.theme.base_hi
                         } else {
-                            theme.base
+                            self.theme.base
                         }
                     };
                     if n == index {
-                        style = style.patch(theme.mod_select);
+                        style = style.patch(self.theme.mod_select);
                         if active {
-                            style = style.patch(theme.mod_select_active)
+                            style = style.patch(self.theme.mod_select_active)
                         }
                     }
                     ListItem::new(text::Span {
@@ -456,12 +455,11 @@ impl UI {
     // ## UI Layout FNs }}}
 
     // ## draw ## {{{
-    fn draw<T: tui::backend::Backend>(
-        &mut self,
-        library: &Arc<Library>,
-        terminal: &mut Terminal<T>,
-    ) {
+    fn draw(&mut self, library: &Arc<Library>) {
+        let mut terminal = self.terminal.take();
         terminal
+            .as_mut()
+            .unwrap()
             .draw(|f| {
                 let size = f.size();
                 let zones = Layout::default()
@@ -487,7 +485,7 @@ impl UI {
                 }
                 self.queue_rect = zones[2];
                 f.render_widget(
-                    self.build_list(Pane::Queue, self.theme).block(
+                    self.build_list(Pane::Queue).block(
                         Block::default()
                             .border_type(widgets::BorderType::Plain)
                             .borders(Borders::ALL)
@@ -499,7 +497,7 @@ impl UI {
                 self.bar.draw(f, library);
                 for (num, fp) in self.panes.iter().enumerate() {
                     f.render_widget(
-                        self.build_list(Pane::Panes(num), self.theme).block(
+                        self.build_list(Pane::Panes(num)).block(
                             Block::default()
                                 .border_type(widgets::BorderType::Plain)
                                 .borders(Borders::ALL)
@@ -517,6 +515,7 @@ impl UI {
                 }
             })
             .unwrap();
+        self.terminal = terminal;
     }
     // ## draw ## }}}
 
@@ -571,9 +570,7 @@ impl UI {
 // ### UI ### }}}
 
 pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
-    let mut ui = UI::from_library(&library, Theme::new(Color::Yellow));
     let library_weak = Arc::downgrade(&library);
-    drop(library);
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
 
@@ -589,18 +586,18 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     )
     .unwrap();
 
-    let backend = CrosstermBackend::new(stdo);
-    let mut terminal = Terminal::new(backend).unwrap();
+    let mut ui = UI::from_library(
+        &library,
+        Terminal::new(CrosstermBackend::new(stdo)).unwrap(),
+        Theme::new(Color::Yellow),
+    );
+    drop(library);
 
     let result = std::panic::catch_unwind(move || 'main: loop {
         match library_weak.upgrade() {
-            Some(l) => ui.draw(&l, &mut terminal),
+            Some(l) => ui.draw(&l),
             None => break 'main,
         };
-
-        // you *could* implement a proper event-driven system where you have separate threads for
-        // key events, cli events, and updating the UI, but that'd mean redoing damn near
-        // everything here to avoid deadlocks
 
         // ## Event Loop ## {{{
         'poller: loop {
