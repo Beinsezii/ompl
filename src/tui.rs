@@ -773,7 +773,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                         },
                     },
 
-                    Event::Resize(..) => break 'poller,
+                    Event::Resize(..) => (),
                     _ => continue,
                 }
                 break 'poller;
@@ -784,7 +784,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     Action::Filter { .. } => ui.update_from_library(&library),
                     _ => continue,
                 }
-                break 'poller;
             }
         }
         // ## Event Loop ## }}}
