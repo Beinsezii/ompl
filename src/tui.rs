@@ -453,6 +453,72 @@ impl UI {
     }
     // ## UI Layout FNs }}}
 
+    // ## draw ## {{{
+    fn draw<T: tui::backend::Backend>(
+        &mut self,
+        library: &Arc<Library>,
+        terminal: &mut Terminal<T>,
+        theme: Theme,
+    ) {
+        terminal
+            .draw(|f| {
+                let size = f.size();
+                let zones = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Length(1),
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(50),
+                    ])
+                    .split(size);
+                for (n, r) in Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(
+                        (0..self.panes.len())
+                            .map(|_| Constraint::Ratio(1, self.panes.len() as u32))
+                            .collect::<Vec<Constraint>>(),
+                    )
+                    .split(zones[1])
+                    .into_iter()
+                    .enumerate()
+                {
+                    self.panes[n].rect = r;
+                }
+                self.queue_rect = zones[2];
+                f.render_widget(
+                    self.build_list(Pane::Queue, theme).block(
+                        Block::default()
+                            .border_type(widgets::BorderType::Plain)
+                            .borders(Borders::ALL)
+                            .title("Queue"),
+                    ),
+                    self.queue_rect,
+                );
+                self.bar = Bar::from_rect(zones[0]);
+                self.bar.draw(f, library);
+                for (num, fp) in self.panes.iter().enumerate() {
+                    f.render_widget(
+                        self.build_list(Pane::Panes(num), theme).block(
+                            Block::default()
+                                .border_type(widgets::BorderType::Plain)
+                                .borders(Borders::ALL)
+                                .title(text::Span {
+                                    content: fp.tag.as_str().into(),
+                                    style: if fp.selected.is_empty() {
+                                        theme.base_hi
+                                    } else {
+                                        theme.base
+                                    },
+                                }),
+                        ),
+                        self.panes[num].rect,
+                    );
+                }
+            })
+            .unwrap();
+    }
+    // ## draw ## }}}
+
     // ## UI Event FNs {{{
     fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
         let point = Rect {
@@ -528,72 +594,10 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let theme = Theme::new(Color::Yellow);
 
     let result = std::panic::catch_unwind(move || 'main: loop {
-        // ## Layout ## {{{
-
-        let library = match library_weak.upgrade() {
-            Some(l) => l,
+        match library_weak.upgrade() {
+            Some(l) => ui.draw(&l, &mut terminal, theme),
             None => break 'main,
         };
-
-        terminal
-            .draw(|f| {
-                let size = f.size();
-                let zones = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(1),
-                        Constraint::Percentage(50),
-                        Constraint::Percentage(50),
-                    ])
-                    .split(size);
-                for (n, r) in Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints(
-                        (0..ui.panes.len())
-                            .map(|_| Constraint::Ratio(1, ui.panes.len() as u32))
-                            .collect::<Vec<Constraint>>(),
-                    )
-                    .split(zones[1])
-                    .into_iter()
-                    .enumerate()
-                {
-                    ui.panes[n].rect = r;
-                }
-                ui.queue_rect = zones[2];
-                f.render_widget(
-                    ui.build_list(Pane::Queue, theme).block(
-                        Block::default()
-                            .border_type(widgets::BorderType::Plain)
-                            .borders(Borders::ALL)
-                            .title("Queue"),
-                    ),
-                    ui.queue_rect,
-                );
-                ui.bar = Bar::from_rect(zones[0]);
-                ui.bar.draw(f, &library);
-                for (num, fp) in ui.panes.iter().enumerate() {
-                    f.render_widget(
-                        ui.build_list(Pane::Panes(num), theme).block(
-                            Block::default()
-                                .border_type(widgets::BorderType::Plain)
-                                .borders(Borders::ALL)
-                                .title(text::Span {
-                                    content: fp.tag.as_str().into(),
-                                    style: if fp.selected.is_empty() {
-                                        theme.base_hi
-                                    } else {
-                                        theme.base
-                                    },
-                                }),
-                        ),
-                        ui.panes[num].rect,
-                    );
-                }
-            })
-            .unwrap();
-        drop(library);
-
-        // ## Layout ## }}}
 
         // you *could* implement a proper event-driven system where you have separate threads for
         // key events, cli events, and updating the UI, but that'd mean redoing damn near
