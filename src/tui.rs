@@ -681,7 +681,11 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
                     km!('V') => library.volume_sub(0.05),
 
                     Event::Mouse(event) => match ui.convert_event(event) {
-                        ZoneEvent { kind, event, .. } => match kind {
+                        ZoneEvent {
+                            kind,
+                            event,
+                            mods: KeyModifiers::NONE,
+                        } => match kind {
                             MouseEventKind::Down(button) => match button {
                                 MouseButton::Left => match event {
                                     ZoneEventType::Queue(index) => {
@@ -771,6 +775,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
                             _ => continue,
                         },
+                        _ => continue,
                     },
 
                     Event::Resize(..) => (),
