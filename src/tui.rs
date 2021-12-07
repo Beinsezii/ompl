@@ -588,7 +588,7 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
     let mut ui = UI::from_library(
         &library,
-        Terminal::new(CrosstermBackend::new(stdo)).unwrap(),
+        Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
     );
     drop(library);
@@ -790,7 +790,6 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
         // ## Event Loop ## }}}
     });
 
-    let mut stdo = std::io::stdout();
     queue!(
         stdo,
         terminal::Clear(terminal::ClearType::All),
