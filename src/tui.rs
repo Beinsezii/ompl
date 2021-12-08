@@ -872,7 +872,7 @@ impl<T: Backend> UI<T> {
 // ### UI ### }}}
 
 // ### tui ### {{{
-pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
+pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
     let library_weak = Arc::downgrade(&library);
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
