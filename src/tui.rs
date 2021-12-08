@@ -126,6 +126,8 @@ enum ZoneEventType {
     PlayPause,
     Prev,
 
+    Help,
+
     None,
 }
 
@@ -530,17 +532,61 @@ impl<T: Backend> UI<T> {
     }
     // ## draw ## }}}
 
-    pub fn get_input(&mut self, display: &str) -> String {
-        let mut result = String::new();
-        let mut terminal = self.terminal.take().unwrap();
+    // ## Popops ## {{{
+
+    pub fn message(&mut self, title: &str, message: &str) {
+        let mut terminal = self.terminal.take();
 
         terminal
+            .as_mut()
+            .unwrap()
+            .draw(|f| {
+                f.render_widget(
+                    Paragraph::new(message).block(
+                        Block::default()
+                            .border_type(widgets::BorderType::Plain)
+                            .borders(Borders::ALL)
+                            .title(title),
+                    ),
+                    f.size(),
+                )
+            })
+            .unwrap();
+
+        loop {
+            match get_event(None) {
+                Some(Event::Mouse(MouseEvent {
+                    kind: MouseEventKind::Moved,
+                    ..
+                })) => (),
+                Some(Event::Mouse(MouseEvent {
+                    kind: MouseEventKind::Up(_),
+                    ..
+                })) => (),
+                Some(Event::Mouse(MouseEvent {
+                    kind: MouseEventKind::Drag(_),
+                    ..
+                })) => (),
+                _ => break,
+            }
+        }
+
+        self.terminal = terminal;
+    }
+
+    pub fn get_input(&mut self, title: &str) -> String {
+        let mut result = String::new();
+        let mut terminal = self.terminal.take();
+
+        terminal
+            .as_mut()
+            .unwrap()
             .draw(|f| {
                 f.render_widget(
                     Block::default()
                         .border_type(widgets::BorderType::Plain)
                         .borders(Borders::ALL)
-                        .title(display),
+                        .title(title),
                     f.size(),
                 )
             })
@@ -561,9 +607,11 @@ impl<T: Backend> UI<T> {
         terminal::enable_raw_mode().unwrap();
         execute!(stdo, event::EnableMouseCapture, cursor::Hide).unwrap();
 
-        self.terminal = Some(terminal);
+        self.terminal = terminal;
         result
     }
+
+    // ## Popops ## }}}
 
     // ## convert_event ## {{{
     fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
@@ -591,6 +639,8 @@ impl<T: Backend> UI<T> {
                     ZoneEventType::PlayPause
                 } else if self.bar.next.intersects(point) {
                     ZoneEventType::Next
+                } else if self.bar.help.intersects(point) {
+                    ZoneEventType::Help
                 } else {
                     ZoneEventType::None
                 }
@@ -615,6 +665,10 @@ impl<T: Backend> UI<T> {
     fn process_event(&mut self, event: Event, library: &Arc<Library>) {
         match event {
             // # Key Events # {{{
+            km!('/') | km!('?') => {
+                self.message("Help", HELP);
+            }
+
             Event::Key(KeyEvent {
                 code: KeyCode::Tab, ..
             }) => self.queue_sel = !self.queue_sel,
@@ -753,6 +807,7 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::Stop => library.stop(),
                             ZoneEventType::PlayPause => library.play_pause(),
                             ZoneEventType::Next => library.next(),
+                            ZoneEventType::Help => self.message("Help", HELP),
                             ZoneEventType::None => return,
                         },
                         MouseButton::Right => match event {
