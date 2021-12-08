@@ -777,43 +777,54 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let uiw_cli = Arc::downgrade(&ui);
     let lw_cli = library_weak.clone();
 
-    let event_jh = std::thread::spawn(move || loop {
-        match library_weak.upgrade() {
-            Some(library) => {
-                if let Some(ev) = get_event(None) {
-                    if ev == km_c!('c') {
-                        break;
-                    }
-                    // process_event will draw for us
-                    ui.lock().unwrap().process_event(ev, &library);
-                }
-            }
-            None => break,
-        };
-    });
+    let (tui_s, tui_r) = std::sync::mpsc::channel::<()>();
+    let cli_s = tui_s.clone();
 
-    let _cli_jh = std::thread::spawn(move || loop {
-        if let Ok(action) = cli_recv.recv() {
-            match uiw_cli.upgrade() {
-                Some(ui) => match lw_cli.upgrade() {
-                    Some(library) => {
-                        match action {
-                            Action::Volume { .. } => (),
-                            Action::Filter { .. } => {
-                                ui.lock().unwrap().update_from_library(&library)
-                            }
-                            _ => continue,
-                        }
-                        ui.lock().unwrap().draw(&library);
-                    }
-                    None => break,
-                },
-                None => break,
+    let _event_jh = std::thread::spawn(move || {
+        loop {
+            if let Some(ev) = get_event(None) {
+                if ev == km_c!('c') {
+                    break;
+                }
+                // process_event will draw for us
+                ui.lock().unwrap().process_event(
+                    ev,
+                    &match library_weak.upgrade() {
+                        Some(l) => l,
+                        None => break,
+                    },
+                );
             }
         }
+        tui_s.send(())
     });
 
-    let result_event = event_jh.join();
+    let _cli_jh = std::thread::spawn(move || {
+        loop {
+            match cli_recv.recv() {
+                Ok(action) => match uiw_cli.upgrade() {
+                    Some(ui) => match lw_cli.upgrade() {
+                        Some(library) => {
+                            match action {
+                                Action::Volume { .. } => (),
+                                Action::Filter { .. } => {
+                                    ui.lock().unwrap().update_from_library(&library)
+                                }
+                                _ => continue,
+                            }
+                            ui.lock().unwrap().draw(&library);
+                        }
+                        None => break,
+                    },
+                    None => break,
+                },
+                Err(_) => break,
+            }
+        }
+        cli_s.send(())
+    });
+
+    drop(tui_r.recv());
 
     queue!(
         stdo,
@@ -828,8 +839,4 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     terminal::disable_raw_mode().unwrap();
 
     LOG_LEVEL.store(log_level, LOG_ORD);
-
-    if let Err(e) = result_event {
-        std::panic::resume_unwind(e)
-    };
 }
