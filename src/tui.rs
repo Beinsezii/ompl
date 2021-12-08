@@ -11,7 +11,7 @@ use crossbeam::channel::Receiver;
 use crossterm::{
     cursor, event,
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
-    queue, terminal,
+    execute, queue, terminal,
 };
 
 use tui::backend::{Backend, CrosstermBackend};
@@ -78,9 +78,9 @@ TUI Controls:
 * v/V - Volume Increase/Decrease
 * h/j/k/l - left/down/up/right
 * f - [De]select active item
-* Ctrl+f - [De]select all
+* F - [De]select all
 * Tab - [De]select queue
-* Ctrl-d - Delete filter
+* I/D - Insert/Delete filter
 ";
 
 // ### UI ### {{{
@@ -273,7 +273,7 @@ impl<T: Backend> UI<T> {
         result
     }
 
-    // UI Data FNs {{{
+    // ## UI Data FNs ## {{{
 
     fn update_from_library(&mut self, library: &Arc<Library>) {
         let filter_tree = library.get_filter_tree();
@@ -344,7 +344,7 @@ impl<T: Backend> UI<T> {
         &mut self.panes[self.panes_index]
     }
 
-    // UI Data FNs }}}
+    // ## UI Data FNs ## }}}
 
     // ## UI Layout FNs {{{
 
@@ -530,6 +530,41 @@ impl<T: Backend> UI<T> {
     }
     // ## draw ## }}}
 
+    pub fn get_input(&mut self, display: &str) -> String {
+        let mut result = String::new();
+        let mut terminal = self.terminal.take().unwrap();
+
+        terminal
+            .draw(|f| {
+                f.render_widget(
+                    Block::default()
+                        .border_type(widgets::BorderType::Plain)
+                        .borders(Borders::ALL)
+                        .title(display),
+                    f.size(),
+                )
+            })
+            .unwrap();
+
+        let mut stdo = std::io::stdout();
+        execute!(
+            stdo,
+            cursor::MoveTo(1, 1),
+            event::DisableMouseCapture,
+            cursor::Show
+        )
+        .unwrap();
+        terminal::disable_raw_mode().unwrap();
+
+        std::io::stdin().read_line(&mut result).unwrap();
+
+        terminal::enable_raw_mode().unwrap();
+        execute!(stdo, event::EnableMouseCapture, cursor::Hide).unwrap();
+
+        self.terminal = Some(terminal);
+        result
+    }
+
     // ## convert_event ## {{{
     fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
         let point = Rect {
@@ -629,7 +664,7 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_c!('f') => {
+            km_s!('F') => {
                 if !self.queue_sel {
                     match self.active_pane().selected.is_empty() {
                         true => {
@@ -641,7 +676,7 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_c!('d') => {
+            km_s!('D') => {
                 if !self.queue_sel {
                     if self.panes.len() > 1 {
                         self.panes.remove(self.panes_index);
@@ -649,6 +684,21 @@ impl<T: Backend> UI<T> {
                         library.set_filters(self.rebuild_filters());
                         self.update_from_library(library);
                     }
+                }
+            }
+            km_s!('I') => {
+                if !self.queue_sel {
+                    let mut filters = self.rebuild_filters();
+                    filters.insert(
+                        self.panes_index + 1,
+                        Filter {
+                            tag: self.get_input("Tag to sort by: ").trim().to_string(),
+                            items: Vec::new(),
+                        },
+                    );
+                    library.set_filters(filters);
+                    self.update_from_library(library);
+                    self.panes_index += 1;
                 }
             }
 
@@ -766,6 +816,7 @@ impl<T: Backend> UI<T> {
 
 // ### UI ### }}}
 
+// ### tui ### {{{
 pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
     let library_weak = Arc::downgrade(&library);
     l2!("Entering interactive terminal...");
@@ -856,3 +907,4 @@ pub fn tui(library: Arc<crate::library::Library>, cli_recv: Receiver<Action>) {
 
     LOG_LEVEL.store(log_level, LOG_ORD);
 }
+// ### tui ### }}}
