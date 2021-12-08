@@ -80,6 +80,7 @@ TUI Controls:
 * f - [De]select active item
 * Ctrl+f - [De]select all
 * Tab - [De]select queue
+* Ctrl-d - Delete filter
 ";
 
 // ### UI ### {{{
@@ -578,6 +579,7 @@ impl<T: Backend> UI<T> {
     // ## process_event ## {{{
     fn process_event(&mut self, event: Event, library: &Arc<Library>) {
         match event {
+            // # Key Events # {{{
             Event::Key(KeyEvent {
                 code: KeyCode::Tab, ..
             }) => self.queue_sel = !self.queue_sel,
@@ -639,6 +641,17 @@ impl<T: Backend> UI<T> {
                 }
             }
 
+            km_c!('d') => {
+                if !self.queue_sel {
+                    if self.panes.len() > 1 {
+                        self.panes.remove(self.panes_index);
+                        self.panes_index = self.panes_index.saturating_sub(1);
+                        library.set_filters(self.rebuild_filters());
+                        self.update_from_library(library);
+                    }
+                }
+            }
+
             km!('a') => library.play_pause(),
             km!('x') => library.stop(),
             km!('n') => library.next(),
@@ -646,6 +659,9 @@ impl<T: Backend> UI<T> {
             km!('v') => library.volume_add(0.05),
             km_s!('V') => library.volume_sub(0.05),
 
+            // # Key Events # }}}
+
+            // # Mouse Events # {{{
             Event::Mouse(event) => match self.convert_event(event) {
                 ZoneEvent {
                     kind,
@@ -739,7 +755,7 @@ impl<T: Backend> UI<T> {
                 },
                 _ => return,
             },
-
+            // # Mouse Events # }}}
             Event::Resize(..) => (),
             _ => return,
         }
