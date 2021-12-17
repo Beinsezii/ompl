@@ -11,6 +11,7 @@ use library::Library;
 
 use crossbeam::channel;
 use crossbeam::channel::Sender;
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
 
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
@@ -285,9 +286,91 @@ fn instance_main(listener: TcpListener) {
     }
 
     let (cli_send, cli_recv) = channel::bounded::<Action>(1);
+    let ctrl_send = cli_send.clone();
 
     let server_library = library.clone();
     let jh = thread::spawn(move || server(listener, server_library, cli_send));
+
+    // ## souvlaki ## {{
+
+    l2!("Initializing media controls...");
+
+    #[cfg(not(target_os = "windows"))]
+    let hwnd = None;
+
+    #[cfg(target_os = "windows")]
+    let hwnd = {
+        use raw_window_handle::windows::WindowsHandle;
+
+        let handle: WindowsHandle = unimplemented!();
+        Some(handle.hwnd)
+    };
+
+    match MediaControls::new(PlatformConfig {
+        dbus_name: "ompl",
+        display_name: "OMPL",
+        hwnd,
+    }) {
+        Ok(mut controls) => {
+            let ctrl_libr = library.clone();
+            controls
+                .attach(move |event: MediaControlEvent| match event {
+                    MediaControlEvent::Play => {
+                        ctrl_libr.play();
+                        ctrl_send.send(Action::Play).unwrap();
+                    },
+                    MediaControlEvent::Stop => {
+                        ctrl_libr.stop();
+                        ctrl_send.send(Action::Stop).unwrap();
+                    },
+                    MediaControlEvent::Pause => {
+                        ctrl_libr.pause();
+                        ctrl_send.send(Action::Pause).unwrap();
+                    },
+                    MediaControlEvent::Toggle => {
+                        ctrl_libr.play_pause();
+                        ctrl_send.send(Action::PlayPause).unwrap();
+                    },
+                    MediaControlEvent::Next => {
+                        ctrl_libr.next();
+                        ctrl_send.send(Action::Next).unwrap();
+                    },
+                    MediaControlEvent::Previous => {
+                        ctrl_libr.previous();
+                        ctrl_send.send(Action::Previous).unwrap();
+                    },
+                    _ => (),
+                })
+                .unwrap();
+            let meta_libr = library.clone();
+            thread::spawn(move || loop {
+                controls
+                    .set_metadata(MediaMetadata {
+                        title: meta_libr
+                            .track_get()
+                            .map(|t| t.tags().get("title").cloned())
+                            .flatten()
+                            .as_deref(),
+                        artist: meta_libr
+                            .track_get()
+                            .map(|t| t.tags().get("artist").cloned())
+                            .flatten()
+                            .as_deref(),
+                        album: meta_libr
+                            .track_get()
+                            .map(|t| t.tags().get("album").cloned())
+                            .flatten()
+                            .as_deref(),
+                        ..Default::default()
+                    })
+                    .unwrap();
+                thread::sleep(std::time::Duration::from_millis(50));
+            });
+        }
+        Err(e) => println!("Media control failure: {:?}", e),
+    }
+
+    // ## souvlaki ## }}
 
     l2!("Main server started");
     if main_args.daemon {
