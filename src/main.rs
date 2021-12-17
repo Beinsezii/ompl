@@ -372,7 +372,7 @@ fn instance_main(listener: TcpListener) {
                 } else {
                     break;
                 }
-                thread::sleep(std::time::Duration::from_millis(50));
+                thread::sleep(std::time::Duration::from_millis(100));
             });
         }
         Err(e) => println!("Media control failure: {:?}", e),
