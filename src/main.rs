@@ -291,7 +291,7 @@ fn instance_main(listener: TcpListener) {
     let server_library = library.clone();
     let jh = thread::spawn(move || server(listener, server_library, cli_send));
 
-    // ## souvlaki ## {{
+    // ## souvlaki ## {{{
 
     l2!("Initializing media controls...");
 
@@ -378,7 +378,7 @@ fn instance_main(listener: TcpListener) {
         Err(e) => println!("Media control failure: {:?}", e),
     }
 
-    // ## souvlaki ## }}
+    // ## souvlaki ## }}}
 
     l2!("Main server started");
     if main_args.daemon {
