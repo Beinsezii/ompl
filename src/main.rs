@@ -312,58 +312,66 @@ fn instance_main(listener: TcpListener) {
         hwnd,
     }) {
         Ok(mut controls) => {
-            let ctrl_libr = library.clone();
+            let ctrl_libr_wk = std::sync::Arc::downgrade(&library);
             controls
-                .attach(move |event: MediaControlEvent| match event {
-                    MediaControlEvent::Play => {
-                        ctrl_libr.play();
-                        ctrl_send.send(Action::Play).unwrap();
-                    },
-                    MediaControlEvent::Stop => {
-                        ctrl_libr.stop();
-                        ctrl_send.send(Action::Stop).unwrap();
-                    },
-                    MediaControlEvent::Pause => {
-                        ctrl_libr.pause();
-                        ctrl_send.send(Action::Pause).unwrap();
-                    },
-                    MediaControlEvent::Toggle => {
-                        ctrl_libr.play_pause();
-                        ctrl_send.send(Action::PlayPause).unwrap();
-                    },
-                    MediaControlEvent::Next => {
-                        ctrl_libr.next();
-                        ctrl_send.send(Action::Next).unwrap();
-                    },
-                    MediaControlEvent::Previous => {
-                        ctrl_libr.previous();
-                        ctrl_send.send(Action::Previous).unwrap();
-                    },
-                    _ => (),
+                .attach(move |event: MediaControlEvent| {
+                    if let Some(library) = ctrl_libr_wk.upgrade() {
+                        match event {
+                            MediaControlEvent::Play => {
+                                library.play();
+                                ctrl_send.send(Action::Play).unwrap();
+                            }
+                            MediaControlEvent::Stop => {
+                                library.stop();
+                                ctrl_send.send(Action::Stop).unwrap();
+                            }
+                            MediaControlEvent::Pause => {
+                                library.pause();
+                                ctrl_send.send(Action::Pause).unwrap();
+                            }
+                            MediaControlEvent::Toggle => {
+                                library.play_pause();
+                                ctrl_send.send(Action::PlayPause).unwrap();
+                            }
+                            MediaControlEvent::Next => {
+                                library.next();
+                                ctrl_send.send(Action::Next).unwrap();
+                            }
+                            MediaControlEvent::Previous => {
+                                library.previous();
+                                ctrl_send.send(Action::Previous).unwrap();
+                            }
+                            _ => (),
+                        }
+                    }
                 })
                 .unwrap();
-            let meta_libr = library.clone();
+            let meta_libr_wk = std::sync::Arc::downgrade(&library);
             thread::spawn(move || loop {
-                controls
-                    .set_metadata(MediaMetadata {
-                        title: meta_libr
-                            .track_get()
-                            .map(|t| t.tags().get("title").cloned())
-                            .flatten()
-                            .as_deref(),
-                        artist: meta_libr
-                            .track_get()
-                            .map(|t| t.tags().get("artist").cloned())
-                            .flatten()
-                            .as_deref(),
-                        album: meta_libr
-                            .track_get()
-                            .map(|t| t.tags().get("album").cloned())
-                            .flatten()
-                            .as_deref(),
-                        ..Default::default()
-                    })
-                    .unwrap();
+                if let Some(library) = meta_libr_wk.upgrade() {
+                    controls
+                        .set_metadata(MediaMetadata {
+                            title: library
+                                .track_get()
+                                .map(|t| t.tags().get("title").cloned())
+                                .flatten()
+                                .as_deref(),
+                            artist: library
+                                .track_get()
+                                .map(|t| t.tags().get("artist").cloned())
+                                .flatten()
+                                .as_deref(),
+                            album: library
+                                .track_get()
+                                .map(|t| t.tags().get("album").cloned())
+                                .flatten()
+                                .as_deref(),
+                            ..Default::default()
+                        })
+                        .unwrap();
+                } else {
+                    break;
+                }
                 thread::sleep(std::time::Duration::from_millis(50));
             });
         }
