@@ -930,6 +930,9 @@ pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
                                 Action::Filter { .. } => {
                                     ui.lock().unwrap().update_from_library(&library)
                                 }
+                                Action::Next => (),
+                                Action::Previous => (),
+                                Action::Exit => break,
                                 _ => continue,
                             }
                             ui.lock().unwrap().draw(&library);
