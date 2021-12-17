@@ -264,7 +264,7 @@ impl<T: Backend> UI<T> {
             panes: Vec::new(),
             panes_index: 0,
             queue: Vec::new(),
-            queue_sel: false,
+            queue_sel: true,
             queue_pos: 0,
             queue_rect: Rect::default(),
             queue_view: 0,
@@ -318,10 +318,8 @@ impl<T: Backend> UI<T> {
                 }
             })
             .collect();
-        if let Some(_ft) = filter_tree.iter().last() {
-            self.queue = library.get_queue();
-            crate::library::sort_by_tag("title", &mut self.queue)
-        }
+        self.queue = library.get_queue();
+        crate::library::sort_by_tag("title", &mut self.queue);
         self.draw(library);
     }
 
@@ -339,11 +337,8 @@ impl<T: Backend> UI<T> {
             .collect::<Vec<Filter>>()
     }
 
-    fn active_pane(&self) -> &FilterPane {
-        &self.panes[self.panes_index]
-    }
-    fn active_pane_mut(&mut self) -> &mut FilterPane {
-        &mut self.panes[self.panes_index]
+    fn active_pane_mut(&mut self) -> Option<&mut FilterPane> {
+        self.panes.get_mut(self.panes_index)
     }
 
     // ## UI Data FNs ## }}}
@@ -479,7 +474,11 @@ impl<T: Backend> UI<T> {
                     .direction(Direction::Vertical)
                     .constraints(vec![
                         Constraint::Length(1),
-                        Constraint::Percentage(50),
+                        if self.panes.is_empty() {
+                            Constraint::Length(1)
+                        } else {
+                            Constraint::Percentage(50)
+                        },
                         Constraint::Percentage(50),
                     ])
                     .split(size);
@@ -671,7 +670,7 @@ impl<T: Backend> UI<T> {
 
             Event::Key(KeyEvent {
                 code: KeyCode::Tab, ..
-            }) => self.queue_sel = !self.queue_sel,
+            }) => self.queue_sel = !self.queue_sel || self.panes.is_empty(),
             km!('h') => {
                 if !self.queue_sel {
                     self.panes_index = self.panes_index.saturating_sub(1)
@@ -686,11 +685,8 @@ impl<T: Backend> UI<T> {
                 if self.queue_sel {
                     self.queue_pos = min(self.queue_pos + 1, self.queue.len().saturating_sub(1));
                     self.lock_view(Pane::Queue);
-                } else {
-                    self.active_pane_mut().index = min(
-                        self.active_pane().index + 1,
-                        self.active_pane().items.len().saturating_sub(1),
-                    );
+                } else if let Some(pane) = self.active_pane_mut() {
+                    pane.index = min(pane.index + 1, pane.items.len().saturating_sub(1));
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
             }
@@ -698,8 +694,8 @@ impl<T: Backend> UI<T> {
                 if self.queue_sel {
                     self.queue_pos = self.queue_pos.saturating_sub(1);
                     self.lock_view(Pane::Queue);
-                } else {
-                    self.active_pane_mut().index = self.active_pane().index.saturating_sub(1);
+                } else if let Some(pane) = self.active_pane_mut() {
+                    pane.index = pane.index.saturating_sub(1);
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
             }
@@ -707,8 +703,7 @@ impl<T: Backend> UI<T> {
             km!('f') => {
                 if self.queue_sel {
                     library.play_track(self.queue.get(self.queue_pos).cloned())
-                } else {
-                    let pane = self.active_pane_mut();
+                } else if let Some(pane) = self.active_pane_mut() {
                     match pane.selected.iter().position(|i| i == &pane.index) {
                         Some(p) => drop(pane.selected.remove(p)),
                         None => pane.selected.push(pane.index),
@@ -720,31 +715,31 @@ impl<T: Backend> UI<T> {
 
             km_s!('F') => {
                 if !self.queue_sel {
-                    match self.active_pane().selected.is_empty() {
-                        true => {
-                            self.active_pane_mut().selected =
-                                (0..self.active_pane().items.len()).collect()
+                    if let Some(pane) = self.active_pane_mut() {
+                        match pane.selected.is_empty() {
+                            true => pane.selected = (0..pane.items.len()).collect(),
+                            false => pane.selected = Vec::new(),
                         }
-                        false => self.active_pane_mut().selected = Vec::new(),
                     }
                 }
             }
 
             km_s!('D') => {
                 if !self.queue_sel {
-                    if self.panes.len() > 1 {
+                    if !self.panes.is_empty() {
                         self.panes.remove(self.panes_index);
-                        self.panes_index = self.panes_index.saturating_sub(1);
-                        library.set_filters(self.rebuild_filters());
-                        self.update_from_library(library);
                     }
+                    self.panes_index = self.panes_index.saturating_sub(1);
+                    library.set_filters(self.rebuild_filters());
+                    self.update_from_library(library);
+                    if self.panes.is_empty() {self.queue_sel = true}
                 }
             }
             km_s!('I') => {
-                if !self.queue_sel {
+                if !self.queue_sel || self.panes.is_empty() {
                     let mut filters = self.rebuild_filters();
                     filters.insert(
-                        self.panes_index + 1,
+                        min(self.panes_index + 1, self.panes.len().saturating_sub(1)),
                         Filter {
                             tag: self.get_input("Tag to sort by: ").trim().to_string(),
                             items: Vec::new(),
@@ -752,7 +747,7 @@ impl<T: Backend> UI<T> {
                     );
                     library.set_filters(filters);
                     self.update_from_library(library);
-                    self.panes_index += 1;
+                    self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1));
                 }
             }
 
