@@ -732,7 +732,9 @@ impl<T: Backend> UI<T> {
                     self.panes_index = self.panes_index.saturating_sub(1);
                     library.set_filters(self.rebuild_filters());
                     self.update_from_library(library);
-                    if self.panes.is_empty() {self.queue_sel = true}
+                    if self.panes.is_empty() {
+                        self.queue_sel = true
+                    }
                 }
             }
             km_s!('I') => {
@@ -747,7 +749,8 @@ impl<T: Backend> UI<T> {
                     );
                     library.set_filters(filters);
                     self.update_from_library(library);
-                    self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1));
+                    self.panes_index =
+                        min(self.panes_index + 1, self.panes.len().saturating_sub(1));
                 }
             }
 
