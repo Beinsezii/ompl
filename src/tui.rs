@@ -81,7 +81,8 @@ TUI Controls:
 * f - [De]select active item
 * F - [De]select all
 * Tab - [De]select queue
-* I/D - Insert/Delete filter
+* i/I - Insert filter after/before
+* D - Delete Filter
 * / - Search
 ";
 
@@ -129,6 +130,8 @@ enum ZoneEventType {
     Prev,
 
     Search,
+    Insert(bool),
+    Delete,
     Help,
 
     None,
@@ -247,6 +250,11 @@ struct MultiBar {
     help: Rect,
     help_div: Rect,
     search: Rect,
+    search_div: Rect,
+    insert: Rect,
+    insert_before: Rect,
+    insert_div: Rect,
+    delete: Rect,
 }
 
 impl MultiBar {
@@ -255,9 +263,15 @@ impl MultiBar {
             .direction(Direction::Horizontal)
             .constraints([
                 Constraint::Length(1),
-                Constraint::Length(4), // help
-                Constraint::Length(3), // help_div
-                Constraint::Length(6), // search
+                Constraint::Length(4),  // help
+                Constraint::Length(3),  // help_div
+                Constraint::Length(6),  // search
+                Constraint::Length(3),  // serach_div
+                Constraint::Length(13), // insert
+                Constraint::Length(1),
+                Constraint::Length(8),  // insert_before
+                Constraint::Length(3),  // insert_div
+                Constraint::Length(13), // delete
                 Constraint::Length(0),
             ])
             .split(rect);
@@ -267,6 +281,11 @@ impl MultiBar {
             help: s[1],
             help_div: s[2],
             search: s[3],
+            search_div: s[4],
+            insert: s[5],
+            insert_before: s[7],
+            insert_div: s[8],
+            delete: s[9],
         }
     }
     pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, _library: &Arc<Library>) {
@@ -275,6 +294,11 @@ impl MultiBar {
                 frame.render_widget(Paragraph::new("Help"), self.help);
                 frame.render_widget(Paragraph::new(" | "), self.help_div);
                 frame.render_widget(Paragraph::new("Search"), self.search);
+                frame.render_widget(Paragraph::new(" | "), self.search_div);
+                frame.render_widget(Paragraph::new("Insert Filter"), self.insert);
+                frame.render_widget(Paragraph::new("[Before]"), self.insert_before);
+                frame.render_widget(Paragraph::new(" | "), self.insert_div);
+                frame.render_widget(Paragraph::new("Delete Filter"), self.delete);
             }
             MBDrawMode::Input {
                 title,
@@ -410,6 +434,42 @@ impl<T: Backend> UI<T> {
                     .collect::<Vec<String>>(),
             })
             .collect::<Vec<Filter>>()
+    }
+
+    fn insert_filter(&mut self, library: &Arc<Library>, before: bool) {
+        if !self.queue_sel || self.panes.is_empty() {
+            let mut filters = self.rebuild_filters();
+            filters.insert(
+                min(
+                    self.panes_index + if before { 0 } else { 1 },
+                    self.panes.len().saturating_sub(1),
+                ),
+                Filter {
+                    tag: self.multi_bar_input("Filter", library).trim().to_string(),
+                    items: Vec::new(),
+                },
+            );
+            library.set_filters(filters);
+            self.update_from_library(library);
+            self.panes_index = min(
+                self.panes_index + if before { 0 } else { 1 },
+                self.panes.len().saturating_sub(1),
+            );
+        }
+    }
+
+    fn delete_filter(&mut self, library: &Arc<Library>) {
+        if !self.queue_sel {
+            if !self.panes.is_empty() {
+                self.panes.remove(self.panes_index);
+            }
+            self.panes_index = self.panes_index.saturating_sub(1);
+            library.set_filters(self.rebuild_filters());
+            self.update_from_library(library);
+            if self.panes.is_empty() {
+                self.queue_sel = true
+            }
+        }
     }
 
     fn active_pane_mut(&mut self) -> Option<&mut FilterPane> {
@@ -758,6 +818,12 @@ impl<T: Backend> UI<T> {
                     ZoneEventType::Help
                 } else if self.multi_bar.search.intersects(point) {
                     ZoneEventType::Search
+                } else if self.multi_bar.insert.intersects(point) {
+                    ZoneEventType::Insert(false)
+                } else if self.multi_bar.insert_before.intersects(point) {
+                    ZoneEventType::Insert(true)
+                } else if self.multi_bar.delete.intersects(point) {
+                    ZoneEventType::Delete
                 } else {
                     ZoneEventType::None
                 }
@@ -782,10 +848,6 @@ impl<T: Backend> UI<T> {
     fn process_event(&mut self, event: Event, library: &Arc<Library>) {
         match event {
             // # Key Events # {{{
-            km!('?') => self.message("Help", HELP),
-
-            km!('/') => self.search(library),
-
             Event::Key(KeyEvent {
                 code: KeyCode::Tab, ..
             }) => self.queue_sel = !self.queue_sel || self.panes.is_empty(),
@@ -842,35 +904,11 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_s!('D') => {
-                if !self.queue_sel {
-                    if !self.panes.is_empty() {
-                        self.panes.remove(self.panes_index);
-                    }
-                    self.panes_index = self.panes_index.saturating_sub(1);
-                    library.set_filters(self.rebuild_filters());
-                    self.update_from_library(library);
-                    if self.panes.is_empty() {
-                        self.queue_sel = true
-                    }
-                }
-            }
-            km_s!('I') => {
-                if !self.queue_sel || self.panes.is_empty() {
-                    let mut filters = self.rebuild_filters();
-                    filters.insert(
-                        min(self.panes_index + 1, self.panes.len().saturating_sub(1)),
-                        Filter {
-                            tag: self.multi_bar_input("Filter", library).trim().to_string(),
-                            items: Vec::new(),
-                        },
-                    );
-                    library.set_filters(filters);
-                    self.update_from_library(library);
-                    self.panes_index =
-                        min(self.panes_index + 1, self.panes.len().saturating_sub(1));
-                }
-            }
+            km!('?') => self.message("Help", HELP),
+            km!('/') => self.search(library),
+            km_s!('D') => self.delete_filter(library),
+            km!('i') => self.insert_filter(library, false),
+            km_s!('I') => self.insert_filter(library, true),
 
             km!('a') => library.play_pause(),
             km!('x') => library.stop(),
@@ -924,6 +962,20 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::PlayPause => library.play_pause(),
                             ZoneEventType::Next => library.next(),
                             ZoneEventType::Search => self.search(library),
+                            ZoneEventType::Insert(before) => {
+                                if self.queue_sel {
+                                    self.queue_sel = false
+                                } else {
+                                    self.insert_filter(library, before)
+                                }
+                            }
+                            ZoneEventType::Delete => {
+                                if self.queue_sel {
+                                    self.queue_sel = false
+                                } else {
+                                    self.delete_filter(library)
+                                }
+                            }
                             ZoneEventType::Help => self.message("Help", HELP),
                             ZoneEventType::None => return,
                         },
