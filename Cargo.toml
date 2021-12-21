@@ -15,10 +15,13 @@ rand = "0.8"
 rayon = "1"
 rodio = "0.14"
 serde = { version = "1", features = ["derive"] }
-souvlaki = "0.4"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 windows = { version = "0.28", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Console"] }
+
+# Souvlaki doesn't seem to compile on MinGW
+[target.'cfg(not(all(target_os = "windows", target_env = "gnu")))'.dependencies]
+souvlaki = "0.4"
 
 [profile.dev]
 opt-level = 1

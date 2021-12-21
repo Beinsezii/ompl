@@ -11,7 +11,6 @@ use library::Library;
 
 use crossbeam::channel;
 use crossbeam::channel::Sender;
-use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
 
 const ID: &str = "OMPL SERVER 0.1.0";
 const PORT: u16 = 18346;
@@ -181,12 +180,12 @@ struct MainArgs {
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
 
-    #[clap(long, short, default_value="0.5")]
+    #[clap(long, short, default_value = "0.5")]
     /// Starting volume
     volume: f32,
 
     /// Verbosity level. Pass multiple times to get more verbose (spammy).
-    #[clap(long, short='V', multiple_occurrences(true), parse(from_occurrences))]
+    #[clap(long, short = 'V', multiple_occurrences(true), parse(from_occurrences))]
     verbosity: u8,
 }
 
@@ -297,108 +296,111 @@ fn instance_main(listener: TcpListener) {
     let jh = thread::spawn(move || server(listener, server_library, cli_send));
 
     // ## souvlaki ## {{{
+    // souvlaki doesn't seem to compile on MinGW
+    #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+    {
+        use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
+        l2!("Initializing media controls...");
 
-    l2!("Initializing media controls...");
+        #[cfg(not(target_os = "windows"))]
+        let hwnd = None;
 
-    #[cfg(not(target_os = "windows"))]
-    let hwnd = None;
+        #[cfg(target_os = "windows")]
+        let hwnd = unsafe {
+            // Trying to use this:
+            // https://docs.microsoft.com/en-us/troubleshoot/windows-server/performance/obtain-console-window-handle
+            //
+            //     use std::ffi::CString;
+            //     use windows::Win32::Foundation::PSTR;
+            //     const SIZE: u32 = 1024;
+            //     let old_title = PSTR(CString::new(String::with_capacity(SIZE as usize)).unwrap().into_raw() as *mut u8);
+            //     let mut new = String::with_capacity(SIZE as usize);
+            //         new.push_str(&format!("ompl.{}", PORT));
+            //     let new_title = PSTR(CString::new(new).unwrap().into_raw() as *mut u8);
+            //     windows::Win32::System::Console::GetConsoleTitleA(old_title, SIZE);
+            //     windows::Win32::System::Console::SetConsoleTitleA(new_title);
+            //     thread::sleep(std::time::Duration::from_millis(4000));
+            //     let hwnd_ptr: *mut isize = &mut windows::Win32::UI::WindowsAndMessaging::FindWindowA(PSTR(&mut 0u8), new_title).0;
+            //     windows::Win32::System::Console::SetConsoleTitleA(old_title);
+            //     println!("{:?}", *hwnd_ptr);
+            //     thread::sleep(std::time::Duration::from_millis(4000));
+            //     Some(hwnd_ptr as *mut std::ffi::c_void)
+            let hwnd_ptr: *mut isize = &mut 0;
+            Some(hwnd_ptr as *mut std::ffi::c_void)
+        };
 
-    #[cfg(target_os = "windows")]
-    let hwnd = unsafe {
-        // Trying to use this:
-        // https://docs.microsoft.com/en-us/troubleshoot/windows-server/performance/obtain-console-window-handle
-        //
-        //     use std::ffi::CString;
-        //     use windows::Win32::Foundation::PSTR;
-        //     const SIZE: u32 = 1024;
-        //     let old_title = PSTR(CString::new(String::with_capacity(SIZE as usize)).unwrap().into_raw() as *mut u8);
-        //     let mut new = String::with_capacity(SIZE as usize);
-        //         new.push_str(&format!("ompl.{}", PORT));
-        //     let new_title = PSTR(CString::new(new).unwrap().into_raw() as *mut u8);
-        //     windows::Win32::System::Console::GetConsoleTitleA(old_title, SIZE);
-        //     windows::Win32::System::Console::SetConsoleTitleA(new_title);
-        //     thread::sleep(std::time::Duration::from_millis(4000));
-        //     let hwnd_ptr: *mut isize = &mut windows::Win32::UI::WindowsAndMessaging::FindWindowA(PSTR(&mut 0u8), new_title).0;
-        //     windows::Win32::System::Console::SetConsoleTitleA(old_title);
-        //     println!("{:?}", *hwnd_ptr);
-        //     thread::sleep(std::time::Duration::from_millis(4000));
-        //     Some(hwnd_ptr as *mut std::ffi::c_void)
-        let hwnd_ptr: *mut isize = &mut 0;
-        Some(hwnd_ptr as *mut std::ffi::c_void)
-    };
-
-    match MediaControls::new(PlatformConfig {
-        dbus_name: &format!("ompl.p{}", PORT),
-        display_name: "OMPL",
-        hwnd,
-    }) {
-        Ok(mut controls) => {
-            let ctrl_libr_wk = std::sync::Arc::downgrade(&library);
-            controls
-                .attach(move |event: MediaControlEvent| {
-                    if let Some(library) = ctrl_libr_wk.upgrade() {
-                        match event {
-                            MediaControlEvent::Play => {
-                                library.play();
-                                ctrl_send.send(Action::Play).unwrap();
+        match MediaControls::new(PlatformConfig {
+            dbus_name: &format!("ompl.p{}", PORT),
+            display_name: "OMPL",
+            hwnd,
+        }) {
+            Ok(mut controls) => {
+                let ctrl_libr_wk = std::sync::Arc::downgrade(&library);
+                controls
+                    .attach(move |event: MediaControlEvent| {
+                        if let Some(library) = ctrl_libr_wk.upgrade() {
+                            match event {
+                                MediaControlEvent::Play => {
+                                    library.play();
+                                    ctrl_send.send(Action::Play).unwrap();
+                                }
+                                MediaControlEvent::Stop => {
+                                    library.stop();
+                                    ctrl_send.send(Action::Stop).unwrap();
+                                }
+                                MediaControlEvent::Pause => {
+                                    library.pause();
+                                    ctrl_send.send(Action::Pause).unwrap();
+                                }
+                                MediaControlEvent::Toggle => {
+                                    library.play_pause();
+                                    ctrl_send.send(Action::PlayPause).unwrap();
+                                }
+                                MediaControlEvent::Next => {
+                                    library.next();
+                                    ctrl_send.send(Action::Next).unwrap();
+                                }
+                                MediaControlEvent::Previous => {
+                                    library.previous();
+                                    ctrl_send.send(Action::Previous).unwrap();
+                                }
+                                _ => (),
                             }
-                            MediaControlEvent::Stop => {
-                                library.stop();
-                                ctrl_send.send(Action::Stop).unwrap();
-                            }
-                            MediaControlEvent::Pause => {
-                                library.pause();
-                                ctrl_send.send(Action::Pause).unwrap();
-                            }
-                            MediaControlEvent::Toggle => {
-                                library.play_pause();
-                                ctrl_send.send(Action::PlayPause).unwrap();
-                            }
-                            MediaControlEvent::Next => {
-                                library.next();
-                                ctrl_send.send(Action::Next).unwrap();
-                            }
-                            MediaControlEvent::Previous => {
-                                library.previous();
-                                ctrl_send.send(Action::Previous).unwrap();
-                            }
-                            _ => (),
                         }
+                    })
+                    .unwrap();
+                let meta_libr_wk = std::sync::Arc::downgrade(&library);
+                thread::spawn(move || loop {
+                    if let Some(library) = meta_libr_wk.upgrade() {
+                        controls
+                            .set_metadata(MediaMetadata {
+                                title: library
+                                    .track_get()
+                                    .map(|t| t.tags().get("title").cloned())
+                                    .flatten()
+                                    .as_deref(),
+                                artist: library
+                                    .track_get()
+                                    .map(|t| t.tags().get("artist").cloned())
+                                    .flatten()
+                                    .as_deref(),
+                                album: library
+                                    .track_get()
+                                    .map(|t| t.tags().get("album").cloned())
+                                    .flatten()
+                                    .as_deref(),
+                                ..Default::default()
+                            })
+                            .unwrap();
+                    } else {
+                        break;
                     }
-                })
-                .unwrap();
-            let meta_libr_wk = std::sync::Arc::downgrade(&library);
-            thread::spawn(move || loop {
-                if let Some(library) = meta_libr_wk.upgrade() {
-                    controls
-                        .set_metadata(MediaMetadata {
-                            title: library
-                                .track_get()
-                                .map(|t| t.tags().get("title").cloned())
-                                .flatten()
-                                .as_deref(),
-                            artist: library
-                                .track_get()
-                                .map(|t| t.tags().get("artist").cloned())
-                                .flatten()
-                                .as_deref(),
-                            album: library
-                                .track_get()
-                                .map(|t| t.tags().get("album").cloned())
-                                .flatten()
-                                .as_deref(),
-                            ..Default::default()
-                        })
-                        .unwrap();
-                } else {
-                    break;
-                }
-                thread::sleep(std::time::Duration::from_millis(100));
-            });
+                    thread::sleep(std::time::Duration::from_millis(100));
+                });
+            }
+            Err(e) => println!("Media control failure: {:?}", e),
         }
-        Err(e) => println!("Media control failure: {:?}", e),
     }
-
     // ## souvlaki ## }}}
 
     l2!("Main server started");
