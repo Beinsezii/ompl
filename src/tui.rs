@@ -120,7 +120,7 @@ impl Theme {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZoneEventType {
     Queue(usize),
-    Panes { pane: usize, index: usize },
+    Panes { pane: usize, row: usize, column: usize},
 
     VolAdd,
     VolSub,
@@ -833,7 +833,8 @@ impl<T: Backend> UI<T> {
                     if pane.rect.intersects(point) {
                         result = ZoneEventType::Panes {
                             pane: num,
-                            index: event.row.saturating_sub(pane.rect.y).into(),
+                            row: event.row.saturating_sub(pane.rect.y).into(),
+                            column: event.column.saturating_sub(pane.rect.x).into(),
                         };
                         break;
                     }
@@ -939,17 +940,18 @@ impl<T: Backend> UI<T> {
                                     self.queue_pos = index;
                                 }
                             }
-                            ZoneEventType::Panes { pane, index } => {
+                            ZoneEventType::Panes { pane, row, column } => {
                                 self.queue_sel = false;
                                 self.panes_index = pane;
-                                if index == 0 {
+                                if row == 0 && column <= self.panes[pane].tag.len() {
                                     self.panes[pane].selected = vec![];
-                                } else if index <= self.panes[pane].rect.height as usize - 2
-                                    && index <= self.panes[pane].items.len()
+                                } else if row > 0 && row <= self.panes[pane].rect.height as usize - 2
+                                    && row <= self.panes[pane].items.len()
                                 {
                                     self.panes[pane].selected =
-                                        vec![index - 1 + self.panes[pane].view];
+                                        vec![row - 1 + self.panes[pane].view];
                                 } else {
+                                    self.draw(library);
                                     return;
                                 }
                                 library.set_filters(self.rebuild_filters());
@@ -980,11 +982,11 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::None => return,
                         },
                         MouseButton::Right => match event {
-                            ZoneEventType::Panes { pane, index } => {
+                            ZoneEventType::Panes { pane, row, column } => {
                                 self.queue_sel = false;
                                 self.panes_index = pane;
-                                if index > 0 && index <= self.panes[pane].rect.height as usize - 2 {
-                                    let sel = index - 1 + self.panes[pane].view;
+                                if row > 0 && row <= self.panes[pane].rect.height as usize - 2 {
+                                    let sel = row - 1 + self.panes[pane].view;
                                     if let Some(pos) =
                                         self.panes[pane].selected.iter().position(|x| *x == sel)
                                     {
