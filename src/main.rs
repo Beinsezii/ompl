@@ -181,8 +181,12 @@ struct MainArgs {
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
 
+    #[clap(long, short, default_value="0.5")]
+    /// Starting volume
+    volume: f32,
+
     /// Verbosity level. Pass multiple times to get more verbose (spammy).
-    #[clap(long, short, multiple_occurrences(true), parse(from_occurrences))]
+    #[clap(long, short='V', multiple_occurrences(true), parse(from_occurrences))]
     verbosity: u8,
 }
 
@@ -281,6 +285,7 @@ fn instance_main(listener: TcpListener) {
 
     l2!("Starting main...");
     let library = Library::new(&main_args.library, Some(main_args.filters));
+    library.volume_set(main_args.volume);
     if main_args.now {
         library.play()
     }
