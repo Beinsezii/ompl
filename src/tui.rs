@@ -442,23 +442,26 @@ impl<T: Backend> UI<T> {
 
     fn insert_filter(&mut self, library: &Arc<Library>, before: bool) {
         if !self.queue_sel || self.panes.is_empty() {
-            let mut filters = self.rebuild_filters();
-            filters.insert(
-                min(
+            let tag = self.multi_bar_input("Filter", library).trim().to_string();
+            if !tag.is_empty() {
+                let mut filters = self.rebuild_filters();
+                filters.insert(
+                    min(
+                        self.panes_index + if before { 0 } else { 1 },
+                        self.panes.len().saturating_sub(1),
+                    ),
+                    Filter {
+                        tag,
+                        items: Vec::new(),
+                    },
+                );
+                library.set_filters(filters);
+                self.update_from_library(library);
+                self.panes_index = min(
                     self.panes_index + if before { 0 } else { 1 },
                     self.panes.len().saturating_sub(1),
-                ),
-                Filter {
-                    tag: self.multi_bar_input("Filter", library).trim().to_string(),
-                    items: Vec::new(),
-                },
-            );
-            library.set_filters(filters);
-            self.update_from_library(library);
-            self.panes_index = min(
-                self.panes_index + if before { 0 } else { 1 },
-                self.panes.len().saturating_sub(1),
-            );
+                );
+            }
         }
     }
 
@@ -755,17 +758,18 @@ impl<T: Backend> UI<T> {
     }
 
     pub fn search(&mut self, library: &Arc<Library>) {
-        match self.multi_bar_input("Search", library).trim().to_ascii_lowercase().as_str() {
+        match self
+            .multi_bar_input("Search", library)
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "" => (),
             input => {
                 if self.queue_sel {
                     for (n, t) in self.queue.iter().enumerate() {
                         if let Some(tag) = t.tags().get("title") {
-                            if tag
-                                .trim()
-                                .to_ascii_lowercase()
-                                .starts_with(&input)
-                            {
+                            if tag.trim().to_ascii_lowercase().starts_with(&input) {
                                 self.queue_pos = n;
                                 self.lock_view(Pane::Queue);
                                 break;
@@ -775,10 +779,7 @@ impl<T: Backend> UI<T> {
                 } else {
                     if let Some(pane) = self.active_pane_mut() {
                         for (n, i) in pane.items.iter().enumerate() {
-                            if i.trim()
-                                .to_ascii_lowercase()
-                                .starts_with(&input)
-                            {
+                            if i.trim().to_ascii_lowercase().starts_with(&input) {
                                 pane.index = n;
                                 self.lock_view(Pane::Panes(self.panes_index));
                                 break;
@@ -1036,7 +1037,11 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::None => return,
                         },
                         MouseButton::Right => match event {
-                            ZoneEventType::Panes { pane, row, column: _column } => {
+                            ZoneEventType::Panes {
+                                pane,
+                                row,
+                                column: _column,
+                            } => {
                                 self.queue_sel = false;
                                 self.panes_index = pane;
                                 if row > 0 && row <= self.panes[pane].rect.height as usize - 2 {
