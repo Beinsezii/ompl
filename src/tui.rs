@@ -448,7 +448,7 @@ impl<T: Backend> UI<T> {
                 filters.insert(
                     min(
                         self.panes_index + if before { 0 } else { 1 },
-                        self.panes.len().saturating_sub(1),
+                        self.panes.len().saturating_sub(if before{1} else {0}),
                     ),
                     Filter {
                         tag,
@@ -459,7 +459,7 @@ impl<T: Backend> UI<T> {
                 self.update_from_library(library);
                 self.panes_index = min(
                     self.panes_index + if before { 0 } else { 1 },
-                    self.panes.len().saturating_sub(1),
+                    self.panes.len().saturating_sub(if before{1} else {0}),
                 );
             }
         }
