@@ -1053,6 +1053,10 @@ impl<T: Backend> UI<T> {
                                     } else {
                                         self.panes[pane].selected.push(sel);
                                     }
+                                    library.set_filters(self.rebuild_filters());
+                                    self.update_from_library(&library);
+                                } else {
+                                    self.draw(library)
                                 }
                             }
                             ZoneEventType::Queue(_) => self.queue_sel = true,
