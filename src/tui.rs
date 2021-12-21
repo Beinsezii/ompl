@@ -11,7 +11,7 @@ use crossbeam::channel::Receiver;
 use crossterm::{
     cursor, event,
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
-    execute, queue, terminal,
+    queue, terminal,
 };
 
 use tui::backend::{Backend, CrosstermBackend};
@@ -70,6 +70,7 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
 
 pub const HELP: &str = &"\
 TUI Controls:
+* ? - Show this help
 * Ctrl+c - Exit
 * a - Play/Pause
 * x - Stop
@@ -81,6 +82,7 @@ TUI Controls:
 * F - [De]select all
 * Tab - [De]select queue
 * I/D - Insert/Delete filter
+* / - Search
 ";
 
 // ### UI ### {{{
@@ -126,6 +128,7 @@ enum ZoneEventType {
     PlayPause,
     Prev,
 
+    Search,
     Help,
 
     None,
@@ -140,13 +143,11 @@ struct ZoneEvent {
 
 // ## Events ## }}}
 
-// ## Bar ## {{{
+// ## StatusBar ## {{{
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct Bar {
+struct StatusBar {
     parent: Rect,
-    help: Rect,
-    vol_div: Rect,
     vol_stat: Rect,
     vol_sub: Rect,
     vol_add: Rect,
@@ -159,18 +160,16 @@ struct Bar {
     track: Rect,
 }
 
-impl Bar {
+impl StatusBar {
     pub fn from_rect(rect: Rect) -> Self {
         let s = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(2), // help
-                Constraint::Length(3), // vol_div
-                Constraint::Length(9), // vol_stat
-                Constraint::Length(1), // vol_sub
-                Constraint::Length(1), // vol_add
-                Constraint::Length(3), // control_div
-                Constraint::Length(2), // prev
+                Constraint::Length(10), // vol_stat
+                Constraint::Length(1),  // vol_sub
+                Constraint::Length(1),  // vol_add
+                Constraint::Length(3),  // control_div
+                Constraint::Length(2),  // prev
                 Constraint::Length(1),
                 Constraint::Length(1), // stop
                 Constraint::Length(1),
@@ -183,25 +182,21 @@ impl Bar {
             .split(rect);
         Self {
             parent: rect,
-            help: s[0],
-            vol_div: s[1],
-            vol_stat: s[2],
-            vol_sub: s[3],
-            vol_add: s[4],
-            control_div: s[5],
-            prev: s[6],
-            stop: s[8],
-            play_pause: s[10],
-            next: s[12],
-            track_div: s[13],
-            track: s[14],
+            vol_stat: s[0],
+            vol_sub: s[1],
+            vol_add: s[2],
+            control_div: s[3],
+            prev: s[4],
+            stop: s[6],
+            play_pause: s[8],
+            next: s[10],
+            track_div: s[11],
+            track: s[12],
         }
     }
     pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, library: &Arc<Library>) {
-        frame.render_widget(Paragraph::new(" ?"), self.help);
-        frame.render_widget(Paragraph::new(" | "), self.vol_div);
         frame.render_widget(
-            Paragraph::new(format!("Vol {:.2} ", library.volume_get())),
+            Paragraph::new(format!(" Vol {:.2} ", library.volume_get())),
             self.vol_stat,
         );
         frame.render_widget(Paragraph::new("-"), self.vol_sub);
@@ -227,6 +222,84 @@ impl Bar {
 
 // ## Bar ## }}}
 
+// ## MultiBar ## {{{
+
+#[derive(Clone, Debug, PartialEq)]
+enum MBDrawMode {
+    Default,
+    Input {
+        title: String,
+        contents: String,
+        style: Style,
+    },
+}
+
+impl Default for MBDrawMode {
+    fn default() -> Self {
+        Self::Default
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct MultiBar {
+    parent: Rect,
+    mode: MBDrawMode,
+    help: Rect,
+    help_div: Rect,
+    search: Rect,
+}
+
+impl MultiBar {
+    pub fn from_rect(rect: Rect) -> Self {
+        let s = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Length(4), // help
+                Constraint::Length(3), // help_div
+                Constraint::Length(6), // search
+                Constraint::Length(0),
+            ])
+            .split(rect);
+        Self {
+            parent: rect,
+            mode: MBDrawMode::default(),
+            help: s[1],
+            help_div: s[2],
+            search: s[3],
+        }
+    }
+    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, _library: &Arc<Library>) {
+        match &self.mode {
+            MBDrawMode::Default => {
+                frame.render_widget(Paragraph::new("Help"), self.help);
+                frame.render_widget(Paragraph::new(" | "), self.help_div);
+                frame.render_widget(Paragraph::new("Search"), self.search);
+            }
+            MBDrawMode::Input {
+                title,
+                contents,
+                style,
+            } => {
+                let rects = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(vec![
+                        Constraint::Length((title.len() + 3) as u16),
+                        Constraint::Length(0),
+                    ])
+                    .split(self.parent);
+                frame.render_widget(
+                    Paragraph::new(format!(" {}: ", title)).style(*style),
+                    rects[0],
+                );
+                frame.render_widget(Paragraph::new(format!("{}", contents)), rects[1]);
+            }
+        }
+    }
+}
+
+// ## MultiBar ## }}}
+
 #[derive(Clone, Debug, PartialEq)]
 struct FilterPane {
     tag: String,
@@ -245,7 +318,8 @@ enum Pane {
 
 #[derive(Debug)]
 struct UI<T: Backend> {
-    bar: Bar,
+    status_bar: StatusBar,
+    multi_bar: MultiBar,
     panes: Vec<FilterPane>,
     panes_index: usize,
     queue: Vec<Arc<Track>>,
@@ -260,7 +334,8 @@ struct UI<T: Backend> {
 impl<T: Backend> UI<T> {
     fn from_library(library: &Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
         let mut result = Self {
-            bar: Bar::default(),
+            status_bar: StatusBar::default(),
+            multi_bar: MultiBar::default(),
             panes: Vec::new(),
             panes_index: 0,
             queue: Vec::new(),
@@ -474,8 +549,9 @@ impl<T: Backend> UI<T> {
                     .direction(Direction::Vertical)
                     .constraints(vec![
                         Constraint::Length(1),
+                        Constraint::Length(1),
                         if self.panes.is_empty() {
-                            Constraint::Length(1)
+                            Constraint::Length(0)
                         } else {
                             Constraint::Percentage(50)
                         },
@@ -489,13 +565,13 @@ impl<T: Backend> UI<T> {
                             .map(|_| Constraint::Ratio(1, self.panes.len() as u32))
                             .collect::<Vec<Constraint>>(),
                     )
-                    .split(zones[1])
+                    .split(zones[2])
                     .into_iter()
                     .enumerate()
                 {
                     self.panes[n].rect = r;
                 }
-                self.queue_rect = zones[2];
+                self.queue_rect = zones[3];
                 f.render_widget(
                     self.build_list(Pane::Queue).block(
                         Block::default()
@@ -505,8 +581,12 @@ impl<T: Backend> UI<T> {
                     ),
                     self.queue_rect,
                 );
-                self.bar = Bar::from_rect(zones[0]);
-                self.bar.draw(f, library);
+                self.status_bar = StatusBar::from_rect(zones[0]);
+                self.status_bar.draw(f, library);
+                let bar_mode = self.multi_bar.mode.clone();
+                self.multi_bar = MultiBar::from_rect(zones[1]);
+                self.multi_bar.mode = bar_mode;
+                self.multi_bar.draw(f, library);
                 for (num, fp) in self.panes.iter().enumerate() {
                     f.render_widget(
                         self.build_list(Pane::Panes(num)).block(
@@ -573,41 +653,73 @@ impl<T: Backend> UI<T> {
         self.terminal = terminal;
     }
 
-    pub fn get_input(&mut self, title: &str) -> String {
+    pub fn multi_bar_input(&mut self, title: &str, library: &Arc<Library>) -> String {
         let mut result = String::new();
-        let mut terminal = self.terminal.take();
+        let esc = loop {
+            self.multi_bar.mode = MBDrawMode::Input {
+                title: title.to_owned(),
+                contents: result.clone(),
+                style: self.theme.active,
+            };
+            self.draw(library);
+            if let Some(event) = get_event(None) {
+                match event {
+                    km_c!('c') => break false,
+                    Event::Key(KeyEvent { code, .. }) => match code {
+                        KeyCode::Esc => break true,
+                        KeyCode::Tab => break true,
+                        KeyCode::Enter => break true,
+                        KeyCode::Backspace => drop(result.pop()),
+                        KeyCode::Char(c) => result.push(c),
+                        _ => (),
+                    },
+                    _ => (),
+                }
+            };
+        };
+        self.multi_bar.mode = MBDrawMode::Default;
+        self.draw(library);
+        if esc {
+            result
+        } else {
+            String::new()
+        }
+    }
 
-        terminal
-            .as_mut()
-            .unwrap()
-            .draw(|f| {
-                f.render_widget(
-                    Block::default()
-                        .border_type(widgets::BorderType::Plain)
-                        .borders(Borders::ALL)
-                        .title(title),
-                    f.size(),
-                )
-            })
-            .unwrap();
-
-        let mut stdo = std::io::stdout();
-        execute!(
-            stdo,
-            cursor::MoveTo(1, 1),
-            event::DisableMouseCapture,
-            cursor::Show
-        )
-        .unwrap();
-        terminal::disable_raw_mode().unwrap();
-
-        std::io::stdin().read_line(&mut result).unwrap();
-
-        terminal::enable_raw_mode().unwrap();
-        execute!(stdo, event::EnableMouseCapture, cursor::Hide).unwrap();
-
-        self.terminal = terminal;
-        result
+    pub fn search(&mut self, library: &Arc<Library>) {
+        match self.multi_bar_input("Search", library).as_str() {
+            "" => (),
+            input => {
+                if self.queue_sel {
+                    for (n, t) in self.queue.iter().enumerate() {
+                        if let Some(tag) = t.tags().get("title") {
+                            if tag
+                                .trim()
+                                .to_ascii_lowercase()
+                                .starts_with(&input.trim().to_ascii_lowercase())
+                            {
+                                self.queue_pos = n;
+                                self.lock_view(Pane::Queue);
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    if let Some(pane) = self.active_pane_mut() {
+                        for (n, i) in pane.items.iter().enumerate() {
+                            if i.trim()
+                                .to_ascii_lowercase()
+                                .starts_with(&input.trim().to_ascii_lowercase())
+                            {
+                                pane.index = n;
+                                self.lock_view(Pane::Panes(self.panes_index));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ## Popops ## }}}
@@ -625,21 +737,27 @@ impl<T: Backend> UI<T> {
             mods: event.modifiers,
             event: if self.queue_rect.intersects(point) {
                 ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
-            } else if self.bar.parent.intersects(point) {
-                if self.bar.vol_sub.intersects(point) {
+            } else if self.status_bar.parent.intersects(point) {
+                if self.status_bar.vol_sub.intersects(point) {
                     ZoneEventType::VolSub
-                } else if self.bar.vol_add.intersects(point) {
+                } else if self.status_bar.vol_add.intersects(point) {
                     ZoneEventType::VolAdd
-                } else if self.bar.prev.intersects(point) {
+                } else if self.status_bar.prev.intersects(point) {
                     ZoneEventType::Prev
-                } else if self.bar.stop.intersects(point) {
+                } else if self.status_bar.stop.intersects(point) {
                     ZoneEventType::Stop
-                } else if self.bar.play_pause.intersects(point) {
+                } else if self.status_bar.play_pause.intersects(point) {
                     ZoneEventType::PlayPause
-                } else if self.bar.next.intersects(point) {
+                } else if self.status_bar.next.intersects(point) {
                     ZoneEventType::Next
-                } else if self.bar.help.intersects(point) {
+                } else {
+                    ZoneEventType::None
+                }
+            } else if self.multi_bar.parent.intersects(point) {
+                if self.multi_bar.help.intersects(point) {
                     ZoneEventType::Help
+                } else if self.multi_bar.search.intersects(point) {
+                    ZoneEventType::Search
                 } else {
                     ZoneEventType::None
                 }
@@ -664,9 +782,9 @@ impl<T: Backend> UI<T> {
     fn process_event(&mut self, event: Event, library: &Arc<Library>) {
         match event {
             // # Key Events # {{{
-            km!('/') | km!('?') => {
-                self.message("Help", HELP);
-            }
+            km!('?') => self.message("Help", HELP),
+
+            km!('/') => self.search(library),
 
             Event::Key(KeyEvent {
                 code: KeyCode::Tab, ..
@@ -743,7 +861,7 @@ impl<T: Backend> UI<T> {
                     filters.insert(
                         min(self.panes_index + 1, self.panes.len().saturating_sub(1)),
                         Filter {
-                            tag: self.get_input("Tag to sort by: ").trim().to_string(),
+                            tag: self.multi_bar_input("Filter", library).trim().to_string(),
                             items: Vec::new(),
                         },
                     );
@@ -805,6 +923,7 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::Stop => library.stop(),
                             ZoneEventType::PlayPause => library.play_pause(),
                             ZoneEventType::Next => library.next(),
+                            ZoneEventType::Search => self.search(library),
                             ZoneEventType::Help => self.message("Help", HELP),
                             ZoneEventType::None => return,
                         },
