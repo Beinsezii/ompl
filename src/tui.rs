@@ -733,6 +733,7 @@ impl<T: Backend> UI<T> {
                         KeyCode::Char(c) => result.push(c),
                         _ => (),
                     },
+                    Event::Mouse(MouseEvent{kind: MouseEventKind::Down(_), ..}) => break false,
                     _ => (),
                 }
             };
