@@ -850,19 +850,19 @@ impl<T: Backend> UI<T> {
         match event {
             // # Key Events # {{{
             Event::Key(KeyEvent {
-                code: KeyCode::Tab, ..
+                code: KeyCode::Tab, modifiers: KeyModifiers::NONE
             }) => self.queue_sel = !self.queue_sel || self.panes.is_empty(),
-            km!('h') => {
+            km!('h') | Event::Key(KeyEvent{code: KeyCode::Left, modifiers: KeyModifiers::NONE}) => {
                 if !self.queue_sel {
                     self.panes_index = self.panes_index.saturating_sub(1)
                 }
             }
-            km!('l') => {
+            km!('l') | Event::Key(KeyEvent{code: KeyCode::Right, modifiers: KeyModifiers::NONE}) => {
                 if !self.queue_sel {
                     self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1))
                 }
             }
-            km!('j') => {
+            km!('j') | Event::Key(KeyEvent{code: KeyCode::Down, modifiers: KeyModifiers::NONE}) => {
                 if self.queue_sel {
                     self.queue_pos = min(self.queue_pos + 1, self.queue.len().saturating_sub(1));
                     self.lock_view(Pane::Queue);
@@ -871,7 +871,7 @@ impl<T: Backend> UI<T> {
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
             }
-            km!('k') => {
+            km!('k') | Event::Key(KeyEvent{code: KeyCode::Up, modifiers: KeyModifiers::NONE}) => {
                 if self.queue_sel {
                     self.queue_pos = self.queue_pos.saturating_sub(1);
                     self.lock_view(Pane::Queue);
@@ -881,7 +881,7 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km!('f') => {
+            km!('f') | Event::Key(KeyEvent{code: KeyCode::Enter, modifiers: KeyModifiers::NONE}) => {
                 if self.queue_sel {
                     library.play_track(self.queue.get(self.queue_pos).cloned())
                 } else if let Some(pane) = self.active_pane_mut() {
@@ -894,7 +894,8 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_s!('F') => {
+            // shift enter no worky???
+            km_s!('F') | Event::Key(KeyEvent{code: KeyCode::Enter, modifiers: KeyModifiers::SHIFT}) => {
                 if !self.queue_sel {
                     if let Some(pane) = self.active_pane_mut() {
                         match pane.selected.is_empty() {
