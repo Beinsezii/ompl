@@ -120,7 +120,11 @@ impl Theme {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZoneEventType {
     Queue(usize),
-    Panes { pane: usize, row: usize, column: usize},
+    Panes {
+        pane: usize,
+        row: usize,
+        column: usize,
+    },
 
     VolAdd,
     VolSub,
@@ -733,7 +737,10 @@ impl<T: Backend> UI<T> {
                         KeyCode::Char(c) => result.push(c),
                         _ => (),
                     },
-                    Event::Mouse(MouseEvent{kind: MouseEventKind::Down(_), ..}) => break false,
+                    Event::Mouse(MouseEvent {
+                        kind: MouseEventKind::Down(_),
+                        ..
+                    }) => break false,
                     _ => (),
                 }
             };
@@ -748,7 +755,7 @@ impl<T: Backend> UI<T> {
     }
 
     pub fn search(&mut self, library: &Arc<Library>) {
-        match self.multi_bar_input("Search", library).as_str() {
+        match self.multi_bar_input("Search", library).trim().to_ascii_lowercase().as_str() {
             "" => (),
             input => {
                 if self.queue_sel {
@@ -757,7 +764,7 @@ impl<T: Backend> UI<T> {
                             if tag
                                 .trim()
                                 .to_ascii_lowercase()
-                                .starts_with(&input.trim().to_ascii_lowercase())
+                                .starts_with(&input)
                             {
                                 self.queue_pos = n;
                                 self.lock_view(Pane::Queue);
@@ -770,7 +777,7 @@ impl<T: Backend> UI<T> {
                         for (n, i) in pane.items.iter().enumerate() {
                             if i.trim()
                                 .to_ascii_lowercase()
-                                .starts_with(&input.trim().to_ascii_lowercase())
+                                .starts_with(&input)
                             {
                                 pane.index = n;
                                 self.lock_view(Pane::Panes(self.panes_index));
@@ -851,19 +858,32 @@ impl<T: Backend> UI<T> {
         match event {
             // # Key Events # {{{
             Event::Key(KeyEvent {
-                code: KeyCode::Tab, modifiers: KeyModifiers::NONE
+                code: KeyCode::Tab,
+                modifiers: KeyModifiers::NONE,
             }) => self.queue_sel = !self.queue_sel || self.panes.is_empty(),
-            km!('h') | Event::Key(KeyEvent{code: KeyCode::Left, modifiers: KeyModifiers::NONE}) => {
+            km!('h')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+            }) => {
                 if !self.queue_sel {
                     self.panes_index = self.panes_index.saturating_sub(1)
                 }
             }
-            km!('l') | Event::Key(KeyEvent{code: KeyCode::Right, modifiers: KeyModifiers::NONE}) => {
+            km!('l')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+            }) => {
                 if !self.queue_sel {
                     self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1))
                 }
             }
-            km!('j') | Event::Key(KeyEvent{code: KeyCode::Down, modifiers: KeyModifiers::NONE}) => {
+            km!('j')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+            }) => {
                 if self.queue_sel {
                     self.queue_pos = min(self.queue_pos + 1, self.queue.len().saturating_sub(1));
                     self.lock_view(Pane::Queue);
@@ -872,7 +892,11 @@ impl<T: Backend> UI<T> {
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
             }
-            km!('k') | Event::Key(KeyEvent{code: KeyCode::Up, modifiers: KeyModifiers::NONE}) => {
+            km!('k')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+            }) => {
                 if self.queue_sel {
                     self.queue_pos = self.queue_pos.saturating_sub(1);
                     self.lock_view(Pane::Queue);
@@ -882,7 +906,11 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km!('f') | Event::Key(KeyEvent{code: KeyCode::Enter, modifiers: KeyModifiers::NONE}) => {
+            km!('f')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+            }) => {
                 if self.queue_sel {
                     library.play_track(self.queue.get(self.queue_pos).cloned())
                 } else if let Some(pane) = self.active_pane_mut() {
@@ -896,7 +924,11 @@ impl<T: Backend> UI<T> {
             }
 
             // shift enter no worky???
-            km_s!('F') | Event::Key(KeyEvent{code: KeyCode::Enter, modifiers: KeyModifiers::SHIFT}) => {
+            km_s!('F')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::SHIFT,
+            }) => {
                 if !self.queue_sel {
                     if let Some(pane) = self.active_pane_mut() {
                         match pane.selected.is_empty() {
@@ -907,11 +939,30 @@ impl<T: Backend> UI<T> {
                 }
             }
 
+            km_s!('D') => {
+                if self.queue_sel {
+                    self.queue_sel = false
+                } else {
+                    self.delete_filter(library)
+                }
+            }
+            km!('i') => {
+                if self.queue_sel {
+                    self.queue_sel = false
+                } else {
+                    self.insert_filter(library, false)
+                }
+            }
+            km_s!('I') => {
+                if self.queue_sel {
+                    self.queue_sel = false
+                } else {
+                    self.insert_filter(library, true)
+                }
+            }
+
             km!('?') => self.message("Help", HELP),
             km!('/') => self.search(library),
-            km_s!('D') => self.delete_filter(library),
-            km!('i') => self.insert_filter(library, false),
-            km_s!('I') => self.insert_filter(library, true),
 
             km!('a') => library.play_pause(),
             km!('x') => library.stop(),
@@ -947,7 +998,8 @@ impl<T: Backend> UI<T> {
                                 self.panes_index = pane;
                                 if row == 0 && column <= self.panes[pane].tag.len() {
                                     self.panes[pane].selected = vec![];
-                                } else if row > 0 && row <= self.panes[pane].rect.height as usize - 2
+                                } else if row > 0
+                                    && row <= self.panes[pane].rect.height as usize - 2
                                     && row <= self.panes[pane].items.len()
                                 {
                                     self.panes[pane].selected =
@@ -984,7 +1036,7 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::None => return,
                         },
                         MouseButton::Right => match event {
-                            ZoneEventType::Panes { pane, row, column } => {
+                            ZoneEventType::Panes { pane, row, column: _column } => {
                                 self.queue_sel = false;
                                 self.panes_index = pane;
                                 if row > 0 && row <= self.panes[pane].rect.height as usize - 2 {
