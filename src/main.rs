@@ -13,7 +13,6 @@ use crossbeam::channel;
 use crossbeam::channel::Sender;
 
 const ID: &str = "OMPL SERVER 0.1.0";
-const PORT: u16 = 18346;
 
 // ### LOGGING ### {{{
 
@@ -177,6 +176,10 @@ struct MainArgs {
     /// [D]aemon / no-gui mode.
     daemon: bool,
 
+    /// Port with which to communicate with other OMPL instances
+    #[clap(long, default_value = "18346")]
+    port: u16,
+
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
 
@@ -190,7 +193,6 @@ struct MainArgs {
 }
 
 fn server(listener: TcpListener, library: std::sync::Arc<Library>, cli_send: Sender<Action>) {
-    l2!(format!("Listening on port {}", PORT));
     for stream in listener.incoming() {
         l2!("Found client");
         match stream {
@@ -278,7 +280,7 @@ fn server(listener: TcpListener, library: std::sync::Arc<Library>, cli_send: Sen
     l2!("Server exiting");
 }
 
-fn instance_main(listener: TcpListener) {
+fn instance_main(listener: TcpListener, port: u16) {
     let main_args = MainArgs::parse();
     LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
@@ -294,6 +296,7 @@ fn instance_main(listener: TcpListener) {
 
     let server_library = library.clone();
     let jh = thread::spawn(move || server(listener, server_library, cli_send));
+    l2!(format!("Listening on port {}", port));
 
     // ## souvlaki ## {{{
     // souvlaki doesn't seem to compile on MinGW
@@ -315,7 +318,7 @@ fn instance_main(listener: TcpListener) {
             //     const SIZE: u32 = 1024;
             //     let old_title = PSTR(CString::new(String::with_capacity(SIZE as usize)).unwrap().into_raw() as *mut u8);
             //     let mut new = String::with_capacity(SIZE as usize);
-            //         new.push_str(&format!("ompl.{}", PORT));
+            //         new.push_str(&format!("ompl.port{}", port));
             //     let new_title = PSTR(CString::new(new).unwrap().into_raw() as *mut u8);
             //     windows::Win32::System::Console::GetConsoleTitleA(old_title, SIZE);
             //     windows::Win32::System::Console::SetConsoleTitleA(new_title);
@@ -330,7 +333,7 @@ fn instance_main(listener: TcpListener) {
         };
 
         match MediaControls::new(PlatformConfig {
-            dbus_name: &format!("ompl.p{}", PORT),
+            dbus_name: &format!("ompl.port{}", port),
             display_name: "OMPL",
             hwnd,
         }) {
@@ -420,6 +423,10 @@ fn instance_main(listener: TcpListener) {
 struct SubArgs {
     #[clap(subcommand)]
     action: Action,
+
+    /// Port with which to communicate with other OMPL instances
+    #[clap(long, default_value = "18346")]
+    port: u16,
 }
 
 fn instance_sub(mut stream: TcpStream) {
@@ -452,9 +459,22 @@ fn instance_sub(mut stream: TcpStream) {
 
 // ### MAIN ### {{{
 fn main() {
-    // I want the port to be change-able but don't know a good way to without buggering the
-    // sub & main args
-    let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), PORT);
+    let mut port = 18346;
+    let mut p = false;
+    for arg in std::env::args() {
+        if p {
+            match arg.parse::<u16>() {
+                Ok(a) => port = a,
+                Err(_) => (),
+            }
+            break;
+        } else {
+            if arg == "--port" {
+                p = true
+            }
+        }
+    }
+    let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port);
 
     let instance = match TcpListener::bind(socket) {
         Ok(v) => Instance::Main(v),
@@ -465,7 +485,7 @@ fn main() {
     };
 
     match instance {
-        Instance::Main(m) => instance_main(m),
+        Instance::Main(m) => instance_main(m, port),
         Instance::Sub(s) => instance_sub(s),
     }
 }
