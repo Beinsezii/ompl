@@ -33,7 +33,7 @@ To update the running program filters to genres "Epic" and "Game" while sorting 
 To start a *new* TUI if you want two songs playing at once like a crackhead, run `ompl -l Path/To/Music --port 12345` or whatever valid port # you want.
 Be careful to avoid commonly used ports such as 80, as other programs may be occupying these sockets.
 
-To view a full list of daeomon/tui initialization commands, run `ompl --help while no TUI/Daemons are open on the active port.
+To view a full list of daeomon/tui initialization commands, run `ompl --help` while no TUI/Daemons are open on the active port.
 
 To view a full list of CLI commands, run `ompl --help` while the TUI/Daemon is already open on the active port
 
