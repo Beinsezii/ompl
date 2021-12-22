@@ -176,6 +176,10 @@ struct MainArgs {
     /// [D]aemon / no-gui mode.
     daemon: bool,
 
+    #[clap(long, short)]
+    /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS
+    no_media: bool,
+
     /// Port with which to communicate with other OMPL instances
     #[clap(long, default_value = "18346")]
     port: u16,
@@ -301,7 +305,7 @@ fn instance_main(listener: TcpListener, port: u16) {
     // ## souvlaki ## {{{
     // souvlaki doesn't seem to compile on MinGW
     #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
-    {
+    if !main_args.no_media {
         use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
         l2!("Initializing media controls...");
 
