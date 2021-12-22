@@ -987,7 +987,7 @@ impl<T: Backend> UI<T> {
                                 self.queue_sel = true;
                                 if index > 0
                                     && index <= self.queue_rect.height as usize - 2
-                                    && index < self.queue.len()
+                                    && index <= self.queue.len()
                                 {
                                     let index = index - 1 + self.queue_view;
                                     library.play_track(self.queue.get(index).cloned());
