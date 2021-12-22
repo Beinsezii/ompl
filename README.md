@@ -21,6 +21,7 @@ A music player organized exactly how *I* like it.
     * Personally just modifying the cli command in my startup config has been fine, but this is a very common thing among any somewhat major program.
   
 ## Usage
+<img src="./screenshot.png" width = 400px />
 Either download a binary from the tags/releases tab or if you already have Rust installed, run `cargo install --git https://github.com/Beinsezii/ompl.git`.
 It is recommended you add the downloaded binary or cargo install dir to your `PATH` for ease of use.
 
