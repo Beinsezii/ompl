@@ -16,6 +16,7 @@ A music player organized exactly how *I* like it.
   * Windows media interface support
   * Filling out of `print` cli command
   * More advanced tag sorting, something a la [quodlibet's tag patterns](https://quodlibet.readthedocs.io/en/latest/guide/tags/patterns.html)
+  * Theme customization
   * Polish passes/hundred papercuts
   * Possibly some form of retained settings/config file
     * Personally just modifying the cli command in my startup config has been fine, but this is a very common thing among any somewhat major program.
