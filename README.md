@@ -43,7 +43,7 @@ Have Rust 2021 installed, clone repo and just run `cargo build`.
 
 Note cross-compiling to windows with MinGW will have the media interface disabled to avoid miscompiles.
 Compile using MSVC instead to have a (still non-functional) but *compiled* media interface.
-I believe this is due to
+I believe this is a problem with the [windows-rs](https://github.com/microsoft/windows-rs) crate and consequently [souvlaki](https://github.com/Sinono3/souvlaki) that I'm not sure how to work around.
 
 ## F.A.Q.
 Question|Answer
