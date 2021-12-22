@@ -448,7 +448,7 @@ impl<T: Backend> UI<T> {
                 filters.insert(
                     min(
                         self.panes_index + if before { 0 } else { 1 },
-                        self.panes.len().saturating_sub(if before{1} else {0}),
+                        self.panes.len().saturating_sub(if before { 1 } else { 0 }),
                     ),
                     Filter {
                         tag,
@@ -459,7 +459,7 @@ impl<T: Backend> UI<T> {
                 self.update_from_library(library);
                 self.panes_index = min(
                     self.panes_index + if before { 0 } else { 1 },
-                    self.panes.len().saturating_sub(if before{1} else {0}),
+                    self.panes.len().saturating_sub(if before { 1 } else { 0 }),
                 );
             }
         }
@@ -941,23 +941,17 @@ impl<T: Backend> UI<T> {
             }
 
             km_s!('D') => {
-                if self.queue_sel {
-                    self.queue_sel = false
-                } else {
+                if !self.queue_sel {
                     self.delete_filter(library)
                 }
             }
             km!('i') => {
-                if self.queue_sel {
-                    self.queue_sel = false
-                } else {
+                if !self.queue_sel {
                     self.insert_filter(library, false)
                 }
             }
             km_s!('I') => {
-                if self.queue_sel {
-                    self.queue_sel = false
-                } else {
+                if !self.queue_sel {
                     self.insert_filter(library, true)
                 }
             }
