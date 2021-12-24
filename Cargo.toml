@@ -17,7 +17,10 @@ rodio = "0.14"
 serde = { version = "1", features = ["derive"] }
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 walkdir = "2"
-windows = { version = "0.28", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Console"] }
+
+[target.'cfg(windows)'.dependencies]
+winit = "0.26"
+raw-window-handle = "0.4"
 
 # Souvlaki doesn't seem to compile on MinGW
 [target.'cfg(not(all(target_os = "windows", target_env = "gnu")))'.dependencies]

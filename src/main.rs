@@ -313,27 +313,20 @@ fn instance_main(listener: TcpListener, port: u16) {
         let hwnd = None;
 
         #[cfg(target_os = "windows")]
-        let hwnd = unsafe {
-            // Trying to use this:
-            // https://docs.microsoft.com/en-us/troubleshoot/windows-server/performance/obtain-console-window-handle
-            //
-            //     use std::ffi::CString;
-            //     use windows::Win32::Foundation::PSTR;
-            //     const SIZE: u32 = 1024;
-            //     let old_title = PSTR(CString::new(String::with_capacity(SIZE as usize)).unwrap().into_raw() as *mut u8);
-            //     let mut new = String::with_capacity(SIZE as usize);
-            //         new.push_str(&format!("ompl.port{}", port));
-            //     let new_title = PSTR(CString::new(new).unwrap().into_raw() as *mut u8);
-            //     windows::Win32::System::Console::GetConsoleTitleA(old_title, SIZE);
-            //     windows::Win32::System::Console::SetConsoleTitleA(new_title);
-            //     thread::sleep(std::time::Duration::from_millis(4000));
-            //     let hwnd_ptr: *mut isize = &mut windows::Win32::UI::WindowsAndMessaging::FindWindowA(PSTR(&mut 0u8), new_title).0;
-            //     windows::Win32::System::Console::SetConsoleTitleA(old_title);
-            //     println!("{:?}", *hwnd_ptr);
-            //     thread::sleep(std::time::Duration::from_millis(4000));
-            //     Some(hwnd_ptr as *mut std::ffi::c_void)
-            let hwnd_ptr: *mut isize = &mut 0;
-            Some(hwnd_ptr as *mut std::ffi::c_void)
+        let hwnd = {
+            // You *could* use winapi::um::wincon::GetConsoleWindow()
+            // but if you're running ompl from the CLI, conhost.exe will own the window process
+            // so souvlaki can't hook into it. This just creates a hidden window instead.
+            use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+            match winit::window::WindowBuilder::new()
+                    .with_decorations(false)
+                    .with_visible(false)
+                    .with_title("OMPL Media Control Window")
+                    .build(&winit::event_loop::EventLoop::new())
+                    .unwrap().raw_window_handle() {
+                RawWindowHandle::Win32(han) => Some(han.hwnd),
+                _ => panic!("Unknown window handle type!"),
+            }
         };
 
         match MediaControls::new(PlatformConfig {
