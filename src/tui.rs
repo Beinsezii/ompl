@@ -1027,7 +1027,10 @@ impl<T: Backend> UI<T> {
                             } => {
                                 self.queue_sel = false;
                                 self.panes_index = pane;
-                                if row > 0 && row <= self.panes[pane].rect.height as usize - 2 {
+                                if row > 0
+                                    && row <= self.panes[pane].rect.height as usize - 2
+                                    && row <= self.panes[pane].items.len()
+                                {
                                     let sel = row - 1 + self.panes[pane].view;
                                     if let Some(pos) =
                                         self.panes[pane].selected.iter().position(|x| *x == sel)
