@@ -459,9 +459,10 @@ impl<T: Backend> UI<T> {
                 self.update_from_library(library);
                 self.panes_index = min(
                     self.panes_index + if before { 0 } else { 1 },
-                    self.panes.len().saturating_sub(if before { 1 } else { 0 }),
+                    self.panes.len().saturating_sub(1),
                 );
             }
+            self.queue_sel = false;
         }
     }
 
@@ -469,12 +470,12 @@ impl<T: Backend> UI<T> {
         if !self.queue_sel {
             if !self.panes.is_empty() {
                 self.panes.remove(self.panes_index);
-            }
-            self.panes_index = self.panes_index.saturating_sub(1);
-            library.set_filters(self.rebuild_filters());
-            self.update_from_library(library);
-            if self.panes.is_empty() {
-                self.queue_sel = true
+                self.panes_index = self.panes_index.saturating_sub(1);
+                library.set_filters(self.rebuild_filters());
+                self.update_from_library(library);
+                if self.panes.is_empty() {
+                    self.queue_sel = true
+                }
             }
         }
     }
@@ -940,21 +941,9 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_s!('D') => {
-                if !self.queue_sel {
-                    self.delete_filter(library)
-                }
-            }
-            km!('i') => {
-                if !self.queue_sel {
-                    self.insert_filter(library, false)
-                }
-            }
-            km_s!('I') => {
-                if !self.queue_sel {
-                    self.insert_filter(library, true)
-                }
-            }
+            km_s!('D') => self.delete_filter(library),
+            km!('i') => self.insert_filter(library, false),
+            km_s!('I') => self.insert_filter(library, true),
 
             km!('?') => self.message("Help", HELP),
             km!('/') => self.search(library),
