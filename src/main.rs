@@ -319,11 +319,13 @@ fn instance_main(listener: TcpListener, port: u16) {
             // so souvlaki can't hook into it. This just creates a hidden window instead.
             use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
             match winit::window::WindowBuilder::new()
-                    .with_decorations(false)
-                    .with_visible(false)
-                    .with_title("OMPL Media Control Window")
-                    .build(&winit::event_loop::EventLoop::new())
-                    .unwrap().raw_window_handle() {
+                .with_decorations(false)
+                .with_visible(false)
+                .with_title("OMPL Media Control Window")
+                .build(&winit::event_loop::EventLoop::new())
+                .unwrap()
+                .raw_window_handle()
+            {
                 RawWindowHandle::Win32(han) => Some(han.hwnd),
                 _ => panic!("Unknown window handle type!"),
             }
