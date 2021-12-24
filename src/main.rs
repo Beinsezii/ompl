@@ -464,7 +464,7 @@ fn main() {
         if p {
             match arg.parse::<u16>() {
                 Ok(a) => port = a,
-                Err(_) => (),
+                Err(e) => panic!("Invalid port: {:?}", e),
             }
             break;
         } else {
