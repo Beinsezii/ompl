@@ -9,7 +9,7 @@ mod library;
 mod tui;
 use library::Library;
 
-const ID: &str = "OMPL SERVER 0.1.0";
+const ID: &str = "OMPL SERVER 0.2.0";
 
 // ### LOGGING ### {{{
 
@@ -126,7 +126,10 @@ pub enum VolumeCmd {
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
     Status,
-    Playing { format_string: String },
+    Volume,
+    Playing,
+    Stopped,
+    Paused,
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -240,16 +243,29 @@ fn server(listener: TcpListener, library: std::sync::Arc<Library>) {
                             Action::Stop => library.stop(),
                             Action::Volume(vol_cmd) => match vol_cmd {
                                 VolumeCmd::Get => {
-                                    response = format!("{:.3}", library.volume_get());
+                                    response = format!("{:.2}", library.volume_get());
                                 }
                                 VolumeCmd::Add { amount } => library.volume_add(amount),
                                 VolumeCmd::Sub { amount } => library.volume_sub(amount),
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
                             Action::Print(print_cmd) => match print_cmd {
-                                PrintCmd::Status => response = format!("{:?}", library.track_get()),
-                                PrintCmd::Playing { format_string } => {
-                                    response = format!("Unimplemented!\n{}", format_string)
+                                PrintCmd::Status => {
+                                    response = if library.playing() {
+                                        "playing".to_string()
+                                    } else if library.paused() {
+                                        "paused".to_string()
+                                    } else if library.stopped() {
+                                        "stopped".to_string()
+                                    } else {
+                                        "invalid".to_string()
+                                    }
+                                }
+                                PrintCmd::Playing => response = library.playing().to_string(),
+                                PrintCmd::Paused => response = library.paused().to_string(),
+                                PrintCmd::Stopped => response = library.stopped().to_string(),
+                                PrintCmd::Volume => {
+                                    response = format!("{:.2}", library.volume_get())
                                 }
                             },
                             Action::Filter { now, filters } => {
@@ -299,7 +315,9 @@ fn instance_main(listener: TcpListener, port: u16) {
     // souvlaki doesn't seem to compile on MinGW
     #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
     if !main_args.no_media {
-        use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, PlatformConfig};
+        use souvlaki::{
+            MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
+        };
         l2!("Initializing media controls...");
 
         #[cfg(not(target_os = "windows"))]
@@ -367,6 +385,15 @@ fn instance_main(listener: TcpListener, port: u16) {
                                     .flatten()
                                     .as_deref(),
                                 ..Default::default()
+                            })
+                            .unwrap();
+                        controls
+                            .set_playback(if library.playing() {
+                                MediaPlayback::Playing { progress: None }
+                            } else if library.paused() {
+                                MediaPlayback::Paused { progress: None }
+                            } else {
+                                MediaPlayback::Stopped
                             })
                             .unwrap();
                     } else {

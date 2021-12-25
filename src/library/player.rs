@@ -93,13 +93,7 @@ impl Player {
     // ## PLAYBACK ## {{{
 
     fn start(&self) {
-        if let Some(reader) = self
-            .track
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|t| t.get_reader())
-        {
+        if let Some(reader) = self.track.read().unwrap().as_ref().map(|t| t.get_reader()) {
             match self.stream_handle.play_once(reader) {
                 Ok(sink) => {
                     sink.set_volume(*self.volume_retained.read().unwrap());
@@ -164,10 +158,24 @@ impl Player {
 
     // ## STATUS ## {{{
 
-    pub fn active(&self) -> bool {
+    pub fn playing(&self) -> bool {
         match &*self.sink.read().unwrap() {
             Some(sink) => !sink.empty() && !sink.is_paused(),
             None => false,
+        }
+    }
+
+    pub fn paused(&self) -> bool {
+        match &*self.sink.read().unwrap() {
+            Some(sink) => sink.is_paused() && !sink.empty(),
+            None => false,
+        }
+    }
+
+    pub fn stopped(&self) -> bool {
+        match &*self.sink.read().unwrap() {
+            Some(sink) => sink.empty(),
+            None => true,
         }
     }
 

@@ -180,7 +180,7 @@ impl StatusBar {
                 Constraint::Length(1),
                 Constraint::Length(1), // stop
                 Constraint::Length(1),
-                Constraint::Length(3), // play_pause
+                Constraint::Length(2), // play_pause
                 Constraint::Length(1),
                 Constraint::Length(2), // next
                 Constraint::Length(3), // track_div
@@ -211,7 +211,10 @@ impl StatusBar {
         frame.render_widget(Paragraph::new(" | "), self.control_div);
         frame.render_widget(Paragraph::new(":<"), self.prev);
         frame.render_widget(Paragraph::new("#"), self.stop);
-        frame.render_widget(Paragraph::new("::>"), self.play_pause);
+        frame.render_widget(
+            Paragraph::new(if library.playing() { "::" } else { "/>" }),
+            self.play_pause,
+        );
         frame.render_widget(Paragraph::new(">:"), self.next);
         frame.render_widget(Paragraph::new(" | "), self.track_div);
         frame.render_widget(

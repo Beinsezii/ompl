@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crossbeam::channel;
-use crossbeam::channel::{Sender, Receiver};
+use crossbeam::channel::{Receiver, Sender};
 
 mod player;
 mod track;
@@ -207,7 +207,7 @@ impl Library {
         self.libevt_s.send(LibEvt::Stop).unwrap();
     }
     pub fn play_pause(&self) {
-        match self.player.active() {
+        match self.player.playing() {
             true => self.pause(),
             false => self.play(),
         }
@@ -339,4 +339,18 @@ impl Library {
     }
 
     // ## GET/SET ## }}}
+
+    // ## Status ## {{{
+
+    pub fn playing(&self) -> bool {
+        self.player.playing()
+    }
+    pub fn paused(&self) -> bool {
+        self.player.paused()
+    }
+    pub fn stopped(&self) -> bool {
+        self.player.stopped()
+    }
+
+    // ## Status ## }}}
 }
