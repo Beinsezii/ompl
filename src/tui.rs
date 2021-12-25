@@ -1,6 +1,6 @@
 use std::cmp::min;
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use crate::library::{Filter, LibEvt, Library, Track};
@@ -292,7 +292,7 @@ impl MultiBar {
             delete: s[9],
         }
     }
-    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, _library: &Arc<Library>) {
+    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>) {
         match &self.mode {
             MBDrawMode::Default => {
                 frame.render_widget(Paragraph::new("Help"), self.help);
@@ -375,8 +375,8 @@ enum Pane {
     Panes(usize),
 }
 
-#[derive(Debug)]
 struct UI<T: Backend> {
+    lib_weak: Weak<Library>,
     status_bar: StatusBar,
     multi_bar: MultiBar,
     debug_bar: DebugBar,
@@ -395,12 +395,13 @@ struct UI<T: Backend> {
 
 impl<T: Backend> UI<T> {
     fn from_library(
-        library: &Arc<Library>,
+        library: Arc<Library>,
         terminal: Terminal<T>,
         theme: Theme,
         debug: bool,
     ) -> Self {
         let mut result = Self {
+            lib_weak: Arc::downgrade(&library),
             status_bar: StatusBar::default(),
             multi_bar: MultiBar::default(),
             debug_bar: DebugBar::default(),
@@ -416,13 +417,17 @@ impl<T: Backend> UI<T> {
             debug,
             draw_count: 0,
         };
-        result.update_from_library(library);
+        result.update_from_library();
         result
     }
 
     // ## UI Data FNs ## {{{
 
-    fn update_from_library(&mut self, library: &Arc<Library>) {
+    fn update_from_library(&mut self) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
         let filter_tree = library.get_filter_tree();
         let old_indicies = self.panes.iter().map(|p| p.index).collect::<Vec<usize>>();
         let old_views = self.panes.iter().map(|p| p.view).collect::<Vec<usize>>();
@@ -473,7 +478,7 @@ impl<T: Backend> UI<T> {
                 .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
         );
         crate::library::sort_by_tag("title", &mut self.queue);
-        self.draw(library);
+        self.draw();
     }
 
     fn rebuild_filters(&self) -> Vec<Filter> {
@@ -490,9 +495,13 @@ impl<T: Backend> UI<T> {
             .collect::<Vec<Filter>>()
     }
 
-    fn insert_filter(&mut self, library: &Arc<Library>, before: bool) {
+    fn insert_filter(&mut self, before: bool) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
         if !self.queue_sel || self.panes.is_empty() {
-            let tag = self.multi_bar_input("Filter", library).trim().to_string();
+            let tag = self.multi_bar_input("Filter").trim().to_string();
             if !tag.is_empty() {
                 let mut filters = self.rebuild_filters();
                 filters.insert(
@@ -506,7 +515,7 @@ impl<T: Backend> UI<T> {
                     },
                 );
                 library.set_filters(filters);
-                self.update_from_library(library);
+                self.update_from_library();
                 self.panes_index = min(
                     self.panes_index + if before { 0 } else { 1 },
                     self.panes.len().saturating_sub(1),
@@ -516,13 +525,17 @@ impl<T: Backend> UI<T> {
         }
     }
 
-    fn delete_filter(&mut self, library: &Arc<Library>) {
+    fn delete_filter(&mut self) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
         if !self.queue_sel {
             if !self.panes.is_empty() {
                 self.panes.remove(self.panes_index);
                 self.panes_index = self.panes_index.saturating_sub(1);
                 library.set_filters(self.rebuild_filters());
-                self.update_from_library(library);
+                self.update_from_library();
                 if self.panes.is_empty() {
                     self.queue_sel = true
                 }
@@ -656,7 +669,11 @@ impl<T: Backend> UI<T> {
     // ## UI Layout FNs }}}
 
     // ## draw ## {{{
-    fn draw(&mut self, library: &Arc<Library>) {
+    fn draw(&mut self) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
         self.draw_count += 1;
         let mut terminal = self.terminal.take();
         terminal
@@ -702,11 +719,11 @@ impl<T: Backend> UI<T> {
                     self.queue_rect,
                 );
                 self.status_bar = StatusBar::from_rect(zones[0]);
-                self.status_bar.draw(f, library);
+                self.status_bar.draw(f, &library);
                 let bar_mode = self.multi_bar.mode.clone();
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.mode = bar_mode;
-                self.multi_bar.draw(f, library);
+                self.multi_bar.draw(f);
                 self.debug_bar = DebugBar::from_rect(zones[2]);
                 self.debug_bar.draw(f, self.draw_count);
                 for (num, fp) in self.panes.iter().enumerate() {
@@ -735,7 +752,7 @@ impl<T: Backend> UI<T> {
 
     // ## Popops ## {{{
 
-    pub fn message(&mut self, title: &str, message: &str, library: &Arc<Library>) {
+    pub fn message(&mut self, title: &str, message: &str) {
         let mut terminal = self.terminal.take();
 
         terminal
@@ -773,17 +790,17 @@ impl<T: Backend> UI<T> {
         }
 
         self.terminal = terminal;
-        self.draw(library);
+        self.draw();
     }
 
-    pub fn multi_bar_input(&mut self, title: &str, library: &Arc<Library>) -> String {
+    pub fn multi_bar_input(&mut self, title: &str) -> String {
         let mut result = String::new();
         self.multi_bar.mode = MBDrawMode::Input {
             title: title.to_owned(),
             contents: result.clone(),
             style: self.theme.active,
         };
-        self.draw(library);
+        self.draw();
         let esc = loop {
             if let Some(event) = get_event(None) {
                 match event {
@@ -807,11 +824,11 @@ impl<T: Backend> UI<T> {
                     contents: result.clone(),
                     style: self.theme.active,
                 };
-                self.draw(library);
+                self.draw();
             };
         };
         self.multi_bar.mode = MBDrawMode::Default;
-        self.draw(library);
+        self.draw();
         if esc {
             result
         } else {
@@ -819,9 +836,9 @@ impl<T: Backend> UI<T> {
         }
     }
 
-    pub fn search(&mut self, library: &Arc<Library>) {
+    pub fn search(&mut self) {
         match self
-            .multi_bar_input("Search", library)
+            .multi_bar_input("Search")
             .trim()
             .to_ascii_lowercase()
             .as_str()
@@ -852,7 +869,7 @@ impl<T: Backend> UI<T> {
                         } {
                             *index = n;
                             self.lock_view(view);
-                            self.draw(library);
+                            self.draw();
                             return;
                         }
                     }
@@ -925,7 +942,11 @@ impl<T: Backend> UI<T> {
     // ## convert_event ## }}}
 
     // ## process_event ## {{{
-    fn process_event(&mut self, event: Event, library: &Arc<Library>) {
+    fn process_event(&mut self, event: Event) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
         match event {
             // # Key Events # {{{
             Event::Key(KeyEvent {
@@ -933,7 +954,7 @@ impl<T: Backend> UI<T> {
                 modifiers: KeyModifiers::NONE,
             }) => {
                 self.queue_sel = !self.queue_sel || self.panes.is_empty();
-                self.draw(library);
+                self.draw();
             }
             km!('h')
             | Event::Key(KeyEvent {
@@ -942,7 +963,7 @@ impl<T: Backend> UI<T> {
             }) => {
                 if !self.queue_sel {
                     self.panes_index = self.panes_index.saturating_sub(1);
-                    self.draw(library);
+                    self.draw();
                 }
             }
             km!('l')
@@ -953,7 +974,7 @@ impl<T: Backend> UI<T> {
                 if !self.queue_sel {
                     self.panes_index =
                         min(self.panes_index + 1, self.panes.len().saturating_sub(1));
-                    self.draw(library);
+                    self.draw();
                 }
             }
             km!('j')
@@ -968,7 +989,7 @@ impl<T: Backend> UI<T> {
                     pane.index = min(pane.index + 1, pane.items.len().saturating_sub(1));
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
-                self.draw(library);
+                self.draw();
             }
             km!('k')
             | Event::Key(KeyEvent {
@@ -982,7 +1003,7 @@ impl<T: Backend> UI<T> {
                     pane.index = pane.index.saturating_sub(1);
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
-                self.draw(library);
+                self.draw();
             }
 
             km!('f')
@@ -998,7 +1019,7 @@ impl<T: Backend> UI<T> {
                         None => pane.selected.push(pane.index),
                     }
                     library.set_filters(self.rebuild_filters());
-                    self.update_from_library(&library);
+                    self.update_from_library();
                 }
             }
 
@@ -1018,12 +1039,12 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_s!('D') => self.delete_filter(library),
-            km!('i') => self.insert_filter(library, false),
-            km_s!('I') => self.insert_filter(library, true),
+            km_s!('D') => self.delete_filter(),
+            km!('i') => self.insert_filter(false),
+            km_s!('I') => self.insert_filter(true),
 
-            km!('?') => self.message("Help", HELP, library),
-            km!('/') => self.search(library),
+            km!('?') => self.message("Help", HELP),
+            km!('/') => self.search(),
 
             km!('a') => library.play_pause(),
             km!('x') => library.stop(),
@@ -1053,7 +1074,7 @@ impl<T: Backend> UI<T> {
                                     library.play_track(self.queue.get(index).cloned());
                                     self.queue_pos = index;
                                 }
-                                self.draw(library);
+                                self.draw();
                             }
                             ZoneEventType::Panes { pane, row, column } => {
                                 self.queue_sel = false;
@@ -1067,11 +1088,11 @@ impl<T: Backend> UI<T> {
                                     self.panes[pane].selected =
                                         vec![row - 1 + self.panes[pane].view];
                                 } else {
-                                    self.draw(library);
+                                    self.draw();
                                     return;
                                 }
                                 library.set_filters(self.rebuild_filters());
-                                self.update_from_library(&library);
+                                self.update_from_library();
                             }
                             ZoneEventType::VolSub => library.volume_sub(0.05),
                             ZoneEventType::VolAdd => library.volume_add(0.05),
@@ -1079,22 +1100,22 @@ impl<T: Backend> UI<T> {
                             ZoneEventType::Stop => library.stop(),
                             ZoneEventType::PlayPause => library.play_pause(),
                             ZoneEventType::Next => library.next(),
-                            ZoneEventType::Search => self.search(library),
+                            ZoneEventType::Search => self.search(),
                             ZoneEventType::Insert(before) => {
                                 if self.queue_sel {
                                     self.queue_sel = false
                                 } else {
-                                    self.insert_filter(library, before)
+                                    self.insert_filter(before)
                                 }
                             }
                             ZoneEventType::Delete => {
                                 if self.queue_sel {
                                     self.queue_sel = false
                                 } else {
-                                    self.delete_filter(library)
+                                    self.delete_filter()
                                 }
                             }
-                            ZoneEventType::Help => self.message("Help", HELP, library),
+                            ZoneEventType::Help => self.message("Help", HELP),
                             ZoneEventType::None => (),
                         },
                         MouseButton::Right => match event {
@@ -1118,14 +1139,14 @@ impl<T: Backend> UI<T> {
                                         self.panes[pane].selected.push(sel);
                                     }
                                     library.set_filters(self.rebuild_filters());
-                                    self.update_from_library(&library);
+                                    self.update_from_library();
                                 } else {
-                                    self.draw(library)
+                                    self.draw()
                                 }
                             }
                             ZoneEventType::Queue(_) => {
                                 self.queue_sel = true;
-                                self.draw(library);
+                                self.draw();
                             }
                             _ => (),
                         },
@@ -1136,13 +1157,13 @@ impl<T: Backend> UI<T> {
                         ZoneEventType::Queue(_index) => {
                             self.scroll_view_down(Pane::Queue);
                             self.queue_sel = true;
-                            self.draw(library);
+                            self.draw();
                         }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_down(Pane::Panes(pane));
                             self.queue_sel = false;
                             self.panes_index = pane;
-                            self.draw(library);
+                            self.draw();
                         }
                         _ => (),
                     },
@@ -1150,13 +1171,13 @@ impl<T: Backend> UI<T> {
                         ZoneEventType::Queue(_index) => {
                             self.scroll_view_up(Pane::Queue);
                             self.queue_sel = true;
-                            self.draw(library);
+                            self.draw();
                         }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_up(Pane::Panes(pane));
                             self.queue_sel = false;
                             self.panes_index = pane;
-                            self.draw(library);
+                            self.draw();
                         }
                         _ => (),
                     },
@@ -1166,7 +1187,7 @@ impl<T: Backend> UI<T> {
                 _ => (),
             },
             // # Mouse Events # }}}
-            Event::Resize(..) => self.draw(library),
+            Event::Resize(..) => self.draw(),
             _ => (),
         }
     }
@@ -1178,7 +1199,6 @@ impl<T: Backend> UI<T> {
 // ### tui ### {{{
 pub fn tui(library: Arc<Library>) {
     let libevt_r: Receiver<LibEvt> = library.get_receiver();
-    let library_weak = Arc::downgrade(&library);
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
 
@@ -1195,15 +1215,13 @@ pub fn tui(library: Arc<Library>) {
     .unwrap();
 
     let ui = Arc::new(std::sync::Mutex::new(UI::from_library(
-        &library,
+        library,
         Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
         log_level > 0,
     )));
-    drop(library);
 
     let uiw_libevt = Arc::downgrade(&ui);
-    let lw_libevt = library_weak.clone();
 
     // end signals
     let (tui_s, tui_r) = std::sync::mpsc::channel::<()>();
@@ -1216,13 +1234,7 @@ pub fn tui(library: Arc<Library>) {
                     break;
                 }
                 // process_event will draw for us
-                ui.lock().unwrap().process_event(
-                    ev,
-                    &match library_weak.upgrade() {
-                        Some(l) => l,
-                        None => break,
-                    },
-                );
+                ui.lock().unwrap().process_event(ev);
             }
         }
         tui_s.send(())
@@ -1232,15 +1244,12 @@ pub fn tui(library: Arc<Library>) {
         loop {
             match libevt_r.recv() {
                 Ok(action) => match uiw_libevt.upgrade() {
-                    Some(ui) => match lw_libevt.upgrade() {
-                        Some(library) => match action {
-                            LibEvt::Volume => ui.lock().unwrap().draw(&library),
-                            LibEvt::Play => ui.lock().unwrap().draw(&library),
-                            LibEvt::Pause => ui.lock().unwrap().draw(&library),
-                            LibEvt::Stop => ui.lock().unwrap().draw(&library),
-                            LibEvt::Filter => ui.lock().unwrap().update_from_library(&library),
-                        },
-                        None => break,
+                    Some(ui) => match action {
+                        LibEvt::Volume => ui.lock().unwrap().draw(),
+                        LibEvt::Play => ui.lock().unwrap().draw(),
+                        LibEvt::Pause => ui.lock().unwrap().draw(),
+                        LibEvt::Stop => ui.lock().unwrap().draw(),
+                        LibEvt::Filter => ui.lock().unwrap().update_from_library(),
                     },
                     None => break,
                 },
