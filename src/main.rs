@@ -2,8 +2,13 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::path::PathBuf;
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    Arc,
+};
 use std::thread;
+use std::time::Duration;
 
 mod library;
 mod tui;
@@ -166,7 +171,7 @@ pub enum Action {
 struct MainArgs {
     #[clap(short, long)]
     /// Path to music libary folder
-    library: std::path::PathBuf,
+    library: PathBuf,
 
     #[clap(long)]
     /// Play immediately
@@ -196,7 +201,7 @@ struct MainArgs {
     verbosity: u8,
 }
 
-fn server(listener: TcpListener, library: std::sync::Arc<Library>) {
+fn server(listener: TcpListener, library: Arc<Library>) {
     for stream in listener.incoming() {
         l2!("Found client");
         match stream {
@@ -348,7 +353,7 @@ fn instance_main(listener: TcpListener, port: u16) {
             hwnd,
         }) {
             Ok(mut controls) => {
-                let ctrl_libr_wk = std::sync::Arc::downgrade(&library);
+                let ctrl_libr_wk = Arc::downgrade(&library);
                 controls
                     .attach(move |event: MediaControlEvent| {
                         if let Some(library) = ctrl_libr_wk.upgrade() {
@@ -364,7 +369,7 @@ fn instance_main(listener: TcpListener, port: u16) {
                         }
                     })
                     .unwrap();
-                let meta_libr_wk = std::sync::Arc::downgrade(&library);
+                let meta_libr_wk = Arc::downgrade(&library);
                 thread::spawn(move || loop {
                     if let Some(library) = meta_libr_wk.upgrade() {
                         controls
@@ -399,7 +404,7 @@ fn instance_main(listener: TcpListener, port: u16) {
                     } else {
                         break;
                     }
-                    thread::sleep(std::time::Duration::from_millis(100));
+                    thread::sleep(Duration::from_millis(100));
                 });
             }
             Err(e) => println!("Media control failure: {:?}", e),

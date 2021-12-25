@@ -1,11 +1,14 @@
 use std::cmp::min;
+use std::io;
 use std::io::Write;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
+use std::thread;
 use std::time::Duration;
 
 use crate::library::{get_all_tag, get_all_tag_sort, sort_by_tag, Filter, LibEvt, Library, Track};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
+use crossbeam::channel;
 use crossbeam::channel::Receiver;
 
 use crossterm::{
@@ -1206,7 +1209,7 @@ pub fn tui(library: Arc<Library>) {
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
 
     terminal::enable_raw_mode().unwrap();
-    let mut stdo = std::io::stdout();
+    let mut stdo = io::stdout();
 
     queue!(
         stdo,
@@ -1217,9 +1220,9 @@ pub fn tui(library: Arc<Library>) {
     )
     .unwrap();
 
-    let ui = Arc::new(std::sync::Mutex::new(UI::from_library(
+    let ui = Arc::new(Mutex::new(UI::from_library(
         library,
-        Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap(),
+        Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
         log_level > 0,
     )));
@@ -1227,10 +1230,10 @@ pub fn tui(library: Arc<Library>) {
     let uiw_libevt = Arc::downgrade(&ui);
 
     // end signals
-    let (tui_s, tui_r) = std::sync::mpsc::channel::<()>();
+    let (tui_s, tui_r) = channel::bounded::<()>(1);
     let libevt_s = tui_s.clone();
 
-    let _event_jh = std::thread::spawn(move || {
+    let _event_jh = thread::spawn(move || {
         loop {
             if let Some(ev) = get_event(None) {
                 if ev == km_c!('c') {
@@ -1243,7 +1246,7 @@ pub fn tui(library: Arc<Library>) {
         tui_s.send(())
     });
 
-    let _libevt_jh = std::thread::spawn(move || {
+    let _libevt_jh = thread::spawn(move || {
         loop {
             match libevt_r.recv() {
                 Ok(action) => match uiw_libevt.upgrade() {

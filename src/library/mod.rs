@@ -13,7 +13,7 @@ mod player;
 mod track;
 
 pub use player::{Player, TYPES};
-pub use track::{Track, sort_by_tag, get_all_tag, get_all_tag_sort, get_tracks};
+pub use track::{get_all_tag, get_all_tag_sort, get_tracks, sort_by_tag, Track};
 
 use crate::{l1, l2, log, LOG_LEVEL};
 

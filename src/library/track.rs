@@ -1,15 +1,15 @@
 use crate::{l1, l2, log, LOG_LEVEL};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::PathBuf;
-use std::cmp::Ordering;
-use std::time::Instant;
-use std::path::Path;
 use std::ops::Deref;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Instant;
 
-use walkdir::WalkDir;
 use super::player::TYPES;
+use walkdir::WalkDir;
 
 pub type Tags = HashMap<String, String>;
 
@@ -99,21 +99,21 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
-pub fn get_all_tag<T: Deref<Target=Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
+pub fn get_all_tag<T: Deref<Target = Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
     tracks
         .iter()
         .filter_map(|t| t.tags().get(tag).cloned())
         .collect::<Vec<String>>()
 }
 
-pub fn get_all_tag_sort<T: Deref<Target=Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
+pub fn get_all_tag_sort<T: Deref<Target = Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
     let mut result = get_all_tag(tag, tracks);
     result.sort();
     result.dedup();
     result
 }
 
-pub fn sort_by_tag<T: Deref<Target=Track>>(tag: &str, tracks: &mut Vec<T>) {
+pub fn sort_by_tag<T: Deref<Target = Track>>(tag: &str, tracks: &mut Vec<T>) {
     tracks.sort_by(|a, b| {
         let a = a.tags().get(tag);
         let b = b.tags().get(tag);
