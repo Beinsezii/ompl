@@ -3,7 +3,7 @@ use std::io::Write;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use crate::library::{Filter, LibEvt, Library, Track};
+use crate::library::{get_all_tag, get_all_tag_sort, sort_by_tag, Filter, LibEvt, Library, Track};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel::Receiver;
@@ -444,7 +444,7 @@ impl<T: Backend> UI<T> {
                 } else {
                     filter_tree[n - 1].tracks.clone()
                 };
-                let items = crate::library::get_all_tag_sort(&f.filter.tag, &tracks);
+                let items = get_all_tag_sort(&f.filter.tag, &tracks);
                 FilterPane {
                     tag: f.filter.tag.clone(),
                     index: min(
@@ -480,7 +480,7 @@ impl<T: Backend> UI<T> {
                 .len()
                 .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
         );
-        crate::library::sort_by_tag("title", &mut self.queue);
+        sort_by_tag("title", &mut self.queue);
         self.draw();
     }
 
@@ -622,7 +622,7 @@ impl<T: Backend> UI<T> {
     fn build_list<'a>(&self, pane: Pane) -> List<'a> {
         let (items, skip, index, active, selected) = match pane {
             Pane::Queue => (
-                crate::library::get_all_tag("title", &self.queue),
+                get_all_tag("title", &self.queue),
                 self.queue_view,
                 self.queue_pos,
                 self.queue_sel,
@@ -851,7 +851,7 @@ impl<T: Backend> UI<T> {
                 let (index, items, view) = if self.queue_sel {
                     (
                         &mut self.queue_pos,
-                        crate::library::get_all_tag("title", &self.queue),
+                        get_all_tag("title", &self.queue),
                         Pane::Queue,
                     )
                 } else {

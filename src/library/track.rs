@@ -1,7 +1,15 @@
+use crate::{l1, l2, log, LOG_LEVEL};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
+use std::cmp::Ordering;
+use std::time::Instant;
+use std::path::Path;
+use std::ops::Deref;
+
+use walkdir::WalkDir;
+use super::player::TYPES;
 
 pub type Tags = HashMap<String, String>;
 
@@ -48,6 +56,82 @@ const TAG_IDS: &[(&'static str, &'static str)] = &[
     ("TYER", "Year"),
 ];
 // ## TAGS ## }}}
+
+// ## FNs ## {{{
+
+pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
+    l2!("Finding tracks...");
+    let now = Instant::now();
+
+    let tracks: Vec<Track> = WalkDir::new(path)
+        .max_depth(10)
+        .into_iter()
+        .filter_entry(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| !s.starts_with("."))
+                .unwrap_or(false)
+        })
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| {
+                    let mut res = false;
+                    for t in TYPES.into_iter() {
+                        if s.ends_with(t) {
+                            res = true;
+                            break;
+                        }
+                    }
+                    res
+                })
+                .unwrap_or(false)
+        })
+        .map(|e| Track::new(e.path()))
+        .collect();
+
+    l1!(format!(
+        "Found {} tracks in {:?}",
+        tracks.len(),
+        Instant::now() - now
+    ));
+    tracks
+}
+
+pub fn get_all_tag<T: Deref<Target=Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
+    tracks
+        .iter()
+        .filter_map(|t| t.tags().get(tag).cloned())
+        .collect::<Vec<String>>()
+}
+
+pub fn get_all_tag_sort<T: Deref<Target=Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
+    let mut result = get_all_tag(tag, tracks);
+    result.sort();
+    result.dedup();
+    result
+}
+
+pub fn sort_by_tag<T: Deref<Target=Track>>(tag: &str, tracks: &mut Vec<T>) {
+    tracks.sort_by(|a, b| {
+        let a = a.tags().get(tag);
+        let b = b.tags().get(tag);
+        if a.is_none() && b.is_none() {
+            Ordering::Equal
+        } else {
+            match a {
+                Some(a) => match b {
+                    Some(b) => a.cmp(b),
+                    None => Ordering::Greater,
+                },
+                None => Ordering::Less,
+            }
+        }
+    })
+}
+
+// ## FNs }}}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {

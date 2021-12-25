@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -6,7 +5,6 @@ use std::time::Instant;
 
 use rand::random;
 use rayon::prelude::*;
-use walkdir::WalkDir;
 
 use crossbeam::channel;
 use crossbeam::channel::{Receiver, Sender};
@@ -15,7 +13,7 @@ mod player;
 mod track;
 
 pub use player::{Player, TYPES};
-pub use track::Track;
+pub use track::{Track, sort_by_tag, get_all_tag, get_all_tag_sort, get_tracks};
 
 use crate::{l1, l2, log, LOG_LEVEL};
 
@@ -52,78 +50,6 @@ fn track_nexter(library: Arc<Library>, next_r: Receiver<()>) {
         }
     }
     l2!("Track Nexter end");
-}
-
-pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
-    l2!("Finding tracks...");
-    let now = Instant::now();
-
-    let tracks: Vec<Track> = WalkDir::new(path)
-        .max_depth(10)
-        .into_iter()
-        .filter_entry(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| !s.starts_with("."))
-                .unwrap_or(false)
-        })
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| {
-                    let mut res = false;
-                    for t in TYPES.into_iter() {
-                        if s.ends_with(t) {
-                            res = true;
-                            break;
-                        }
-                    }
-                    res
-                })
-                .unwrap_or(false)
-        })
-        .map(|e| Track::new(e.path()))
-        .collect();
-
-    l1!(format!(
-        "Found {} tracks in {:?}",
-        tracks.len(),
-        Instant::now() - now
-    ));
-    tracks
-}
-
-pub fn get_all_tag(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
-    tracks
-        .iter()
-        .filter_map(|t| t.tags().get(tag).cloned())
-        .collect::<Vec<String>>()
-}
-
-pub fn get_all_tag_sort(tag: &str, tracks: &Vec<Arc<Track>>) -> Vec<String> {
-    let mut result = get_all_tag(tag, tracks);
-    result.sort();
-    result.dedup();
-    result
-}
-
-pub fn sort_by_tag(tag: &str, tracks: &mut Vec<Arc<Track>>) {
-    tracks.sort_by(|a, b| {
-        let a = a.tags().get(tag);
-        let b = b.tags().get(tag);
-        if a.is_none() && b.is_none() {
-            Ordering::Equal
-        } else {
-            match a {
-                Some(a) => match b {
-                    Some(b) => a.cmp(b),
-                    None => Ordering::Greater,
-                },
-                None => Ordering::Less,
-            }
-        }
-    })
 }
 
 // ### FNs ### }}}
