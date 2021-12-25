@@ -767,24 +767,31 @@ impl<T: Backend> UI<T> {
         {
             "" => (),
             input => {
-                if self.queue_sel {
-                    for (n, t) in self.queue.iter().enumerate() {
-                        if let Some(tag) = t.tags().get("title") {
-                            if tag.trim().to_ascii_lowercase().starts_with(&input) {
-                                self.queue_pos = n;
-                                self.lock_view(Pane::Queue);
-                                break;
-                            }
-                        }
-                    }
+                let (index, items, view) = if self.queue_sel {
+                    (
+                        &mut self.queue_pos,
+                        crate::library::get_all_tag("title", &self.queue),
+                        Pane::Queue,
+                    )
                 } else {
+                    let i = self.panes_index;
                     if let Some(pane) = self.active_pane_mut() {
-                        for (n, i) in pane.items.iter().enumerate() {
-                            if i.trim().to_ascii_lowercase().starts_with(&input) {
-                                pane.index = n;
-                                self.lock_view(Pane::Panes(self.panes_index));
-                                break;
-                            }
+                        (&mut pane.index, pane.items.clone(), Pane::Panes(i))
+                    } else {
+                        return;
+                    }
+                };
+
+                for x in 0..=1 {
+                    for (n, i) in items.iter().enumerate() {
+                        if if x == 0 {
+                            i.trim().to_ascii_lowercase().starts_with(&input)
+                        } else {
+                            i.trim().to_ascii_lowercase().contains(&input)
+                        } {
+                            *index = n;
+                            self.lock_view(view);
+                            return;
                         }
                     }
                 }
