@@ -9,9 +9,6 @@ mod library;
 mod tui;
 use library::Library;
 
-use crossbeam::channel;
-use crossbeam::channel::Sender;
-
 const ID: &str = "OMPL SERVER 0.1.0";
 
 // ### LOGGING ### {{{
@@ -196,7 +193,7 @@ struct MainArgs {
     verbosity: u8,
 }
 
-fn server(listener: TcpListener, library: std::sync::Arc<Library>, cli_send: Sender<Action>) {
+fn server(listener: TcpListener, library: std::sync::Arc<Library>) {
     for stream in listener.incoming() {
         l2!("Found client");
         match stream {
@@ -263,7 +260,6 @@ fn server(listener: TcpListener, library: std::sync::Arc<Library>, cli_send: Sen
                             }
                             Action::Verbosity { verbosity } => LOG_LEVEL.store(verbosity, LOG_ORD),
                         };
-                        cli_send.send(sub_args.action).ok();
                     }
                     Err(e) => {
                         response =
@@ -295,11 +291,8 @@ fn instance_main(listener: TcpListener, port: u16) {
         library.play()
     }
 
-    let (cli_send, cli_recv) = channel::bounded::<Action>(1);
-    let ctrl_send = cli_send.clone();
-
     let server_library = library.clone();
-    let jh = thread::spawn(move || server(listener, server_library, cli_send));
+    let jh = thread::spawn(move || server(listener, server_library));
     l2!(format!("Listening on port {}", port));
 
     // ## souvlaki ## {{{
@@ -342,30 +335,12 @@ fn instance_main(listener: TcpListener, port: u16) {
                     .attach(move |event: MediaControlEvent| {
                         if let Some(library) = ctrl_libr_wk.upgrade() {
                             match event {
-                                MediaControlEvent::Play => {
-                                    library.play();
-                                    ctrl_send.send(Action::Play).unwrap();
-                                }
-                                MediaControlEvent::Stop => {
-                                    library.stop();
-                                    ctrl_send.send(Action::Stop).unwrap();
-                                }
-                                MediaControlEvent::Pause => {
-                                    library.pause();
-                                    ctrl_send.send(Action::Pause).unwrap();
-                                }
-                                MediaControlEvent::Toggle => {
-                                    library.play_pause();
-                                    ctrl_send.send(Action::PlayPause).unwrap();
-                                }
-                                MediaControlEvent::Next => {
-                                    library.next();
-                                    ctrl_send.send(Action::Next).unwrap();
-                                }
-                                MediaControlEvent::Previous => {
-                                    library.previous();
-                                    ctrl_send.send(Action::Previous).unwrap();
-                                }
+                                MediaControlEvent::Play => library.play(),
+                                MediaControlEvent::Stop => library.stop(),
+                                MediaControlEvent::Pause => library.pause(),
+                                MediaControlEvent::Toggle => library.play_pause(),
+                                MediaControlEvent::Next => library.next(),
+                                MediaControlEvent::Previous => library.previous(),
                                 _ => (),
                             }
                         }
@@ -409,7 +384,7 @@ fn instance_main(listener: TcpListener, port: u16) {
     if main_args.daemon {
         jh.join().unwrap();
     } else {
-        tui::tui(library, cli_recv);
+        tui::tui(library);
     }
 }
 

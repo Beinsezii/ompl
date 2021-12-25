@@ -3,8 +3,8 @@ use std::io::Write;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::library::{Filter, Library, Track};
-use crate::{l2, log, Action, LOG_LEVEL, LOG_ORD};
+use crate::library::{Filter, LibEvt, Library, Track};
+use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel::Receiver;
 
@@ -227,7 +227,7 @@ impl StatusBar {
     }
 }
 
-// ## Bar ## }}}
+// ## StatusBar ## }}}
 
 // ## MultiBar ## {{{
 
@@ -328,6 +328,37 @@ impl MultiBar {
 
 // ## MultiBar ## }}}
 
+// ## DebugBar ## {{{
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct DebugBar {
+    parent: Rect,
+    draw_count: Rect,
+}
+
+impl DebugBar {
+    pub fn from_rect(rect: Rect) -> Self {
+        let s = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(100), // draw_count
+            ])
+            .split(rect);
+        Self {
+            parent: rect,
+            draw_count: s[0],
+        }
+    }
+    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, draw_count: u128) {
+        frame.render_widget(
+            Paragraph::new(format!(" Draws {} ", draw_count)),
+            self.draw_count,
+        );
+    }
+}
+
+// ## DebugBar ## }}}
+
 #[derive(Clone, Debug, PartialEq)]
 struct FilterPane {
     tag: String,
@@ -348,6 +379,7 @@ enum Pane {
 struct UI<T: Backend> {
     status_bar: StatusBar,
     multi_bar: MultiBar,
+    debug_bar: DebugBar,
     panes: Vec<FilterPane>,
     panes_index: usize,
     queue: Vec<Arc<Track>>,
@@ -357,13 +389,21 @@ struct UI<T: Backend> {
     queue_view: usize,
     theme: Theme,
     terminal: Option<Terminal<T>>,
+    debug: bool,
+    draw_count: u128,
 }
 
 impl<T: Backend> UI<T> {
-    fn from_library(library: &Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
+    fn from_library(
+        library: &Arc<Library>,
+        terminal: Terminal<T>,
+        theme: Theme,
+        debug: bool,
+    ) -> Self {
         let mut result = Self {
             status_bar: StatusBar::default(),
             multi_bar: MultiBar::default(),
+            debug_bar: DebugBar::default(),
             panes: Vec::new(),
             panes_index: 0,
             queue: Vec::new(),
@@ -373,6 +413,8 @@ impl<T: Backend> UI<T> {
             queue_view: 0,
             theme,
             terminal: Some(terminal),
+            debug,
+            draw_count: 0,
         };
         result.update_from_library(library);
         result
@@ -422,6 +464,14 @@ impl<T: Backend> UI<T> {
             })
             .collect();
         self.queue = library.get_queue();
+        self.queue_pos = min(self.queue_pos, self.queue.len().saturating_sub(1));
+        self.queue_view = min(
+            self.queue_pos
+                .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize / 2),
+            self.queue
+                .len()
+                .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
+        );
         crate::library::sort_by_tag("title", &mut self.queue);
         self.draw(library);
     }
@@ -607,6 +657,7 @@ impl<T: Backend> UI<T> {
 
     // ## draw ## {{{
     fn draw(&mut self, library: &Arc<Library>) {
+        self.draw_count += 1;
         let mut terminal = self.terminal.take();
         terminal
             .as_mut()
@@ -618,6 +669,7 @@ impl<T: Backend> UI<T> {
                     .constraints(vec![
                         Constraint::Length(1),
                         Constraint::Length(1),
+                        Constraint::Length(if self.debug { 1 } else { 0 }),
                         if self.panes.is_empty() {
                             Constraint::Length(0)
                         } else {
@@ -633,13 +685,13 @@ impl<T: Backend> UI<T> {
                             .map(|_| Constraint::Ratio(1, self.panes.len() as u32))
                             .collect::<Vec<Constraint>>(),
                     )
-                    .split(zones[2])
+                    .split(zones[3])
                     .into_iter()
                     .enumerate()
                 {
                     self.panes[n].rect = r;
                 }
-                self.queue_rect = zones[3];
+                self.queue_rect = zones[4];
                 f.render_widget(
                     self.build_list(Pane::Queue).block(
                         Block::default()
@@ -655,6 +707,8 @@ impl<T: Backend> UI<T> {
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.mode = bar_mode;
                 self.multi_bar.draw(f, library);
+                self.debug_bar = DebugBar::from_rect(zones[2]);
+                self.debug_bar.draw(f, self.draw_count);
                 for (num, fp) in self.panes.iter().enumerate() {
                     f.render_widget(
                         self.build_list(Pane::Panes(num)).block(
@@ -681,7 +735,7 @@ impl<T: Backend> UI<T> {
 
     // ## Popops ## {{{
 
-    pub fn message(&mut self, title: &str, message: &str) {
+    pub fn message(&mut self, title: &str, message: &str, library: &Arc<Library>) {
         let mut terminal = self.terminal.take();
 
         terminal
@@ -719,17 +773,18 @@ impl<T: Backend> UI<T> {
         }
 
         self.terminal = terminal;
+        self.draw(library);
     }
 
     pub fn multi_bar_input(&mut self, title: &str, library: &Arc<Library>) -> String {
         let mut result = String::new();
+        self.multi_bar.mode = MBDrawMode::Input {
+            title: title.to_owned(),
+            contents: result.clone(),
+            style: self.theme.active,
+        };
+        self.draw(library);
         let esc = loop {
-            self.multi_bar.mode = MBDrawMode::Input {
-                title: title.to_owned(),
-                contents: result.clone(),
-                style: self.theme.active,
-            };
-            self.draw(library);
             if let Some(event) = get_event(None) {
                 match event {
                     km_c!('c') => break false,
@@ -739,14 +794,20 @@ impl<T: Backend> UI<T> {
                         KeyCode::Enter => break true,
                         KeyCode::Backspace => drop(result.pop()),
                         KeyCode::Char(c) => result.push(c),
-                        _ => (),
+                        _ => continue,
                     },
                     Event::Mouse(MouseEvent {
                         kind: MouseEventKind::Down(_),
                         ..
                     }) => break false,
-                    _ => (),
+                    _ => continue,
                 }
+                self.multi_bar.mode = MBDrawMode::Input {
+                    title: title.to_owned(),
+                    contents: result.clone(),
+                    style: self.theme.active,
+                };
+                self.draw(library);
             };
         };
         self.multi_bar.mode = MBDrawMode::Default;
@@ -791,6 +852,7 @@ impl<T: Backend> UI<T> {
                         } {
                             *index = n;
                             self.lock_view(view);
+                            self.draw(library);
                             return;
                         }
                     }
@@ -869,14 +931,18 @@ impl<T: Backend> UI<T> {
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::NONE,
-            }) => self.queue_sel = !self.queue_sel || self.panes.is_empty(),
+            }) => {
+                self.queue_sel = !self.queue_sel || self.panes.is_empty();
+                self.draw(library);
+            }
             km!('h')
             | Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
                 if !self.queue_sel {
-                    self.panes_index = self.panes_index.saturating_sub(1)
+                    self.panes_index = self.panes_index.saturating_sub(1);
+                    self.draw(library);
                 }
             }
             km!('l')
@@ -885,7 +951,9 @@ impl<T: Backend> UI<T> {
                 modifiers: KeyModifiers::NONE,
             }) => {
                 if !self.queue_sel {
-                    self.panes_index = min(self.panes_index + 1, self.panes.len().saturating_sub(1))
+                    self.panes_index =
+                        min(self.panes_index + 1, self.panes.len().saturating_sub(1));
+                    self.draw(library);
                 }
             }
             km!('j')
@@ -900,6 +968,7 @@ impl<T: Backend> UI<T> {
                     pane.index = min(pane.index + 1, pane.items.len().saturating_sub(1));
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
+                self.draw(library);
             }
             km!('k')
             | Event::Key(KeyEvent {
@@ -913,6 +982,7 @@ impl<T: Backend> UI<T> {
                     pane.index = pane.index.saturating_sub(1);
                     self.lock_view(Pane::Panes(self.panes_index));
                 }
+                self.draw(library);
             }
 
             km!('f')
@@ -952,7 +1022,7 @@ impl<T: Backend> UI<T> {
             km!('i') => self.insert_filter(library, false),
             km_s!('I') => self.insert_filter(library, true),
 
-            km!('?') => self.message("Help", HELP),
+            km!('?') => self.message("Help", HELP, library),
             km!('/') => self.search(library),
 
             km!('a') => library.play_pause(),
@@ -983,6 +1053,7 @@ impl<T: Backend> UI<T> {
                                     library.play_track(self.queue.get(index).cloned());
                                     self.queue_pos = index;
                                 }
+                                self.draw(library);
                             }
                             ZoneEventType::Panes { pane, row, column } => {
                                 self.queue_sel = false;
@@ -1023,8 +1094,8 @@ impl<T: Backend> UI<T> {
                                     self.delete_filter(library)
                                 }
                             }
-                            ZoneEventType::Help => self.message("Help", HELP),
-                            ZoneEventType::None => return,
+                            ZoneEventType::Help => self.message("Help", HELP, library),
+                            ZoneEventType::None => (),
                         },
                         MouseButton::Right => match event {
                             ZoneEventType::Panes {
@@ -1052,46 +1123,52 @@ impl<T: Backend> UI<T> {
                                     self.draw(library)
                                 }
                             }
-                            ZoneEventType::Queue(_) => self.queue_sel = true,
-                            _ => return,
+                            ZoneEventType::Queue(_) => {
+                                self.queue_sel = true;
+                                self.draw(library);
+                            }
+                            _ => (),
                         },
-                        MouseButton::Middle => return,
+                        MouseButton::Middle => (),
                     },
 
                     MouseEventKind::ScrollDown => match event {
                         ZoneEventType::Queue(_index) => {
                             self.scroll_view_down(Pane::Queue);
                             self.queue_sel = true;
+                            self.draw(library);
                         }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_down(Pane::Panes(pane));
                             self.queue_sel = false;
                             self.panes_index = pane;
+                            self.draw(library);
                         }
-                        _ => return,
+                        _ => (),
                     },
                     MouseEventKind::ScrollUp => match event {
                         ZoneEventType::Queue(_index) => {
                             self.scroll_view_up(Pane::Queue);
                             self.queue_sel = true;
+                            self.draw(library);
                         }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_up(Pane::Panes(pane));
                             self.queue_sel = false;
                             self.panes_index = pane;
+                            self.draw(library);
                         }
-                        _ => return,
+                        _ => (),
                     },
 
-                    _ => return,
+                    _ => (),
                 },
-                _ => return,
+                _ => (),
             },
             // # Mouse Events # }}}
-            Event::Resize(..) => (),
-            _ => return,
+            Event::Resize(..) => self.draw(library),
+            _ => (),
         }
-        self.draw(library)
     }
     // ## process_event ## }}}
 }
@@ -1099,7 +1176,8 @@ impl<T: Backend> UI<T> {
 // ### UI ### }}}
 
 // ### tui ### {{{
-pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
+pub fn tui(library: Arc<Library>) {
+    let libevt_r: Receiver<LibEvt> = library.get_receiver();
     let library_weak = Arc::downgrade(&library);
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
@@ -1120,14 +1198,16 @@ pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
         &library,
         Terminal::new(CrosstermBackend::new(std::io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
+        log_level > 0,
     )));
     drop(library);
 
-    let uiw_cli = Arc::downgrade(&ui);
-    let lw_cli = library_weak.clone();
+    let uiw_libevt = Arc::downgrade(&ui);
+    let lw_libevt = library_weak.clone();
 
+    // end signals
     let (tui_s, tui_r) = std::sync::mpsc::channel::<()>();
-    let cli_s = tui_s.clone();
+    let libevt_s = tui_s.clone();
 
     let _event_jh = std::thread::spawn(move || {
         loop {
@@ -1148,24 +1228,18 @@ pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
         tui_s.send(())
     });
 
-    let _cli_jh = std::thread::spawn(move || {
+    let _libevt_jh = std::thread::spawn(move || {
         loop {
-            match cli_recv.recv() {
-                Ok(action) => match uiw_cli.upgrade() {
-                    Some(ui) => match lw_cli.upgrade() {
-                        Some(library) => {
-                            match action {
-                                Action::Volume { .. } => (),
-                                Action::Filter { .. } => {
-                                    ui.lock().unwrap().update_from_library(&library)
-                                }
-                                Action::Next => (),
-                                Action::Previous => (),
-                                Action::Exit => break,
-                                _ => continue,
-                            }
-                            ui.lock().unwrap().draw(&library);
-                        }
+            match libevt_r.recv() {
+                Ok(action) => match uiw_libevt.upgrade() {
+                    Some(ui) => match lw_libevt.upgrade() {
+                        Some(library) => match action {
+                            LibEvt::Volume => ui.lock().unwrap().draw(&library),
+                            LibEvt::Play => ui.lock().unwrap().draw(&library),
+                            LibEvt::Pause => ui.lock().unwrap().draw(&library),
+                            LibEvt::Stop => ui.lock().unwrap().draw(&library),
+                            LibEvt::Filter => ui.lock().unwrap().update_from_library(&library),
+                        },
                         None => break,
                     },
                     None => break,
@@ -1173,7 +1247,7 @@ pub fn tui(library: Arc<Library>, cli_recv: Receiver<Action>) {
                 Err(_) => break,
             }
         }
-        cli_s.send(())
+        libevt_s.send(())
     });
 
     drop(tui_r.recv());

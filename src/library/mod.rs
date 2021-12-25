@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use walkdir::WalkDir;
 
 use crossbeam::channel;
-use crossbeam::channel::Receiver;
+use crossbeam::channel::{Sender, Receiver};
 
 mod player;
 mod track;
@@ -128,11 +128,22 @@ pub fn sort_by_tag(tag: &str, tracks: &mut Vec<Arc<Track>>) {
 
 // ### FNs ### }}}
 
+#[derive(Debug, Clone, Copy)]
+pub enum LibEvt {
+    Play,
+    Pause,
+    Stop,
+    Volume,
+    Filter,
+}
+
 pub struct Library {
     pub tracks: Vec<Arc<Track>>,
     history: RwLock<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
+    libevt_s: Sender<LibEvt>,
+    libevt_r: Receiver<LibEvt>,
 }
 
 impl Library {
@@ -141,6 +152,8 @@ impl Library {
         l2!("Constructing library...");
         let lib_now = Instant::now();
         let mut tracks: Vec<Track> = get_tracks(path);
+
+        let (libevt_s, libevt_r) = channel::unbounded::<LibEvt>();
 
         l2!("Fetching metadata...");
         let met_now = Instant::now();
@@ -160,6 +173,8 @@ impl Library {
             tracks,
             history: RwLock::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
+            libevt_s,
+            libevt_r,
         });
 
         if let Some(f) = initial_filters {
@@ -180,13 +195,16 @@ impl Library {
 
     // ## CONTROLS ## {{{
     pub fn play(&self) {
-        self.player.play()
+        self.player.play();
+        self.libevt_s.send(LibEvt::Play).unwrap();
     }
     pub fn pause(&self) {
-        self.player.pause()
+        self.player.pause();
+        self.libevt_s.send(LibEvt::Pause).unwrap();
     }
     pub fn stop(&self) {
-        self.player.stop()
+        self.player.stop();
+        self.libevt_s.send(LibEvt::Stop).unwrap();
     }
     pub fn play_pause(&self) {
         match self.player.active() {
@@ -208,6 +226,7 @@ impl Library {
     }
     pub fn volume_set(&self, volume: f32) {
         self.player.volume_set(volume);
+        self.libevt_s.send(LibEvt::Volume).unwrap();
     }
     pub fn volume_add(&self, amount: f32) {
         self.volume_set(self.volume_get() + amount);
@@ -273,6 +292,7 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
+        self.libevt_s.send(LibEvt::Filter).unwrap();
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
     // # set_filters # }}}
@@ -312,6 +332,10 @@ impl Library {
             }
         }
         tracks
+    }
+
+    pub fn get_receiver(&self) -> Receiver<LibEvt> {
+        self.libevt_r.clone()
     }
 
     // ## GET/SET ## }}}
