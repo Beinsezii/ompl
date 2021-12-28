@@ -157,9 +157,6 @@ pub enum Action {
         #[clap(long)]
         now: bool,
     },
-    Verbosity {
-        verbosity: u8,
-    },
 }
 
 // ### SHARED }}}
@@ -279,7 +276,6 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     library.next()
                                 }
                             }
-                            Action::Verbosity { verbosity } => LOG_LEVEL.store(verbosity, LOG_ORD),
                         };
                     }
                     Err(e) => {
