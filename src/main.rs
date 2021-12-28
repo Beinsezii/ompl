@@ -324,6 +324,7 @@ fn instance_main(listener: TcpListener, port: u16) {
             MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
         };
         l2!("Initializing media controls...");
+        let libevt_r = library.get_receiver();
 
         #[cfg(not(target_os = "windows"))]
         let hwnd = None;
@@ -371,40 +372,44 @@ fn instance_main(listener: TcpListener, port: u16) {
                     .unwrap();
                 let meta_libr_wk = Arc::downgrade(&library);
                 thread::spawn(move || loop {
-                    if let Some(library) = meta_libr_wk.upgrade() {
-                        controls
-                            .set_metadata(MediaMetadata {
-                                title: library
-                                    .track_get()
-                                    .map(|t| t.tags().get("title").cloned())
-                                    .flatten()
-                                    .as_deref(),
-                                artist: library
-                                    .track_get()
-                                    .map(|t| t.tags().get("artist").cloned())
-                                    .flatten()
-                                    .as_deref(),
-                                album: library
-                                    .track_get()
-                                    .map(|t| t.tags().get("album").cloned())
-                                    .flatten()
-                                    .as_deref(),
-                                ..Default::default()
-                            })
-                            .unwrap();
-                        controls
-                            .set_playback(if library.playing() {
-                                MediaPlayback::Playing { progress: None }
-                            } else if library.paused() {
-                                MediaPlayback::Paused { progress: None }
+                    match libevt_r.recv() {
+                        Ok(_) => {
+                            if let Some(library) = meta_libr_wk.upgrade() {
+                                controls
+                                    .set_metadata(MediaMetadata {
+                                        title: library
+                                            .track_get()
+                                            .map(|t| t.tags().get("title").cloned())
+                                            .flatten()
+                                            .as_deref(),
+                                        artist: library
+                                            .track_get()
+                                            .map(|t| t.tags().get("artist").cloned())
+                                            .flatten()
+                                            .as_deref(),
+                                        album: library
+                                            .track_get()
+                                            .map(|t| t.tags().get("album").cloned())
+                                            .flatten()
+                                            .as_deref(),
+                                        ..Default::default()
+                                    })
+                                    .unwrap();
+                                controls
+                                    .set_playback(if library.playing() {
+                                        MediaPlayback::Playing { progress: None }
+                                    } else if library.paused() {
+                                        MediaPlayback::Paused { progress: None }
+                                    } else {
+                                        MediaPlayback::Stopped
+                                    })
+                                    .unwrap();
                             } else {
-                                MediaPlayback::Stopped
-                            })
-                            .unwrap();
-                    } else {
-                        break;
+                                break;
+                            }
+                        }
+                        Err(_) => break,
                     }
-                    thread::sleep(Duration::from_millis(100));
                 });
             }
             Err(e) => println!("Media control failure: {:?}", e),
