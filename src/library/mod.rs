@@ -1,13 +1,14 @@
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 use std::thread;
 use std::time::Instant;
 
 use rand::random;
 use rayon::prelude::*;
 
+use bus::{ Bus, BusReader };
 use crossbeam::channel;
-use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::Receiver;
 
 mod player;
 mod track;
@@ -68,8 +69,7 @@ pub struct Library {
     history: RwLock<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
-    libevt_s: Sender<LibEvt>,
-    libevt_r: Receiver<LibEvt>,
+    bus: Mutex<Bus<LibEvt>>,
 }
 
 impl Library {
@@ -79,7 +79,7 @@ impl Library {
         let lib_now = Instant::now();
         let mut tracks: Vec<Track> = get_tracks(path);
 
-        let (libevt_s, libevt_r) = channel::unbounded::<LibEvt>();
+        let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
         l2!("Fetching metadata...");
         let met_now = Instant::now();
@@ -99,8 +99,7 @@ impl Library {
             tracks,
             history: RwLock::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
-            libevt_s,
-            libevt_r,
+            bus,
         });
 
         if let Some(f) = initial_filters {
@@ -122,15 +121,15 @@ impl Library {
     // ## CONTROLS ## {{{
     pub fn play(&self) {
         self.player.play();
-        self.libevt_s.send(LibEvt::Play).unwrap();
+        self.bus.lock().unwrap().broadcast(LibEvt::Play);
     }
     pub fn pause(&self) {
         self.player.pause();
-        self.libevt_s.send(LibEvt::Pause).unwrap();
+        self.bus.lock().unwrap().broadcast(LibEvt::Pause);
     }
     pub fn stop(&self) {
         self.player.stop();
-        self.libevt_s.send(LibEvt::Stop).unwrap();
+        self.bus.lock().unwrap().broadcast(LibEvt::Stop);
     }
     pub fn play_pause(&self) {
         match self.player.playing() {
@@ -152,7 +151,7 @@ impl Library {
     }
     pub fn volume_set(&self, volume: f32) {
         self.player.volume_set(volume);
-        self.libevt_s.send(LibEvt::Volume).unwrap();
+        self.bus.lock().unwrap().broadcast(LibEvt::Volume);
     }
     pub fn volume_add(&self, amount: f32) {
         self.volume_set(self.volume_get() + amount);
@@ -218,7 +217,7 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
-        self.libevt_s.send(LibEvt::Filter).unwrap();
+        self.bus.lock().unwrap().broadcast(LibEvt::Filter);
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
     // # set_filters # }}}
@@ -260,8 +259,8 @@ impl Library {
         tracks
     }
 
-    pub fn get_receiver(&self) -> Receiver<LibEvt> {
-        self.libevt_r.clone()
+    pub fn get_receiver(&self) -> BusReader<LibEvt> {
+        self.bus.lock().unwrap().add_rx()
     }
 
     // ## GET/SET ## }}}

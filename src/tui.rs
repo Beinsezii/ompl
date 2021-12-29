@@ -9,7 +9,6 @@ use crate::library::{get_all_tag, get_all_tag_sort, sort_by_tag, Filter, LibEvt,
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel;
-use crossbeam::channel::Receiver;
 
 use crossterm::{
     cursor, event,
@@ -1204,7 +1203,7 @@ impl<T: Backend> UI<T> {
 
 // ### tui ### {{{
 pub fn tui(library: Arc<Library>) {
-    let libevt_r: Receiver<LibEvt> = library.get_receiver();
+    let mut libevt_r = library.get_receiver();
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
 

@@ -319,7 +319,7 @@ fn instance_main(listener: TcpListener, port: u16) {
             MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
         };
         l2!("Initializing media controls...");
-        let libevt_r = library.get_receiver();
+        let mut libevt_r = library.get_receiver();
 
         #[cfg(not(target_os = "windows"))]
         let hwnd = None;
