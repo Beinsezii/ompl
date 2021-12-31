@@ -1,19 +1,18 @@
-# OMPL - Opinionated Music Player/Library v 0.1.0
+# OMPL - Opinionated Music Player/Library v 0.2.0
 A music player organized exactly how *I* like it.
 
 ## Features
   * Fully functional TUI with mouse & tty support
   * Fully functional CLI that interacts either with the TUI or a daemon
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
-    * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track.rs#L10)
+    * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track.rs#L18)
   * Pure Rust where possible. *Should* be portable.
-  * Interfaces as a media player for Linux MPRIS, Windows (broken currently), and MacOS (Untested)
+  * Interfaces as a media player for Linux MPRIS, Windows, and [untested] MacOS
   * Very fast - Handle a few thousand files effortlessly on a shitty 2006 acer laptop with a failing harddisk
     * Memory usage something like a few MBs
   * Shouldn't crash.
 
 ## WIP/Blocking features for 1.0.0
-  * Windows media interface support
   * Filling out of `print` cli command
   * More advanced tag sorting, something a la [quodlibet's tag patterns](https://quodlibet.readthedocs.io/en/latest/guide/tags/patterns.html)
   * Theme customization
@@ -43,8 +42,8 @@ Both helps will also print TUI keybinds.
 Have Rust 2021 installed, clone repo and just run `cargo build`.
 `build_release.sh` will build in release mode for linux-x86_64-gnu and pc-windows-gnu, moving the binaries to ./bin/
 
-Note cross-compiling to windows with MinGW will have the media interface disabled to avoid miscompiles.
-Compile using MSVC instead to have a (still non-functional) but *compiled* media interface.
+Compiling with windows using the GNU abi will disable the media interface. This is to avoid miscompiles when cross-compiling via MinGW.
+Compile on windows using MSVC or compile with MSYS2 and disable the windows-gnu checks to have a functional media interface.
 I believe this is a problem with the [windows-rs](https://github.com/microsoft/windows-rs) crate and consequently [souvlaki](https://github.com/Sinono3/souvlaki) that I'm not sure how to work around.
 
 ## F.A.Q.
