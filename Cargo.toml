@@ -1,6 +1,6 @@
 [package]
 name = "ompl"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -25,7 +25,7 @@ raw-window-handle = "0.4"
 
 # Souvlaki doesn't seem to compile on MinGW
 [target.'cfg(not(all(target_os = "windows", target_env = "gnu")))'.dependencies]
-souvlaki = "0.4"
+souvlaki = "= 0.4.0"
 
 [profile.dev]
 opt-level = 1
