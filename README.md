@@ -42,10 +42,6 @@ Both helps will also print TUI keybinds.
 Have Rust 2021 installed, clone repo and just run `cargo build`.
 `build_release.sh` will build in release mode for linux-x86_64-gnu and pc-windows-gnu, moving the binaries to ./bin/
 
-Compiling with windows using the GNU abi will disable the media interface. This is to avoid miscompiles when cross-compiling via MinGW.
-Compile on windows using MSVC or compile with MSYS2 and disable the windows-gnu checks to have a functional media interface.
-I believe this is a problem with the [windows-rs](https://github.com/microsoft/windows-rs) crate and consequently [souvlaki](https://github.com/Sinono3/souvlaki) that I'm not sure how to work around.
-
 ## F.A.Q.
 Question|Answer
 ---|---
