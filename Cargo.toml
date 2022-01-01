@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bincode = "1"
 bus = "2"
-clap = { version = "3.0.0-rc.5", features = ["derive", "unicode"] }
+clap = { version = "3", features = ["derive", "unicode"] }
 crossbeam = "0.8"
 crossterm = "0.22"
 id3 = "0.6"
@@ -16,16 +16,13 @@ rand = "0.8"
 rayon = "1"
 rodio = "0.14"
 serde = { version = "1", features = ["derive"] }
+souvlaki = {git = "https://github.com/Sinono3/souvlaki"}
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 
 [target.'cfg(windows)'.dependencies]
 winit = "0.26"
 raw-window-handle = "0.4"
-
-# Souvlaki doesn't seem to compile on MinGW
-[target.'cfg(not(all(target_os = "windows", target_env = "gnu")))'.dependencies]
-souvlaki = "= 0.4.0"
 
 [profile.dev]
 opt-level = 1

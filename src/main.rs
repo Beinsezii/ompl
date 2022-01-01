@@ -312,8 +312,6 @@ fn instance_main(listener: TcpListener, port: u16) {
     l2!(format!("Listening on port {}", port));
 
     // ## souvlaki ## {{{
-    // souvlaki doesn't seem to compile on MinGW
-    #[cfg(not(all(target_os = "windows", target_env = "gnu")))]
     if !main_args.no_media {
         use souvlaki::{
             MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
