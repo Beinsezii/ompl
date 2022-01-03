@@ -102,7 +102,7 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
 pub fn get_all_tag<T: Deref<Target = Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
     tracks
         .iter()
-        .filter_map(|t| t.tags().get(tag).cloned())
+        .filter_map(|t| t.tags().get(&tag.to_ascii_lowercase()).cloned())
         .collect::<Vec<String>>()
 }
 
@@ -169,7 +169,7 @@ impl Track {
                                 // lets you search for either the id3 ID or the 'pretty' name
                                 self.tags
                                     .insert(t_str.to_ascii_lowercase().to_string(), t.to_string());
-                                self.tags.insert(t_id.to_string(), t.to_string());
+                                self.tags.insert(t_id.to_ascii_lowercase().to_string(), t.to_string());
                             }
                             break;
                         }
