@@ -16,7 +16,7 @@ rand = "0.8"
 rayon = "1"
 rodio = "0.14"
 serde = { version = "1", features = ["derive"] }
-souvlaki = {git = "https://github.com/Sinono3/souvlaki"}
+souvlaki = "0.5"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 
