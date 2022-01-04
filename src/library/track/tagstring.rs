@@ -8,13 +8,35 @@ fn parse_internal(internal: &str, tags: &Tags) -> String {
     {
         result.remove(0);
         result.pop();
-        // let cond_invert = result.chars().nth(0) == Some('!');
-        // if cond_invert {
-        //     result.remove(0);
-        // }
-        // let cond = internal.find('|').map(||);
-        if let Some(tag) = tags.get(&result.to_ascii_lowercase()) {
-            result = tag.to_string();
+        let mut cond = None;
+        let mut iter = result.char_indices();
+        loop {
+            let (n, c) = match iter.next() {
+                Some(i) => i,
+                None => break,
+            };
+            match c {
+                '\\' => drop(iter.next()),
+                '|' => cond = Some(n),
+                _ => (),
+            }
+        }
+        if let Some(mut cond) = cond {
+            let mut inv = false;
+            if result.starts_with('!') {
+                result.remove(0);
+                cond -= 1;
+                inv = true;
+            }
+            match tags.get(&result[0..cond].to_ascii_lowercase()).is_some() ^ inv {
+                true => result.replace_range(0..=cond, ""),
+                false => result = String::new(),
+            }
+        } else {
+            match tags.get(&result.to_ascii_lowercase()) {
+                Some(tag) => result = tag.to_string(),
+                None => result = String::from("???"),
+            }
         }
     }
     result
@@ -163,7 +185,7 @@ mod tests {
                 r#"Title: \<title\>, Album: <<album>>>, Genre: <genre>, done!"#,
                 &TAGS
             ),
-            r#"Title: <title>, Album: TheAlbum>, Genre: TheGenre, done!"#.to_string()
+            r#"Title: <title>, Album: ???>, Genre: TheGenre, done!"#.to_string()
         );
     }
 
@@ -180,6 +202,30 @@ mod tests {
         assert_eq!(
             parse("Tag?<badtag| Badtag: <badtag>!>", &TAGS),
             "Tag?".to_string()
+        );
+    }
+
+    #[test]
+    fn condition_invert_true() {
+        assert_eq!(
+            parse("Tag?<!title| Title: <title>!>", &TAGS),
+            "Tag?".to_string()
+        );
+    }
+
+    #[test]
+    fn condition_invert_false() {
+        assert_eq!(
+            parse("Tag?<!badtag| Badtag: <badtag>!>", &TAGS),
+            "Tag? Badtag: ???!".to_string()
+        );
+    }
+
+    #[test]
+    fn condition_mixed() {
+        assert_eq!(
+            parse(r#"<mood|This is a very <mood> song~><!mood|\<title\>: <title><TALB| is part of <TALB>>>"#, &TAGS),
+            "<title>: TheTitle is part of TheAlbum".to_string()
         );
     }
 }
