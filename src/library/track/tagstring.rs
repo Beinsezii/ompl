@@ -2,7 +2,10 @@ use super::Tags;
 
 fn parse_internal(internal: &str, tags: &Tags) -> String {
     let mut result = internal.to_string();
-    if internal.starts_with('<') && internal.ends_with('>') {
+    if internal.starts_with('<')
+        && internal.ends_with('>')
+        && internal.chars().nth(internal.len() - 2) != Some('\\')
+    {
         result.remove(0);
         result.pop();
         // let cond_invert = result.chars().nth(0) == Some('!');
@@ -19,6 +22,7 @@ fn parse_internal(internal: &str, tags: &Tags) -> String {
 
 pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     let mut result = tagstring.into();
+    let mut literal = true;
     loop {
         let mut start = None;
         let mut end = None;
@@ -35,6 +39,7 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
                     if let Some(s) = start {
                         // find first end after last start
                         if s < n {
+                            literal = false;
                             end = Some(n);
                             break;
                         }
@@ -51,21 +56,23 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     }
 
     // clean up escapes
-    let mut iter = result.chars();
-    let mut buff = String::with_capacity(result.len());
-    loop {
-        match iter.next() {
-            Some('\\') => {
-                if let Some(c) = iter.next() {
-                    buff.push(c)
+    if !literal {
+        let mut iter = result.chars();
+        let mut buff = String::with_capacity(result.len());
+        loop {
+            match iter.next() {
+                Some('\\') => {
+                    if let Some(c) = iter.next() {
+                        buff.push(c)
+                    }
                 }
+                Some(c) => buff.push(c),
+                None => break,
             }
-            Some(c) => buff.push(c),
-            None => break,
         }
+        result = buff;
+        result.shrink_to_fit();
     }
-    result = buff;
-    result.shrink_to_fit();
 
     result
 }
