@@ -100,15 +100,15 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
-pub fn get_all_tag<T: Deref<Target = Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
+pub fn get_all_tag<T: Deref<Target = Track>>(tagstring: &str, tracks: &Vec<T>) -> Vec<String> {
     tracks
         .iter()
-        .filter_map(|t| t.tags().get(&tag.to_ascii_lowercase()).cloned())
+        .filter_map(|t| Some(tagstring::parse(tagstring, t.tags())))
         .collect::<Vec<String>>()
 }
 
-pub fn get_all_tag_sort<T: Deref<Target = Track>>(tag: &str, tracks: &Vec<T>) -> Vec<String> {
-    let mut result = get_all_tag(tag, tracks);
+pub fn get_all_tag_sort<T: Deref<Target = Track>>(tagstring: &str, tracks: &Vec<T>) -> Vec<String> {
+    let mut result = get_all_tag(tagstring, tracks);
     result.sort();
     result.dedup();
     result

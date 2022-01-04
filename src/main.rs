@@ -129,9 +129,10 @@ pub enum VolumeCmd {
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
-    Status,
-    Track,
     Volume,
+    Track,
+    Tagstring { tagstring: String },
+    Status,
     Playing,
     Stopped,
     Paused,
@@ -268,6 +269,13 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         .track_get()
                                         .map(|t| format!("{}", t))
                                         .unwrap_or("???".to_string())
+                                }
+                                PrintCmd::Tagstring { tagstring } => {
+                                    response = if let Some(track) = library.track_get() {
+                                        library::tagstring::parse(tagstring, track.tags())
+                                    } else {
+                                        String::new()
+                                    }
                                 }
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),

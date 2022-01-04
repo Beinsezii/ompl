@@ -14,7 +14,7 @@ mod player;
 mod track;
 
 pub use player::{Player, TYPES};
-pub use track::{get_all_tag, get_all_tag_sort, get_tracks, sort_by_tag, Track};
+pub use track::{get_all_tag, get_all_tag_sort, get_tracks, sort_by_tag, tagstring, Track};
 
 use crate::{l1, l2, log, LOG_LEVEL};
 
@@ -202,11 +202,8 @@ impl Library {
             let tracks = if !f.items.is_empty() {
                 let mut tracks_f = Vec::new();
                 for t in iter {
-                    let tags = t.tags();
-                    if let Some(val) = tags.get(&f.tag.to_ascii_lowercase()) {
-                        if f.items.contains(val) {
-                            tracks_f.push(t.clone())
-                        }
+                    if f.items.contains(&tagstring::parse(&f.tag, &t.tags())) {
+                        tracks_f.push(t.clone())
                     }
                 }
                 tracks_f
