@@ -12,6 +12,7 @@ use super::player::TYPES;
 use walkdir::WalkDir;
 
 pub type Tags = HashMap<String, String>;
+pub mod tagstring;
 
 // ## TAGS_IDS ## {{{
 /// https://id3.org/id3v2.3.0#Declared_ID3v2_frames
