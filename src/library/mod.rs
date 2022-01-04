@@ -1,12 +1,12 @@
 use std::path::Path;
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Instant;
 
 use rand::random;
 use rayon::prelude::*;
 
-use bus::{ Bus, BusReader };
+use bus::{Bus, BusReader};
 use crossbeam::channel;
 use crossbeam::channel::Receiver;
 

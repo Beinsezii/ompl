@@ -130,6 +130,7 @@ pub enum VolumeCmd {
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
     Status,
+    Track,
     Volume,
     Playing,
     Stopped,
@@ -261,6 +262,12 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     } else {
                                         "invalid".to_string()
                                     }
+                                }
+                                PrintCmd::Track => {
+                                    response = library
+                                        .track_get()
+                                        .map(|t| format!("{}", t))
+                                        .unwrap_or("???".to_string())
                                 }
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),

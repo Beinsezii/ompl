@@ -169,7 +169,8 @@ impl Track {
                                 // lets you search for either the id3 ID or the 'pretty' name
                                 self.tags
                                     .insert(t_str.to_ascii_lowercase().to_string(), t.to_string());
-                                self.tags.insert(t_id.to_ascii_lowercase().to_string(), t.to_string());
+                                self.tags
+                                    .insert(t_id.to_ascii_lowercase().to_string(), t.to_string());
                             }
                             break;
                         }
@@ -202,4 +203,16 @@ impl Track {
     // }
 
     // ## GET / SET ## }}}
+}
+
+impl std::fmt::Display for Track {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut buff = format!("{}", self.path.to_str().unwrap_or("Invalid Path!"));
+        for (t_id, t_str) in TAG_IDS {
+            if let Some(tag) = self.tags().get(&t_id.to_ascii_lowercase()) {
+                buff.push_str(&format!("\n{}/{}: {}", t_id, t_str, tag));
+            }
+        }
+        write!(f, "{}", buff)
+    }
 }
