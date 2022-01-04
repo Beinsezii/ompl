@@ -13,7 +13,7 @@ fn parse_internal(internal: &str, tags: &Tags) -> String {
         //     result.remove(0);
         // }
         // let cond = internal.find('|').map(||);
-        if let Some(tag) = tags.get(&result) {
+        if let Some(tag) = tags.get(&result.to_ascii_lowercase()) {
             result = tag.to_string();
         }
     }
@@ -22,7 +22,6 @@ fn parse_internal(internal: &str, tags: &Tags) -> String {
 
 pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     let mut result = tagstring.into();
-    let mut literal = true;
     loop {
         let mut start = None;
         let mut end = None;
@@ -39,7 +38,6 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
                     if let Some(s) = start {
                         // find first end after last start
                         if s < n {
-                            literal = false;
                             end = Some(n);
                             break;
                         }
@@ -56,23 +54,21 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     }
 
     // clean up escapes
-    if !literal {
-        let mut iter = result.chars();
-        let mut buff = String::with_capacity(result.len());
-        loop {
-            match iter.next() {
-                Some('\\') => {
-                    if let Some(c) = iter.next() {
-                        buff.push(c)
-                    }
+    let mut iter = result.chars();
+    let mut buff = String::with_capacity(result.len());
+    loop {
+        match iter.next() {
+            Some('\\') => {
+                if let Some(c) = iter.next() {
+                    buff.push(c)
                 }
-                Some(c) => buff.push(c),
-                None => break,
             }
+            Some(c) => buff.push(c),
+            None => break,
         }
-        result = buff;
-        result.shrink_to_fit();
     }
+    result = buff;
+    result.shrink_to_fit();
 
     result
 }
@@ -83,16 +79,10 @@ mod tests {
     use super::Tags;
     lazy_static::lazy_static! {
     static ref TAGS: Tags = Tags::from([
-        (String::from("TIT1"), String::from("TheTitle")),
-        (String::from("Title"), String::from("TheTitle")),
         (String::from("tit1"), String::from("TheTitle")),
         (String::from("title"), String::from("TheTitle")),
-        (String::from("TALB"), String::from("TheAlbum")),
-        (String::from("Album"), String::from("TheAlbum")),
         (String::from("talb"), String::from("TheAlbum")),
         (String::from("album"), String::from("TheAlbum")),
-        (String::from("TCON"), String::from("TheGenre")),
-        (String::from("Genre"), String::from("TheGenre")),
         (String::from("tcon"), String::from("TheGenre")),
         (String::from("genre"), String::from("TheGenre")),
     ]);
@@ -122,6 +112,11 @@ mod tests {
     #[test]
     fn sub() {
         assert_eq!(parse("<title>", &TAGS), "TheTitle".to_string());
+    }
+
+    #[test]
+    fn sub_case() {
+        assert_eq!(parse("<TiTlE>", &TAGS), "TheTitle".to_string());
     }
 
     #[test]
@@ -169,6 +164,22 @@ mod tests {
                 &TAGS
             ),
             r#"Title: <title>, Album: TheAlbum>, Genre: TheGenre, done!"#.to_string()
+        );
+    }
+
+    #[test]
+    fn condition_true() {
+        assert_eq!(
+            parse("Tag?<title| Title: <title>!>", &TAGS),
+            "Tag? Title: TheTitle!".to_string()
+        );
+    }
+
+    #[test]
+    fn condition_false() {
+        assert_eq!(
+            parse("Tag?<badtag| Badtag: <badtag>!>", &TAGS),
+            "Tag?".to_string()
         );
     }
 }
