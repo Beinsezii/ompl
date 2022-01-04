@@ -44,6 +44,7 @@ fn parse_internal(internal: &str, tags: &Tags) -> String {
 
 pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     let mut result = tagstring.into();
+    let mut literal = true;
     loop {
         let mut start = None;
         let mut end = None;
@@ -61,6 +62,7 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
                         // find first end after last start
                         if s < n {
                             end = Some(n);
+                            literal = false;
                             break;
                         }
                     }
@@ -92,7 +94,13 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     result = buff;
     result.shrink_to_fit();
 
-    result
+    if literal {
+        tags.get(&result.to_ascii_lowercase())
+            .unwrap_or(&"???".to_string())
+            .to_string()
+    } else {
+        result
+    }
 }
 
 #[cfg(test)]
@@ -112,23 +120,17 @@ mod tests {
 
     #[test]
     fn control() {
-        assert_eq!(parse("Hello, World!", &TAGS), "Hello, World!".to_string());
+        assert_eq!(parse("Hello, World!", &TAGS), "???".to_string());
     }
 
     #[test]
     fn control_unequal() {
-        assert_eq!(
-            parse("Hello>, Worl<d!", &TAGS),
-            "Hello>, Worl<d!".to_string()
-        );
+        assert_eq!(parse("Hello>, Worl<d!", &TAGS), "???".to_string());
     }
 
     #[test]
     fn control_unequal2() {
-        assert_eq!(
-            parse(">Hello, World!<", &TAGS),
-            ">Hello, World!<".to_string()
-        );
+        assert_eq!(parse(">Hello, World!<", &TAGS), "???".to_string());
     }
 
     #[test]
@@ -139,6 +141,11 @@ mod tests {
     #[test]
     fn sub_case() {
         assert_eq!(parse("<TiTlE>", &TAGS), "TheTitle".to_string());
+    }
+
+    #[test]
+    fn sub_literal() {
+        assert_eq!(parse("TiT1", &TAGS), "TheTitle".to_string());
     }
 
     #[test]
@@ -175,7 +182,7 @@ mod tests {
 
     #[test]
     fn escape() {
-        assert_eq!(parse(r#"\<title>"#, &TAGS), "<title>".to_string());
+        assert_eq!(parse(r#"\<title>"#, &TAGS), "???".to_string());
     }
 
     #[test]
@@ -224,7 +231,10 @@ mod tests {
     #[test]
     fn condition_mixed() {
         assert_eq!(
-            parse(r#"<mood|This is a very <mood> song~><!mood|\<title\>: <title><TALB| is part of <TALB>>>"#, &TAGS),
+            parse(
+                r#"<mood|This is a very <mood> song~><!mood|\<title\>: <title><TALB| is part of <TALB>>>"#,
+                &TAGS
+            ),
             "<title>: TheTitle is part of TheAlbum".to_string()
         );
     }
