@@ -20,6 +20,9 @@ souvlaki = "0.5"
 tui = { version = "0.16", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 
+[dev-dependencies]
+lazy_static = "1"
+
 [target.'cfg(windows)'.dependencies]
 winit = "0.26"
 raw-window-handle = "0.4"
