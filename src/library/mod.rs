@@ -128,7 +128,7 @@ impl Library {
         self.bus.lock().unwrap().broadcast(LibEvt::Pause);
     }
     pub fn stop(&self) {
-        self.player.stop();
+        self.player.hard_stop();
         self.bus.lock().unwrap().broadcast(LibEvt::Stop);
     }
     pub fn play_pause(&self) {
@@ -141,7 +141,7 @@ impl Library {
         self.play_track(self.get_random());
     }
     pub fn previous(&self) {
-        self.stop();
+        self.player.stop();
         self.player.track_set(self.history.write().unwrap().pop());
         self.play();
     }
@@ -164,7 +164,7 @@ impl Library {
         if let Some(track) = self.player.track_get() {
             self.history.write().unwrap().push(track)
         }
-        self.stop();
+        self.player.stop();
         self.player.track_set(track);
         self.play();
     }

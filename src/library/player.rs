@@ -45,8 +45,8 @@ fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
 // ### BG TASKS ### }}}
 
 pub struct Player {
-    stream_handle: OutputStreamHandle,
-    stm_ex_s: Sender<()>,
+    stream_handle: RwLock<Option<OutputStreamHandle>>,
+    stm_ex_s: RwLock<Option<Sender<()>>>,
     volume_retained: RwLock<f32>,
     sink: Arc<RwLock<Option<Sink>>>,
     track: RwLock<Option<Arc<Track>>>,
@@ -54,7 +54,7 @@ pub struct Player {
 
 impl Drop for Player {
     fn drop(&mut self) {
-        self.stm_ex_s.send(()).unwrap();
+        self.hard_stop()
     }
 }
 
@@ -64,11 +64,6 @@ impl Player {
         l2!("Constructing Player...");
         let now = Instant::now();
 
-        let (han_ch_s, han_ch_r) = channel::bounded(1);
-        let (stm_ex_s, stm_ex_r) = channel::bounded(1);
-        thread::spawn(|| stream(han_ch_s, stm_ex_r));
-        let stream_handle = han_ch_r.recv().unwrap();
-
         let sink = Arc::new(RwLock::new(None));
 
         if let Some(sig) = signal_next {
@@ -77,8 +72,8 @@ impl Player {
         }
 
         let player = Self {
-            stm_ex_s,
-            stream_handle,
+            stm_ex_s: RwLock::new(None),
+            stream_handle: RwLock::new(None),
             volume_retained: RwLock::new(1.0f32),
             sink,
             track: RwLock::new(track),
@@ -93,8 +88,23 @@ impl Player {
     // ## PLAYBACK ## {{{
 
     fn start(&self) {
+        if self.stream_handle.read().unwrap().is_none() || self.stm_ex_s.read().unwrap().is_none() {
+            let (han_ch_s, han_ch_r) = channel::bounded(1);
+            let (stm_ex_s, stm_ex_r) = channel::bounded(1);
+            thread::spawn(|| stream(han_ch_s, stm_ex_r));
+            *self.stm_ex_s.write().unwrap() = Some(stm_ex_s);
+            *self.stream_handle.write().unwrap() = Some(han_ch_r.recv().unwrap());
+        }
+
         if let Some(reader) = self.track.read().unwrap().as_ref().map(|t| t.get_reader()) {
-            match self.stream_handle.play_once(reader) {
+            match self
+                .stream_handle
+                .read()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .play_once(reader)
+            {
                 Ok(sink) => {
                     sink.set_volume(*self.volume_retained.read().unwrap());
                     *self.sink.write().unwrap() = Some(sink);
@@ -127,10 +137,27 @@ impl Player {
         l2!("Playing");
     }
 
+    /// Clears playback buffer without removing the audio stream.
+    /// Good for playing a different track.
     pub fn stop(&self) {
         l2!("Stopping...");
         *self.sink.write().unwrap() = None;
         l2!("Stopped");
+    }
+
+    /// Completely removes the audio stream
+    /// Should be used when fully stopping playback to reduce idle load
+    pub fn hard_stop(&self) {
+        l2!("Hard Stopping...");
+        if let Some(tx) = &*self.stm_ex_s.read().unwrap() {
+            tx.send(()).unwrap();
+        } else {
+            return;
+        }
+        *self.sink.write().unwrap() = None;
+        *self.stream_handle.write().unwrap() = None;
+        *self.stm_ex_s.write().unwrap() = None;
+        l2!("Hard Stopped");
     }
     // ## PLAYBACK ## }}}
 
