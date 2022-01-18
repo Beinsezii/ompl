@@ -1232,6 +1232,16 @@ pub fn tui(library: Arc<Library>) {
     let (tui_s, tui_r) = channel::bounded::<()>(1);
     let libevt_s = tui_s.clone();
 
+    let uiw_panic = Arc::downgrade(&ui);
+
+    std::panic::set_hook(Box::new(move |e| {
+        if let Some(ui) = uiw_panic.upgrade() {
+            ui.lock()
+                .unwrap()
+                .message("Panic Message", &format!("{}", e))
+        }
+    }));
+
     let _event_jh = thread::spawn(move || {
         loop {
             if let Some(ev) = get_event(None) {
