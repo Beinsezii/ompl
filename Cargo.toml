@@ -11,7 +11,7 @@ bus = "2"
 clap = { version = "3", features = ["derive", "unicode"] }
 crossbeam = "0.8"
 crossterm = "0.22"
-id3 = "0.6"
+id3 = "1"
 rand = "0.8"
 rayon = "1"
 rodio = "0.14"
