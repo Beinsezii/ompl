@@ -3,7 +3,7 @@ A music player organized exactly how *I* like it.
 
 ## Features
   * Fully functional TUI with mouse & tty support
-   * Filter and sort tags however you want. See Tagstrings
+   * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
   * Fully functional CLI that interacts either with the TUI or a daemon
    * Both playback controls and content querying
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
