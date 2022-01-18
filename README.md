@@ -1,9 +1,11 @@
-# OMPL - Opinionated Music Player/Library v 0.2.0
+# OMPL - Opinionated Music Player/Library v 0.3.0
 A music player organized exactly how *I* like it.
 
 ## Features
   * Fully functional TUI with mouse & tty support
+   * Filter and sort tags however you want. See Tagstrings
   * Fully functional CLI that interacts either with the TUI or a daemon
+   * Both playback controls and content querying
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
     * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track.rs#L18)
   * Pure Rust where possible. *Should* be portable.
@@ -13,15 +15,13 @@ A music player organized exactly how *I* like it.
   * Shouldn't crash.
 
 ## WIP/Blocking features for 1.0.0
-  * Filling out of `print` cli command
-  * More advanced tag sorting, something a la [quodlibet's tag patterns](https://quodlibet.readthedocs.io/en/latest/guide/tags/patterns.html)
   * Theme customization
   * Polish passes/hundred papercuts
   * Possibly some form of retained settings/config file
     * Personally just modifying the cli command in my startup config has been fine, but this is a very common thing among any somewhat major program.
   
 ## Usage
-<img src="./screenshot.png" width = 400px />
+<img src="./screenshot.png" height = 400px />
 Either download a binary from the tags/releases tab or if you already have Rust installed, run `cargo install --git https://github.com/Beinsezii/ompl.git`.
 It is recommended you add the downloaded binary or cargo install dir to your `PATH` for ease of use.
 
@@ -37,6 +37,20 @@ To view a full list of daeomon/tui initialization commands, run `ompl --help` wh
 To view a full list of CLI commands, run `ompl --help` while the TUI/Daemon is already open on the active port
 
 Both helps will also print TUI keybinds.
+
+### Tagstrings
+OMPL can sort by literal tags or "tagstrings", a special markup language for creating 'presentable' strings given the presence or lack of specific tags.
+
+ * To simply filter by a single tag, you may type it literally: `album` will result in "Album"
+ * To sort by multiple tags in one filter, use angle brackets like you would other markup language tags:`<genre> <album>` will result in "Genre Album"
+ * To check for a tag's existence, use a vertical bar separating what you wish to display: `<album|<album> - ><title>` will result in "Album - Title" if the `album` tag is present, or "Title" if no album tag is present
+ * To check for a tag's absence, add an exclamation after the first bracked: `<album|<album>><!album|<title>>` will result in "Album" if the `album` tag is present, or "Title" if no album tag is present.
+
+Extra syntactical notes:
+ * `???` will be the result if a non-conditional tag such as `<tag>` isn't found. Use a condition if you don't wish to display this: `<tag|<tag>><!tag|Tag not found!>`
+ * Use `\` to escape characters: `\<title\>: <title>` will result in "<title>: Title"
+ * The algorithm will recursively  process down every set of angle brackets. This allows you to have checks inside checks `<tag|<tag2|<tag3>>>` but also has the side effect that `<<title>>` will result in a song titled "SongName" printing out "???", as it will first process `<<title>>` into `<SongName>`, *then* process `<SongName>` which likely won't be a valid tag, resulting in "???". Use escape `\` to prevent this if undesired.
+ 
 
 ### Compiling
 Have Rust 2021 installed, clone repo and just run `cargo build`.
