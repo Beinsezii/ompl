@@ -13,7 +13,7 @@ mod library;
 mod tui;
 use library::Library;
 
-const ID: &str = "OMPL SERVER 0.2.0";
+const ID: &str = "OMPL SERVER 0.3.0";
 
 // ### LOGGING ### {{{
 
