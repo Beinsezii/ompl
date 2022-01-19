@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::Duration;
 
-use crate::library::{get_all_tag, get_all_tag_sort, sort_by_tag, Filter, LibEvt, Library, Track};
+use crate::library::{Filter, LibEvt, Library};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossbeam::channel;
@@ -18,11 +18,15 @@ use crossterm::{
 
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Modifier, Style};
+use tui::style::{Color, Style};
 use tui::text;
-use tui::widgets;
-use tui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use tui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph};
 use tui::Terminal;
+
+mod theme;
+use theme::Theme;
+mod widgets;
+use widgets::{ClickableStatefulWidget, ClickableWidget};
 
 // ### FNs ### {{{
 
@@ -90,50 +94,15 @@ TUI Controls:
 
 // ### UI ### {{{
 
-// ## Theme ## {{{
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct Theme {
-    base: Style,
-    base_hi: Style,
-    active: Style,
-    active_hi: Style,
-    mod_select: Style,
-    mod_select_active: Style,
-}
-
-impl Theme {
-    fn new(accent: Color) -> Self {
-        Self {
-            base: Style::default(),
-            base_hi: Style::default().fg(Color::Black).bg(Color::White),
-            active: Style::default().fg(accent),
-            active_hi: Style::default().fg(Color::Black).bg(accent),
-            mod_select: Style::default().add_modifier(Modifier::UNDERLINED),
-            mod_select_active: Style::default().add_modifier(Modifier::BOLD),
-        }
-    }
-}
-
-// ## Theme ## }}}
-
 // ## Events ## {{{
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZoneEventType {
-    Queue(usize),
     Panes {
         pane: usize,
         row: usize,
         column: usize,
     },
-
-    VolAdd,
-    VolSub,
-    Next,
-    Stop,
-    PlayPause,
-    Prev,
 
     Search,
     Insert(bool),
@@ -151,88 +120,6 @@ struct ZoneEvent {
 }
 
 // ## Events ## }}}
-
-// ## StatusBar ## {{{
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct StatusBar {
-    parent: Rect,
-    vol_stat: Rect,
-    vol_sub: Rect,
-    vol_add: Rect,
-    control_div: Rect,
-    prev: Rect,
-    stop: Rect,
-    play_pause: Rect,
-    next: Rect,
-    track_div: Rect,
-    track: Rect,
-}
-
-impl StatusBar {
-    pub fn from_rect(rect: Rect) -> Self {
-        let s = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(10), // vol_stat
-                Constraint::Length(1),  // vol_sub
-                Constraint::Length(1),  // vol_add
-                Constraint::Length(3),  // control_div
-                Constraint::Length(2),  // prev
-                Constraint::Length(1),
-                Constraint::Length(1), // stop
-                Constraint::Length(1),
-                Constraint::Length(2), // play_pause
-                Constraint::Length(1),
-                Constraint::Length(2), // next
-                Constraint::Length(3), // track_div
-                Constraint::Min(0),    // track
-            ])
-            .split(rect);
-        Self {
-            parent: rect,
-            vol_stat: s[0],
-            vol_sub: s[1],
-            vol_add: s[2],
-            control_div: s[3],
-            prev: s[4],
-            stop: s[6],
-            play_pause: s[8],
-            next: s[10],
-            track_div: s[11],
-            track: s[12],
-        }
-    }
-    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, library: &Arc<Library>) {
-        frame.render_widget(
-            Paragraph::new(format!(" Vol {:.2} ", library.volume_get())),
-            self.vol_stat,
-        );
-        frame.render_widget(Paragraph::new("-"), self.vol_sub);
-        frame.render_widget(Paragraph::new("+"), self.vol_add);
-        frame.render_widget(Paragraph::new(" | "), self.control_div);
-        frame.render_widget(Paragraph::new(":<"), self.prev);
-        frame.render_widget(Paragraph::new("#"), self.stop);
-        frame.render_widget(
-            Paragraph::new(if library.playing() { "::" } else { "/>" }),
-            self.play_pause,
-        );
-        frame.render_widget(Paragraph::new(">:"), self.next);
-        frame.render_widget(Paragraph::new(" | "), self.track_div);
-        frame.render_widget(
-            Paragraph::new(
-                library
-                    .track_get()
-                    .map(|t| t.tags().get("title").cloned())
-                    .flatten()
-                    .unwrap_or("???".to_owned()),
-            ),
-            self.track,
-        )
-    }
-}
-
-// ## StatusBar ## }}}
 
 // ## MultiBar ## {{{
 
@@ -382,16 +269,13 @@ enum Pane {
 
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
-    status_bar: StatusBar,
+    status_bar_area: Rect,
     multi_bar: MultiBar,
     debug_bar: DebugBar,
     panes: Vec<FilterPane>,
     panes_index: usize,
-    queue: Vec<Arc<Track>>,
-    queue_sel: bool,
-    queue_pos: usize,
-    queue_rect: Rect,
-    queue_view: usize,
+    queue_area: Rect,
+    queue_state: widgets::QueueState,
     theme: Theme,
     terminal: Option<Terminal<T>>,
     debug: bool,
@@ -407,16 +291,13 @@ impl<T: Backend> UI<T> {
     ) -> Self {
         let mut result = Self {
             lib_weak: Arc::downgrade(&library),
-            status_bar: StatusBar::default(),
+            status_bar_area: Rect::default(),
             multi_bar: MultiBar::default(),
             debug_bar: DebugBar::default(),
             panes: Vec::new(),
             panes_index: 0,
-            queue: Vec::new(),
-            queue_sel: true,
-            queue_pos: 0,
-            queue_rect: Rect::default(),
-            queue_view: 0,
+            queue_area: Rect::default(),
+            queue_state: widgets::QueueState::default(),
             theme,
             terminal: Some(terminal),
             debug,
@@ -446,7 +327,7 @@ impl<T: Backend> UI<T> {
                 } else {
                     filter_tree[n - 1].tracks.clone()
                 };
-                let items = get_all_tag_sort(&f.filter.tag, &tracks);
+                let items = crate::library::get_taglist_sort(&f.filter.tag, &tracks);
                 FilterPane {
                     tag: f.filter.tag.clone(),
                     index: min(
@@ -473,16 +354,14 @@ impl<T: Backend> UI<T> {
                 }
             })
             .collect();
-        self.queue = library.get_queue();
-        self.queue_pos = min(self.queue_pos, self.queue.len().saturating_sub(1));
-        self.queue_view = min(
-            self.queue_pos
-                .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize / 2),
-            self.queue
-                .len()
-                .saturating_sub(self.queue_rect.height.saturating_sub(2) as usize),
+        let len = library.get_queue().len();
+        self.queue_state.position = min(self.queue_state.position, len.saturating_sub(1));
+        self.queue_state.view = min(
+            self.queue_state
+                .position
+                .saturating_sub(self.queue_area.height as usize / 2),
+            len.saturating_sub(self.queue_area.height as usize),
         );
-        sort_by_tag("title", &mut self.queue);
         self.draw();
     }
 
@@ -505,7 +384,7 @@ impl<T: Backend> UI<T> {
             Some(l) => l,
             None => return,
         };
-        if !self.queue_sel || self.panes.is_empty() {
+        if !self.queue_state.active || self.panes.is_empty() {
             let tag = self.multi_bar_input("Filter").trim().to_string();
             if !tag.is_empty() {
                 let mut filters = self.rebuild_filters();
@@ -526,7 +405,7 @@ impl<T: Backend> UI<T> {
                     self.panes.len().saturating_sub(1),
                 );
             }
-            self.queue_sel = false;
+            self.queue_state.active = false;
         }
     }
 
@@ -535,14 +414,14 @@ impl<T: Backend> UI<T> {
             Some(l) => l,
             None => return,
         };
-        if !self.queue_sel {
+        if !self.queue_state.active {
             if !self.panes.is_empty() {
                 self.panes.remove(self.panes_index);
                 self.panes_index = self.panes_index.saturating_sub(1);
                 library.set_filters(self.rebuild_filters());
                 self.update_from_library();
                 if self.panes.is_empty() {
-                    self.queue_sel = true
+                    self.queue_state.active = true
                 }
             }
         }
@@ -557,13 +436,8 @@ impl<T: Backend> UI<T> {
     // ## UI Layout FNs {{{
 
     fn lock_view(&mut self, pane: Pane) {
-        let (index, height, len, view) = match pane {
-            Pane::Queue => (
-                self.queue_pos,
-                self.queue_rect.height,
-                self.queue.len(),
-                &mut self.queue_view,
-            ),
+        let (position, height, length, view) = match pane {
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => (
                 self.panes[i].index,
                 self.panes[i].rect.height,
@@ -572,19 +446,12 @@ impl<T: Backend> UI<T> {
             ),
         };
 
-        *view = min(
-            index.saturating_sub(height.saturating_sub(2) as usize / 2),
-            len.saturating_sub(height.saturating_sub(2) as usize),
-        )
+        widgets::scroll_to(position, view, height.into(), length);
     }
 
     fn scroll_view_down(&mut self, pane: Pane) {
         let (height, len, view) = match pane {
-            Pane::Queue => (
-                self.queue_rect.height,
-                self.queue.len(),
-                &mut self.queue_view,
-            ),
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => (
                 self.panes[i].rect.height,
                 self.panes[i].items.len(),
@@ -599,7 +466,7 @@ impl<T: Backend> UI<T> {
 
         // Rust doesn't allow mutable references to separate fields at once
         let index = match pane {
-            Pane::Queue => &mut self.queue_pos,
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => &mut self.panes[i].index,
         };
         *index = min(*index + offset, len - 1);
@@ -607,7 +474,7 @@ impl<T: Backend> UI<T> {
 
     fn scroll_view_up(&mut self, pane: Pane) {
         let (height, index) = match pane {
-            Pane::Queue => (self.queue_rect.height, &mut self.queue_pos),
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => (self.panes[i].rect.height, &mut self.panes[i].index),
         };
         let offset = height.saturating_sub(2) as usize / 2;
@@ -615,7 +482,7 @@ impl<T: Backend> UI<T> {
 
         // Rust doesn't allow mutable references to separate fields at once
         let view = match pane {
-            Pane::Queue => &mut self.queue_view,
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => &mut self.panes[i].view,
         };
         *view = view.saturating_sub(offset);
@@ -623,18 +490,12 @@ impl<T: Backend> UI<T> {
 
     fn build_list<'a>(&self, pane: Pane) -> List<'a> {
         let (items, skip, index, active, selected) = match pane {
-            Pane::Queue => (
-                get_all_tag("title", &self.queue),
-                self.queue_view,
-                self.queue_pos,
-                self.queue_sel,
-                Vec::new(),
-            ),
+            Pane::Queue => unreachable!(),
             Pane::Panes(i) => (
                 self.panes[i].items.clone(),
                 self.panes[i].view,
                 self.panes[i].index,
-                !self.queue_sel && i == self.panes_index,
+                !self.queue_state.active && i == self.panes_index,
                 self.panes[i].selected.clone(),
             ),
         };
@@ -713,18 +574,17 @@ impl<T: Backend> UI<T> {
                 {
                     self.panes[n].rect = r;
                 }
-                self.queue_rect = zones[4];
+                self.status_bar_area = zones[0];
                 f.render_widget(
-                    self.build_list(Pane::Queue).block(
-                        Block::default()
-                            .border_type(widgets::BorderType::Plain)
-                            .borders(Borders::ALL)
-                            .title("Queue"),
-                    ),
-                    self.queue_rect,
+                    widgets::StatusBar::new(&library, "title"),
+                    self.status_bar_area,
                 );
-                self.status_bar = StatusBar::from_rect(zones[0]);
-                self.status_bar.draw(f, &library);
+                self.queue_area = zones[4];
+                f.render_stateful_widget(
+                    widgets::Queue::new(&library, self.theme, &self.queue_state.tagstring),
+                    self.queue_area,
+                    &mut self.queue_state,
+                );
                 let bar_mode = self.multi_bar.mode.clone();
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.mode = bar_mode;
@@ -735,7 +595,7 @@ impl<T: Backend> UI<T> {
                     f.render_widget(
                         self.build_list(Pane::Panes(num)).block(
                             Block::default()
-                                .border_type(widgets::BorderType::Plain)
+                                .border_type(BorderType::Plain)
                                 .borders(Borders::ALL)
                                 .title(text::Span {
                                     content: fp.tag.as_str().into(),
@@ -767,7 +627,7 @@ impl<T: Backend> UI<T> {
                 f.render_widget(
                     Paragraph::new(message).block(
                         Block::default()
-                            .border_type(widgets::BorderType::Plain)
+                            .border_type(BorderType::Plain)
                             .borders(Borders::ALL)
                             .title(title),
                     ),
@@ -850,10 +710,13 @@ impl<T: Backend> UI<T> {
         {
             "" => (),
             input => {
-                let (index, items, view) = if self.queue_sel {
+                let (index, items, view) = if self.queue_state.active {
                     (
-                        &mut self.queue_pos,
-                        get_all_tag("title", &self.queue),
+                        &mut self.queue_state.position,
+                        self.lib_weak
+                            .upgrade()
+                            .unwrap()
+                            .get_taglist_sort(&self.queue_state.tagstring),
                         Pane::Queue,
                     )
                 } else {
@@ -886,7 +749,7 @@ impl<T: Backend> UI<T> {
     // ## Popops ## }}}
 
     // ## convert_event ## {{{
-    fn convert_event(&self, event: MouseEvent) -> ZoneEvent {
+    fn convert_event(&mut self, event: MouseEvent) -> ZoneEvent {
         let point = Rect {
             x: event.column,
             y: event.row,
@@ -896,25 +759,7 @@ impl<T: Backend> UI<T> {
         ZoneEvent {
             kind: event.kind,
             mods: event.modifiers,
-            event: if self.queue_rect.intersects(point) {
-                ZoneEventType::Queue(event.row.saturating_sub(self.queue_rect.y).into())
-            } else if self.status_bar.parent.intersects(point) {
-                if self.status_bar.vol_sub.intersects(point) {
-                    ZoneEventType::VolSub
-                } else if self.status_bar.vol_add.intersects(point) {
-                    ZoneEventType::VolAdd
-                } else if self.status_bar.prev.intersects(point) {
-                    ZoneEventType::Prev
-                } else if self.status_bar.stop.intersects(point) {
-                    ZoneEventType::Stop
-                } else if self.status_bar.play_pause.intersects(point) {
-                    ZoneEventType::PlayPause
-                } else if self.status_bar.next.intersects(point) {
-                    ZoneEventType::Next
-                } else {
-                    ZoneEventType::None
-                }
-            } else if self.multi_bar.parent.intersects(point) {
+            event: if self.multi_bar.parent.intersects(point) {
                 if self.multi_bar.help.intersects(point) {
                     ZoneEventType::Help
                 } else if self.multi_bar.search.intersects(point) {
@@ -930,6 +775,18 @@ impl<T: Backend> UI<T> {
                 }
             } else {
                 let mut result = ZoneEventType::None;
+                if let Some(library) = self.lib_weak.upgrade() {
+                    if widgets::StatusBar::process_event(event, self.status_bar_area, &library)
+                        || widgets::Queue::process_stateful_event(
+                            event,
+                            self.queue_area,
+                            &library,
+                            &mut self.queue_state,
+                        )
+                    {
+                        self.draw()
+                    }
+                }
                 for (num, pane) in self.panes.iter().enumerate() {
                     if pane.rect.intersects(point) {
                         result = ZoneEventType::Panes {
@@ -958,7 +815,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                self.queue_sel = !self.queue_sel || self.panes.is_empty();
+                self.queue_state.active = !self.queue_state.active || self.panes.is_empty();
                 self.draw();
             }
             km!('h')
@@ -966,7 +823,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queue_sel {
+                if !self.queue_state.active {
                     self.panes_index = self.panes_index.saturating_sub(1);
                     self.draw();
                 }
@@ -976,7 +833,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queue_sel {
+                if !self.queue_state.active {
                     self.panes_index =
                         min(self.panes_index + 1, self.panes.len().saturating_sub(1));
                     self.draw();
@@ -987,8 +844,11 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_sel {
-                    self.queue_pos = min(self.queue_pos + 1, self.queue.len().saturating_sub(1));
+                if self.queue_state.active {
+                    self.queue_state.position = min(
+                        self.queue_state.position + 1,
+                        library.get_queue().len().saturating_sub(1),
+                    );
                     self.lock_view(Pane::Queue);
                 } else if let Some(pane) = self.active_pane_mut() {
                     pane.index = min(pane.index + 1, pane.items.len().saturating_sub(1));
@@ -1001,8 +861,8 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_sel {
-                    self.queue_pos = self.queue_pos.saturating_sub(1);
+                if self.queue_state.active {
+                    self.queue_state.position = self.queue_state.position.saturating_sub(1);
                     self.lock_view(Pane::Queue);
                 } else if let Some(pane) = self.active_pane_mut() {
                     pane.index = pane.index.saturating_sub(1);
@@ -1016,8 +876,13 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_sel {
-                    library.play_track(self.queue.get(self.queue_pos).cloned())
+                if self.queue_state.active {
+                    library.play_track(
+                        library
+                            .get_queue_sort(&self.queue_state.tagstring)
+                            .get(self.queue_state.position)
+                            .cloned(),
+                    )
                 } else if let Some(pane) = self.active_pane_mut() {
                     match pane.selected.iter().position(|i| i == &pane.index) {
                         Some(p) => drop(pane.selected.remove(p)),
@@ -1034,7 +899,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if !self.queue_sel {
+                if !self.queue_state.active {
                     if let Some(pane) = self.active_pane_mut() {
                         match pane.selected.is_empty() {
                             true => pane.selected = (0..pane.items.len()).collect(),
@@ -1069,20 +934,8 @@ impl<T: Backend> UI<T> {
                 } => match kind {
                     MouseEventKind::Down(button) => match button {
                         MouseButton::Left => match event {
-                            ZoneEventType::Queue(index) => {
-                                self.queue_sel = true;
-                                if index > 0
-                                    && index <= self.queue_rect.height as usize - 2
-                                    && index <= self.queue.len()
-                                {
-                                    let index = index - 1 + self.queue_view;
-                                    library.play_track(self.queue.get(index).cloned());
-                                    self.queue_pos = index;
-                                }
-                                self.draw();
-                            }
                             ZoneEventType::Panes { pane, row, column } => {
-                                self.queue_sel = false;
+                                self.queue_state.active = false;
                                 self.panes_index = pane;
                                 if row == 0 && column <= self.panes[pane].tag.len() {
                                     self.panes[pane].selected = vec![];
@@ -1099,23 +952,17 @@ impl<T: Backend> UI<T> {
                                 library.set_filters(self.rebuild_filters());
                                 self.update_from_library();
                             }
-                            ZoneEventType::VolSub => library.volume_sub(0.05),
-                            ZoneEventType::VolAdd => library.volume_add(0.05),
-                            ZoneEventType::Prev => library.previous(),
-                            ZoneEventType::Stop => library.stop(),
-                            ZoneEventType::PlayPause => library.play_pause(),
-                            ZoneEventType::Next => library.next(),
                             ZoneEventType::Search => self.search(),
                             ZoneEventType::Insert(before) => {
-                                if self.queue_sel {
-                                    self.queue_sel = false
+                                if self.queue_state.active {
+                                    self.queue_state.active = false
                                 } else {
                                     self.insert_filter(before)
                                 }
                             }
                             ZoneEventType::Delete => {
-                                if self.queue_sel {
-                                    self.queue_sel = false
+                                if self.queue_state.active {
+                                    self.queue_state.active = false
                                 } else {
                                     self.delete_filter()
                                 }
@@ -1129,7 +976,7 @@ impl<T: Backend> UI<T> {
                                 row,
                                 column: _column,
                             } => {
-                                self.queue_sel = false;
+                                self.queue_state.active = false;
                                 self.panes_index = pane;
                                 if row > 0
                                     && row <= self.panes[pane].rect.height as usize - 2
@@ -1149,38 +996,24 @@ impl<T: Backend> UI<T> {
                                     self.draw()
                                 }
                             }
-                            ZoneEventType::Queue(_) => {
-                                self.queue_sel = true;
-                                self.draw();
-                            }
                             _ => (),
                         },
                         MouseButton::Middle => (),
                     },
 
                     MouseEventKind::ScrollDown => match event {
-                        ZoneEventType::Queue(_index) => {
-                            self.scroll_view_down(Pane::Queue);
-                            self.queue_sel = true;
-                            self.draw();
-                        }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_down(Pane::Panes(pane));
-                            self.queue_sel = false;
+                            self.queue_state.active = false;
                             self.panes_index = pane;
                             self.draw();
                         }
                         _ => (),
                     },
                     MouseEventKind::ScrollUp => match event {
-                        ZoneEventType::Queue(_index) => {
-                            self.scroll_view_up(Pane::Queue);
-                            self.queue_sel = true;
-                            self.draw();
-                        }
                         ZoneEventType::Panes { pane, .. } => {
                             self.scroll_view_up(Pane::Panes(pane));
-                            self.queue_sel = false;
+                            self.queue_state.active = false;
                             self.panes_index = pane;
                             self.draw();
                         }
@@ -1231,16 +1064,6 @@ pub fn tui(library: Arc<Library>) {
     // end signals
     let (tui_s, tui_r) = channel::bounded::<()>(1);
     let libevt_s = tui_s.clone();
-
-    let uiw_panic = Arc::downgrade(&ui);
-
-    std::panic::set_hook(Box::new(move |e| {
-        if let Some(ui) = uiw_panic.upgrade() {
-            ui.lock()
-                .unwrap()
-                .message("Panic Message", &format!("{}", e))
-        }
-    }));
 
     let _event_jh = thread::spawn(move || {
         loop {

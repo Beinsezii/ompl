@@ -100,24 +100,25 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
-pub fn get_all_tag<T: Deref<Target = Track>>(tagstring: &str, tracks: &Vec<T>) -> Vec<String> {
+pub fn get_taglist<T: Into<String>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
+    let tagstring = tagstring.into();
     tracks
         .iter()
-        .filter_map(|t| Some(tagstring::parse(tagstring, t.tags())))
+        .filter_map(|t| Some(tagstring::parse(&tagstring, t.tags())))
         .collect::<Vec<String>>()
 }
 
-pub fn get_all_tag_sort<T: Deref<Target = Track>>(tagstring: &str, tracks: &Vec<T>) -> Vec<String> {
-    let mut result = get_all_tag(tagstring, tracks);
+pub fn get_taglist_sort<T: Into<String>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
+    let mut result = get_taglist(tagstring, tracks);
     result.sort();
     result.dedup();
     result
 }
 
-pub fn sort_by_tag<T: Deref<Target = Track>>(tag: &str, tracks: &mut Vec<T>) {
+pub fn sort_by_tag<T: AsRef<str>, U: Deref<Target = Track>>(tag: T, tracks: &mut Vec<U>) {
     tracks.sort_by(|a, b| {
-        let a = a.tags().get(tag);
-        let b = b.tags().get(tag);
+        let a = a.tags().get(tag.as_ref());
+        let b = b.tags().get(tag.as_ref());
         if a.is_none() && b.is_none() {
             Ordering::Equal
         } else {
@@ -197,6 +198,10 @@ impl Track {
 
     pub fn tags(&self) -> &Tags {
         &self.tags
+    }
+
+    pub fn tagstring<T: Into<String>>(&self, tagstring: T) -> String {
+        tagstring::parse(tagstring, self.tags())
     }
 
     // pub fn path(&self) -> &PathBuf {

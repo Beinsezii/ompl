@@ -14,7 +14,7 @@ mod player;
 mod track;
 
 pub use player::{Player, TYPES};
-pub use track::{get_all_tag, get_all_tag_sort, get_tracks, sort_by_tag, tagstring, Track};
+pub use track::{get_taglist, get_taglist_sort, get_tracks, sort_by_tag, tagstring, Track};
 
 use crate::{l1, l2, log, LOG_LEVEL};
 
@@ -66,7 +66,7 @@ pub enum LibEvt {
 
 pub struct Library {
     pub tracks: Vec<Arc<Track>>,
-    history: RwLock<Vec<Arc<Track>>>,
+    history: Mutex<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
     bus: Mutex<Bus<LibEvt>>,
@@ -97,7 +97,7 @@ impl Library {
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
             tracks,
-            history: RwLock::new(Vec::new()),
+            history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
             bus,
         });
@@ -142,7 +142,7 @@ impl Library {
     }
     pub fn previous(&self) {
         self.player.stop();
-        self.player.track_set(self.history.write().unwrap().pop());
+        self.player.track_set(self.history.lock().unwrap().pop());
         self.play();
     }
 
@@ -162,7 +162,7 @@ impl Library {
 
     pub fn play_track(&self, track: Option<Arc<Track>>) {
         if let Some(track) = self.player.track_get() {
-            self.history.write().unwrap().push(track)
+            self.history.lock().unwrap().push(track)
         }
         self.player.stop();
         self.player.track_set(track);
@@ -245,15 +245,32 @@ impl Library {
     }
 
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
-        let mut tracks = self.tracks.clone();
-
-        for ft in self.filtered_tree.read().unwrap().iter().rev() {
+        let mut ptr: &Vec<Arc<Track>> = &self.tracks;
+        let tree = self.filtered_tree.read().unwrap();
+        for ft in tree.iter().rev() {
             if !ft.tracks.is_empty() {
-                tracks = ft.tracks.clone();
+                ptr = &ft.tracks;
                 break;
             }
         }
-        tracks
+        ptr.clone()
+    }
+
+    pub fn get_queue_sort<T: AsRef<str>>(&self, tagstring: T) -> Vec<Arc<Track>> {
+        let mut result = self.get_queue();
+        sort_by_tag(tagstring, &mut result);
+        result
+    }
+
+    /// Fetch all tags from filtered queue. Will map 1:1 with get_queue()
+    pub fn get_taglist<T: Into<String>>(&self, tagstring: T) -> Vec<String> {
+        get_taglist(tagstring, &self.get_queue())
+    }
+
+    /// Sorts *and* dedupes. Will NOT map 1:1 with get_queue_sort() if there are multiple tracks
+    /// with the same tag value.
+    pub fn get_taglist_sort<T: Into<String>>(&self, tagstring: T) -> Vec<String> {
+        get_taglist(tagstring, &self.get_queue())
     }
 
     pub fn get_receiver(&self) -> BusReader<LibEvt> {
