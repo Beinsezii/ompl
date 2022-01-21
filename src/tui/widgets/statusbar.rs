@@ -31,8 +31,8 @@ impl Widget for StatusBar {
             area.x,
             area.y,
             format!(
-                //   456789 012345678901234
-                "Vol --{:.2}++ | :< # {} >: | {}",
+                //1234567 8901234567890123
+                " -- {:.2} ++ | :< # {} >: | {}",
                 self.volume,
                 if self.playing { "::" } else { "/>" },
                 self.tagstring
@@ -49,12 +49,12 @@ impl ClickableWidget for StatusBar {
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
             if area.intersects(Rect::new(event.column, event.row, 1, 1)) {
                 match event.column {
-                    4..=5 => library.volume_sub(0.05),
-                    10..=11 => library.volume_add(0.05),
-                    15..=16 => library.previous(),
-                    18..=18 => library.stop(),
-                    20..=21 => library.play_pause(),
-                    23..=24 => library.next(),
+                    1..=2 => library.volume_sub(0.05),
+                    9..=10 => library.volume_add(0.05),
+                    14..=15 => library.previous(),
+                    17..=17 => library.stop(),
+                    19..=20 => library.play_pause(),
+                    22..=23 => library.next(),
                     _ => (),
                 }
             }
