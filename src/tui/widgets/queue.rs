@@ -140,8 +140,12 @@ impl ClickableStatefulWidget for Queue {
                 _ => true,
             }
         } else {
-            state.active = false;
-            true
+            if state.active {
+                state.active = false;
+                true
+            } else {
+                false
+            }
         }
     }
 }
