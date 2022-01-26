@@ -11,7 +11,6 @@ use super::track::Track;
 
 use crate::{l1, l2, log, LOG_LEVEL};
 
-const POLL_MS: u64 = 5;
 pub const TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
 
 // ### BG TASKS ### {{{
@@ -29,7 +28,7 @@ fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: Sender<()>) {
             }
         }
 
-        thread::sleep(Duration::from_millis(POLL_MS));
+        thread::sleep(Duration::from_millis(50));
     }
     l2!("Track Ender end");
 }
