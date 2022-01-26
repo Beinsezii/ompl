@@ -113,16 +113,15 @@ impl ClickableStatefulWidget for Queue {
 
             match event.kind {
                 event::MouseEventKind::Down(event::MouseButton::Left) => {
-                    if inner.intersects(point) {
-                        state.position = state.view + event.row as usize - 1 - area.y as usize;
-                        library.play_track(
-                            library
-                                .get_queue_sort(&state.tagstring)
-                                .get(state.position)
-                                .cloned(),
-                        );
+                    let index = state.view + event.row as usize - 1 - area.y as usize;
+                    match library.get_queue_sort(&state.tagstring).get(index) {
+                        Some(track) if inner.intersects(point) => {
+                            state.position = index;
+                            library.play_track(track.clone().into());
+                            false
+                        }
+                        _ => true,
                     }
-                    false
                 }
                 event::MouseEventKind::ScrollDown => {
                     scroll_down(
