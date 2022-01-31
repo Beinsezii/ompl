@@ -437,7 +437,12 @@ impl<T: Backend> UI<T> {
 
     fn lock_view(&mut self, pane: Pane) {
         let (position, height, length, view) = match pane {
-            Pane::Queue => unreachable!(),
+            Pane::Queue => (
+                self.queue_state.position,
+                self.queue_area.height,
+                self.lib_weak.upgrade().unwrap().get_queue().len(),
+                &mut self.queue_state.view,
+            ),
             Pane::Panes(i) => (
                 self.panes[i].index,
                 self.panes[i].rect.height,
