@@ -63,27 +63,25 @@ impl StatefulWidget for Queue {
         block.render(outer, buff);
 
         for (y, i) in (0..area.height).zip(self.items.iter().skip(state.view)) {
-            buff.set_string(
+            buff.set_stringn(
                 area.x,
                 y + area.y,
                 i,
+                area.width.into(),
                 if state.active {
                     if state.position == y as usize + state.view {
-                        self.theme
-                            .active
-                            .patch(self.theme.mod_select)
-                            .patch(self.theme.mod_select_active)
+                        self.theme.active_sel
                     } else {
                         self.theme.active
                     }
                 } else {
                     if state.position == y as usize + state.view {
-                        self.theme.base.patch(self.theme.mod_select)
+                        self.theme.base_sel
                     } else {
                         self.theme.base
                     }
                 },
-            )
+            );
         }
     }
 }
@@ -110,10 +108,13 @@ impl ClickableStatefulWidget for Queue {
 
         if area.intersects(point) {
             state.active = true;
+            let index = state.view
+                + (event.row as usize)
+                    .saturating_sub(1)
+                    .saturating_sub(area.y as usize);
 
             match event.kind {
                 event::MouseEventKind::Down(event::MouseButton::Left) => {
-                    let index = state.view + event.row as usize - 1 - area.y as usize;
                     match library.get_queue_sort(&state.tagstring).get(index) {
                         Some(track) if inner.intersects(point) => {
                             state.position = index;

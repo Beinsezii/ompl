@@ -61,7 +61,7 @@ pub enum LibEvt {
     Pause,
     Stop,
     Volume,
-    Filter,
+    Filter(bool),
 }
 
 pub struct Library {
@@ -181,6 +181,7 @@ impl Library {
         let now = Instant::now();
         let mut cache = true;
         let mut filtered_tree = Vec::<FilteredTracks>::new();
+        let resized = filters.len() == self.filtered_tree.read().unwrap().len();
 
         for (i, f) in filters.into_iter().enumerate() {
             // if filters continuously match existing, don't rebuild.
@@ -214,7 +215,7 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
-        self.bus.lock().unwrap().broadcast(LibEvt::Filter);
+        self.bus.lock().unwrap().broadcast(LibEvt::Filter(!resized));
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
     // # set_filters # }}}
@@ -238,6 +239,18 @@ impl Library {
 
     pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
         self.filtered_tree.read().unwrap().clone()
+    }
+
+    pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
+        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.items.clone())
+    }
+
+    pub fn set_filter_items(&self, pos:usize, items: Vec<String>){
+        let mut filters = self.filtered_tree.read().unwrap().iter().map(|ft| ft.filter.clone()).collect::<Vec<Filter>>();
+        if let Some(f) = filters.get_mut(pos) {
+            f.items = items;
+            self.set_filters(filters)
+        }
     }
 
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
@@ -270,7 +283,7 @@ impl Library {
     /// Sorts *and* dedupes. Will NOT map 1:1 with get_queue_sort() if there are multiple tracks
     /// with the same tag value.
     pub fn get_taglist_sort<T: Into<String>>(&self, tagstring: T) -> Vec<String> {
-        get_taglist(tagstring, &self.get_queue())
+        get_taglist_sort(tagstring, &self.get_queue())
     }
 
     pub fn get_receiver(&self) -> BusReader<LibEvt> {
