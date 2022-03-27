@@ -868,7 +868,10 @@ impl<T: Backend> UI<T> {
                 }
                 self.draw();
             }
-            km_s!('J') => {
+            km_s!('J') | Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::SHIFT,
+            })=> {
                 if !self.queue_state.active {
                     self.panes.scroll_down();
                     self.panes.scroll_by_n_lock(0);
@@ -888,7 +891,10 @@ impl<T: Backend> UI<T> {
                 }
                 self.draw();
             }
-            km_s!('K') => {
+            km_s!('K') | Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::SHIFT,
+            })=> {
                 if !self.queue_state.active {
                     self.panes.scroll_up();
                     self.panes.scroll_by_n_lock(0);

@@ -92,7 +92,7 @@ pub fn scroll_by_n_lock(
 }
 
 /// Assumes there is a 2 character border
-#[warn(deprecated)]
+#[deprecated]
 pub fn scroll_down(position: &mut usize, view: &mut usize, mut height: usize, length: usize) {
     height = height.saturating_sub(2);
     *view = std::cmp::min(*view + height / 2, length.saturating_sub(height));
@@ -100,7 +100,7 @@ pub fn scroll_down(position: &mut usize, view: &mut usize, mut height: usize, le
 }
 
 /// Assumes there is a 2 character border
-#[warn(deprecated)]
+#[deprecated]
 pub fn scroll_up(position: &mut usize, view: &mut usize, mut height: usize) {
     height = height.saturating_sub(2);
     *view = view.saturating_sub(height / 2);
@@ -108,7 +108,7 @@ pub fn scroll_up(position: &mut usize, view: &mut usize, mut height: usize) {
 }
 
 /// Assumes there is a 2 character border
-#[warn(deprecated)]
+#[deprecated]
 pub fn scroll_to(position: usize, view: &mut usize, mut height: usize, length: usize) {
     height = height.saturating_sub(2);
     *view = std::cmp::min(
