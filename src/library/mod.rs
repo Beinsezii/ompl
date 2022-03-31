@@ -69,6 +69,7 @@ pub struct Library {
     history: Mutex<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
+    sort_tagstrings: RwLock<Vec<String>>,
     bus: Mutex<Bus<LibEvt>>,
 }
 
@@ -99,6 +100,7 @@ impl Library {
             tracks,
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
+            sort_tagstrings: RwLock::new(Vec::new()),
             bus,
         });
 
@@ -242,21 +244,40 @@ impl Library {
     }
 
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
-        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.items.clone())
+        self.filtered_tree
+            .read()
+            .unwrap()
+            .get(pos)
+            .map(|f| f.filter.items.clone())
     }
 
-    pub fn set_filter_items(&self, pos:usize, items: Vec<String>){
-        let mut filters = self.filtered_tree.read().unwrap().iter().map(|ft| ft.filter.clone()).collect::<Vec<Filter>>();
+    pub fn set_filter_items(&self, pos: usize, items: Vec<String>) {
+        let mut filters = self
+            .filtered_tree
+            .read()
+            .unwrap()
+            .iter()
+            .map(|ft| ft.filter.clone())
+            .collect::<Vec<Filter>>();
         if let Some(f) = filters.get_mut(pos) {
             f.items = items;
             self.set_filters(filters)
         }
     }
 
+    pub fn set_sort_tagstrings(&self, tagstrings: Vec<String>) {
+        *self.sort_tagstrings.write().unwrap() = tagstrings;
+    }
+
+    pub fn get_sort_tagstrings(&self) -> Vec<String> {
+        self.sort_tagstrings.read().unwrap().clone()
+    }
+
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
         self.tracks.clone()
     }
 
+    /// Will be sorted by sort_tagstrings
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
         let mut ptr: &Vec<Arc<Track>> = &self.tracks;
         let tree = self.filtered_tree.read().unwrap();
@@ -266,12 +287,14 @@ impl Library {
                 break;
             }
         }
-        ptr.clone()
-    }
-
-    pub fn get_queue_sort<T: AsRef<str>>(&self, tagstring: T) -> Vec<Arc<Track>> {
-        let mut result = self.get_queue();
-        sort_by_tag(tagstring, &mut result);
+        let mut result = ptr.clone();
+        result.sort_by(|a, b| {
+            let mut result = std::cmp::Ordering::Equal;
+            for ts in self.sort_tagstrings.read().unwrap().iter() {
+                result = result.then(a.tagstring(ts).cmp(&b.tagstring(ts)))
+            }
+            result
+        });
         result
     }
 

@@ -136,11 +136,15 @@ impl ContainedWidget for FilterTreeView {
         };
         let ft = library.get_filter_tree();
         let count = ft.len();
+        if count == 0 {
+            return;
+        };
         let filters = ft.iter().map(|f| f.filter.clone()).collect::<Vec<Filter>>();
         let data = tree2view(ft, library.get_tracks()).1;
 
         // make sure last one always fills
-        let mut constraints = vec![Constraint::Length(self.area.width/count as u16); count.saturating_sub(1)];
+        let mut constraints =
+            vec![Constraint::Length(self.area.width / count as u16); count.saturating_sub(1)];
         constraints.push(Constraint::Min(1));
 
         for (num, ((area, filter), tracks)) in Layout::default()
@@ -277,7 +281,8 @@ impl Clickable for FilterTreeView {
                     break;
                 } // zone intersects
             }
-        } else { // area intersects
+        } else {
+            // area intersects
             self.active = false
         }
         true

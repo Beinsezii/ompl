@@ -23,9 +23,9 @@ use tui::Terminal;
 mod theme;
 use theme::Theme;
 mod widgets;
-use widgets::{tree2view, FilterTreeView};
+use widgets::ClickableWidget;
+use widgets::{tree2view, FilterTreeView, QueueTable};
 use widgets::{Clickable, ContainedWidget, Scrollable};
-use widgets::{ClickableStatefulWidget, ClickableWidget};
 
 // ### FNs ### {{{
 
@@ -244,30 +244,13 @@ impl DebugBar {
 
 // ## DebugBar ## }}}
 
-// #[derive(Clone, Debug, PartialEq)]
-// struct FilterPane {
-//     tag: String,
-//     items: Vec<String>,
-//     index: usize,
-//     selected: Vec<usize>,
-//     rect: Rect,
-//     view: usize,
-// }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Pane {
-    Queue,
-    Panes(usize),
-}
-
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
     status_bar_area: Rect,
     multi_bar: MultiBar,
     debug_bar: DebugBar,
     panes: FilterTreeView,
-    queue_area: Rect,
-    queue_state: widgets::QueueState,
+    queuetable: QueueTable,
     theme: Theme,
     terminal: Option<Terminal<T>>,
     debug: bool,
@@ -287,8 +270,7 @@ impl<T: Backend> UI<T> {
             multi_bar: MultiBar::default(),
             debug_bar: DebugBar::default(),
             panes: FilterTreeView::new(library.clone()),
-            queue_area: Rect::default(),
-            queue_state: widgets::QueueState::default(),
+            queuetable: QueueTable::new(library.clone()),
             theme,
             terminal: Some(terminal),
             debug,
@@ -301,70 +283,28 @@ impl<T: Backend> UI<T> {
     // ## UI Data FNs ## {{{
 
     fn update_from_library(&mut self) {
-        // let library = match self.lib_weak.upgrade() {
-        //     Some(l) => l,
-        //     None => return,
-        // };
-        // let filter_tree = library.get_filter_tree();
-        // let old_indicies = self
-        //     .panes
-        //     .iter()
-        //     .map(|p| p.1.position)
-        //     .collect::<Vec<usize>>();
-        // let old_views = self.panes.iter().map(|p| p.1.view).collect::<Vec<usize>>();
-        // let height = self.panes.first().map(|p| p.0.height).unwrap_or(0) as usize;
-        // self.panes = filter_tree
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(n, f)| {
-        //         let tracks = if n == 0 {
-        //             library.get_tracks()
-        //         } else {
-        //             filter_tree[n - 1].tracks.clone()
-        //         };
-
-        //         let items = crate::library::get_taglist_sort(&f.filter.tag, &tracks);
-
-        //         let mut fp = widgets::FilterPaneState::default();
-        //         fp.id = n;
-        //         fp.tagstring = f.filter.tag.clone();
-        //         fp.position = min(
-        //             *old_indicies.get(n).unwrap_or(&0),
-        //             items.len().saturating_sub(1),
-        //         );
-        //         fp.selected = items
-        //             .iter()
-        //             .enumerate()
-        //             .filter_map(|(n, i)| {
-        //                 if f.filter.items.contains(i) {
-        //                     Some(n)
-        //                 } else {
-        //                     None
-        //                 }
-        //             })
-        //             .collect();
-        //         (Rect::default(), fp)
-        //     })
-        //     .collect();
-        // let len = library.get_queue().len();
-        // self.queue_state.position = min(self.queue_state.position, len.saturating_sub(1));
-        // self.queue_state.view = min(
-        //     self.queue_state
-        //         .position
-        //         .saturating_sub(self.queue_area.height as usize / 2),
-        //     len.saturating_sub(self.queue_area.height as usize),
-        // );
         if let Some(library) = self.lib_weak.upgrade() {
-            let mut panes = FilterTreeView::new(library);
+            // probably not necessary to create a new one. Could work by having draw() take &mut
+            // self and fix errors.
+            let mut panes = FilterTreeView::new(library.clone());
             std::mem::swap(&mut panes, &mut self.panes);
             self.panes.index = panes
                 .index
                 .min(self.panes.positions.len().saturating_sub(1));
             if self.panes.positions.len() == 0 {
-                self.queue_state.active = true;
+                self.queuetable.active = true;
             } else {
                 self.panes.active = panes.active;
             }
+
+            // ditto
+            let mut queue = QueueTable::new(library.clone());
+            std::mem::swap(&mut queue, &mut self.queuetable);
+            self.queuetable.active = queue.active;
+            self.queuetable.position = queue
+                .position
+                .min(library.get_queue().len().saturating_sub(1));
+
             self.draw();
         }
     }
@@ -395,7 +335,7 @@ impl<T: Backend> UI<T> {
     //         Some(l) => l,
     //         None => return,
     //     };
-    //     if !self.queue_state.active || self.panes.is_empty() {
+    //     if !self.queuetable.active || self.panes.is_empty() {
     //         let tag = self.multi_bar_input("Filter").trim().to_string();
     //         if !tag.is_empty() {
     //             let mut filters = self.rebuild_filters();
@@ -416,7 +356,7 @@ impl<T: Backend> UI<T> {
     //                 self.panes.len().saturating_sub(1),
     //             );
     //         }
-    //         self.queue_state.active = false;
+    //         self.queuetable.active = false;
     //     }
     // }
 
@@ -425,138 +365,20 @@ impl<T: Backend> UI<T> {
     //         Some(l) => l,
     //         None => return,
     //     };
-    //     if !self.queue_state.active {
+    //     if !self.queuetable.active {
     //         if !self.panes.is_empty() {
     //             self.panes.remove(self.panes_index);
     //             self.panes_index = self.panes_index.saturating_sub(1);
     //             library.set_filters(self.rebuild_filters());
     //             self.update_from_library();
     //             if self.panes.is_empty() {
-    //                 self.queue_state.active = true
+    //                 self.queuetable.active = true
     //             }
     //         }
     //     }
     // }
 
-    // fn active_pane_mut(&mut self) -> Option<&mut (Rect, widgets::FilterPaneState)> {
-    //     self.panes.get_mut(self.panes_index)
-    // }
-
     // ## UI Data FNs ## }}}
-
-    // ## UI Layout FNs {{{
-
-    fn lock_view(&mut self, pane: Pane) {
-        let (position, height, length, view) = match pane {
-            Pane::Queue => (
-                self.queue_state.position,
-                self.queue_area.height,
-                self.lib_weak.upgrade().unwrap().get_queue().len(),
-                &mut self.queue_state.view,
-            ),
-            // Pane::Panes(i) => (
-            //     self.panes[i].1.position,
-            //     self.panes[i].0.height,
-            //     crate::library::get_taglist_sort(
-            //         &self.panes[i].1.tagstring,
-            //         &self.lib_weak.upgrade().unwrap().get_filter_tree()[self.panes[i].1.id].tracks,
-            //     )
-            //     .len(),
-            //     &mut self.panes[i].1.view,
-            // ),
-            Pane::Panes(_i) => {
-                self.panes.scroll_by_n_lock(0);
-                return;
-            }
-        };
-
-        widgets::scroll_to(position, view, height.into(), length);
-    }
-
-    // fn scroll_view_down(&mut self, pane: Pane) {
-    //     let (height, len, view) = match pane {
-    //         Pane::Queue => unreachable!(),
-    //         Pane::Panes(i) => (
-    //             self.panes[i].rect.height,
-    //             self.panes[i].items.len(),
-    //             &mut self.panes[i].view,
-    //         ),
-    //     };
-    //     let offset = height.saturating_sub(2) as usize / 2;
-    //     *view = min(
-    //         *view + offset,
-    //         len.saturating_sub(height.saturating_sub(2) as usize),
-    //     );
-
-    //     // Rust doesn't allow mutable references to separate fields at once
-    //     let index = match pane {
-    //         Pane::Queue => unreachable!(),
-    //         Pane::Panes(i) => &mut self.panes[i].index,
-    //     };
-    //     *index = min(*index + offset, len - 1);
-    // }
-
-    // fn scroll_view_up(&mut self, pane: Pane) {
-    //     let (height, index) = match pane {
-    //         Pane::Queue => unreachable!(),
-    //         Pane::Panes(i) => (self.panes[i].rect.height, &mut self.panes[i].index),
-    //     };
-    //     let offset = height.saturating_sub(2) as usize / 2;
-    //     *index = index.saturating_sub(offset);
-
-    //     // Rust doesn't allow mutable references to separate fields at once
-    //     let view = match pane {
-    //         Pane::Queue => unreachable!(),
-    //         Pane::Panes(i) => &mut self.panes[i].view,
-    //     };
-    //     *view = view.saturating_sub(offset);
-    // }
-
-    // fn build_list<'a>(&self, pane: Pane) -> List<'a> {
-    //     let (items, skip, index, active, selected) = match pane {
-    //         Pane::Queue => unreachable!(),
-    //         Pane::Panes(i) => (
-    //             self.panes[i].items.clone(),
-    //             self.panes[i].view,
-    //             self.panes[i].index,
-    //             !self.queue_state.active && i == self.panes_index,
-    //             self.panes[i].selected.clone(),
-    //         ),
-    //     };
-    //     List::new(
-    //         items
-    //             .into_iter()
-    //             .enumerate()
-    //             .skip(skip)
-    //             .map(|(n, i)| {
-    //                 let mut style = if active {
-    //                     if selected.contains(&n) {
-    //                         self.theme.active_hi
-    //                     } else {
-    //                         self.theme.active
-    //                     }
-    //                 } else {
-    //                     if selected.contains(&n) {
-    //                         self.theme.base_hi
-    //                     } else {
-    //                         self.theme.base
-    //                     }
-    //                 };
-    //                 if n == index {
-    //                     style = style.patch(self.theme.mod_select);
-    //                     if active {
-    //                         style = style.patch(self.theme.mod_select_active)
-    //                     }
-    //                 }
-    //                 ListItem::new(text::Span {
-    //                     content: i.into(),
-    //                     style,
-    //                 })
-    //             })
-    //             .collect::<Vec<ListItem>>(),
-    //     )
-    // }
-    // ## UI Layout FNs }}}
 
     // ## draw ## {{{
     fn draw(&mut self) {
@@ -594,12 +416,8 @@ impl<T: Backend> UI<T> {
                 );
                 self.panes.area = zones[3];
                 self.panes.draw(f, self.theme);
-                self.queue_area = zones[4];
-                f.render_stateful_widget(
-                    widgets::Queue::new(&library, self.theme, &self.queue_state.tagstring),
-                    self.queue_area,
-                    &mut self.queue_state,
-                );
+                self.queuetable.area = zones[4];
+                self.queuetable.draw(f, self.theme);
                 let bar_mode = self.multi_bar.mode.clone();
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.mode = bar_mode;
@@ -707,15 +525,15 @@ impl<T: Backend> UI<T> {
         {
             "" => (),
             input => {
-                let (index, items, view) = if self.queue_state.active {
-                    (
-                        &mut self.queue_state.position,
-                        self.lib_weak
-                            .upgrade()
-                            .unwrap()
-                            .get_taglist_sort(&self.queue_state.tagstring),
-                        Pane::Queue,
-                    )
+                let (index, items) = if self.queuetable.active {
+                    return;
+                    // (
+                    //     &mut self.queuetable.position,
+                    //     self.lib_weak
+                    //         .upgrade()
+                    //         .unwrap()
+                    //         .get_taglist_sort(&self.queue_state.tagstring),
+                    // )
                 } else {
                     if let Some(library) = self.lib_weak.upgrade() {
                         let (tags, data) =
@@ -726,7 +544,6 @@ impl<T: Backend> UI<T> {
                                 &tags[self.panes.index],
                                 &data[self.panes.index],
                             ),
-                            Pane::Panes(self.panes.index),
                         )
                     } else {
                         return;
@@ -741,7 +558,7 @@ impl<T: Backend> UI<T> {
                             i.trim().to_ascii_lowercase().contains(&input)
                         } {
                             *index = n;
-                            self.lock_view(view);
+                            // self.lock_view(view);
                             self.draw();
                             return;
                         }
@@ -780,25 +597,20 @@ impl<T: Backend> UI<T> {
                 }
             } else {
                 if let Some(library) = self.lib_weak.upgrade() {
-                    let queue = self.queue_state.active;
+                    let queue = self.queuetable.active;
 
                     if [
                         widgets::StatusBar::process_event(event, self.status_bar_area, &library),
-                        widgets::Queue::process_stateful_event(
-                            event,
-                            self.queue_area,
-                            &library,
-                            &mut self.queue_state,
-                        ),
                         self.panes.process_event(event),
+                        self.queuetable.process_event(event),
                     ]
                     .iter()
                     .any(|r| *r)
                     // if you use || it can early return???
                     {
-                        if !self.queue_state.active && !self.panes.active {
+                        if !self.queuetable.active && !self.panes.active {
                             match queue {
-                                true => self.queue_state.active = true,
+                                true => self.queuetable.active = true,
                                 false => self.panes.active = true,
                             }
                         }
@@ -825,7 +637,7 @@ impl<T: Backend> UI<T> {
             }) => {
                 if self.panes.positions.len() != 0 {
                     self.panes.active = !self.panes.active;
-                    self.queue_state.active = !self.queue_state.active;
+                    self.queuetable.active = !self.queuetable.active;
                 }
                 self.draw();
             }
@@ -834,7 +646,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queue_state.active {
+                if !self.queuetable.active {
                     self.panes.index = self.panes.index.saturating_sub(1);
                     self.draw();
                 }
@@ -844,7 +656,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queue_state.active {
+                if !self.queuetable.active {
                     self.panes.index = min(
                         self.panes.index + 1,
                         library.get_filter_tree().len().saturating_sub(1),
@@ -857,62 +669,60 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_state.active {
-                    self.queue_state.position = min(
-                        self.queue_state.position + 1,
-                        library.get_queue().len().saturating_sub(1),
-                    );
-                    self.lock_view(Pane::Queue);
+                if self.queuetable.active {
+                    self.queuetable.scroll_by_n_lock(1)
                 } else {
                     self.panes.scroll_by_n_lock(1)
                 }
                 self.draw();
             }
-            km_s!('J') | Event::Key(KeyEvent {
+            km_s!('J')
+            | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::SHIFT,
-            })=> {
-                if !self.queue_state.active {
+            }) => {
+                if self.queuetable.active {
+                    self.queuetable.scroll_down();
+                    self.queuetable.scroll_by_n_lock(0);
+                } else {
                     self.panes.scroll_down();
                     self.panes.scroll_by_n_lock(0);
-                    self.draw();
                 }
+                self.draw();
             }
             km!('k')
             | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_state.active {
-                    self.queue_state.position = self.queue_state.position.saturating_sub(1);
-                    self.lock_view(Pane::Queue);
+                if self.queuetable.active {
+                    self.queuetable.scroll_by_n_lock(-1)
                 } else {
                     self.panes.scroll_by_n_lock(-1)
                 }
                 self.draw();
             }
-            km_s!('K') | Event::Key(KeyEvent {
+            km_s!('K')
+            | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::SHIFT,
-            })=> {
-                if !self.queue_state.active {
+            }) => {
+                if self.queuetable.active {
+                    self.queuetable.scroll_up();
+                    self.queuetable.scroll_by_n_lock(0)
+                } else {
                     self.panes.scroll_up();
                     self.panes.scroll_by_n_lock(0);
-                    self.draw();
                 }
+                self.draw();
             }
             km!('f')
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queue_state.active {
-                    library.play_track(
-                        library
-                            .get_queue_sort(&self.queue_state.tagstring)
-                            .get(self.queue_state.position)
-                            .cloned(),
-                    )
+                if self.queuetable.active {
+                    library.play_track(library.get_queue().get(self.queuetable.position).cloned())
                 } else {
                     self.panes.toggle_current()
                 }
@@ -924,18 +734,18 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if !self.queue_state.active {
+                if !self.queuetable.active {
                     self.panes.select_current()
                 }
             }
 
             km!('v') => {
-                if !self.queue_state.active {
+                if !self.queuetable.active {
                     self.panes.invert_selection()
                 }
             }
             km_s!('V') => {
-                if !self.queue_state.active {
+                if !self.queuetable.active {
                     self.panes.deselect_all()
                 }
             }
@@ -982,15 +792,15 @@ impl<T: Backend> UI<T> {
                         MouseButton::Left => match event {
                             ZoneEventType::Search => self.search(),
                             // ZoneEventType::Insert(before) => {
-                            //     if self.queue_state.active {
-                            //         self.queue_state.active = false
+                            //     if self.queuetable.active {
+                            //         self.queuetable.active = false
                             //     } else {
                             //         self.insert_filter(before)
                             //     }
                             // }
                             // ZoneEventType::Delete => {
-                            //     if self.queue_state.active {
-                            //         self.queue_state.active = false
+                            //     if self.queuetable.active {
+                            //         self.queuetable.active = false
                             //     } else {
                             //         self.delete_filter()
                             //     }
