@@ -184,10 +184,10 @@ impl MultiBar {
                 frame.render_widget(Paragraph::new(" | "), self.help_div);
                 frame.render_widget(Paragraph::new("Search"), self.search);
                 frame.render_widget(Paragraph::new(" | "), self.search_div);
-                frame.render_widget(Paragraph::new("Insert Filter"), self.insert);
+                frame.render_widget(Paragraph::new("Insert"), self.insert);
                 frame.render_widget(Paragraph::new("[Before]"), self.insert_before);
                 frame.render_widget(Paragraph::new(" | "), self.insert_div);
-                frame.render_widget(Paragraph::new("Delete Filter"), self.delete);
+                frame.render_widget(Paragraph::new("Delete"), self.delete);
             }
             MBDrawMode::Input {
                 title,
@@ -264,7 +264,7 @@ impl<T: Backend> UI<T> {
         theme: Theme,
         debug: bool,
     ) -> Self {
-        let mut result = Self {
+        Self {
             lib_weak: Arc::downgrade(&library),
             status_bar_area: Rect::default(),
             multi_bar: MultiBar::default(),
@@ -275,13 +275,12 @@ impl<T: Backend> UI<T> {
             terminal: Some(terminal),
             debug,
             draw_count: 0,
-        };
-        result.update_from_library();
-        result
+        }
     }
 
     // ## UI Data FNs ## {{{
 
+    #[deprecated]
     fn update_from_library(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
             // probably not necessary to create a new one. Could work by having draw() take &mut
@@ -309,74 +308,55 @@ impl<T: Backend> UI<T> {
         }
     }
 
-    // fn rebuild_filters(&self) -> Vec<Filter> {
-    //     self.panes
-    //         .iter()
-    //         .map(|p| Filter {
-    //             tag: p.1.tagstring.clone(),
-    //             items: p
-    //                 .1
-    //                 .selected
-    //                 .iter()
-    //                 .map(|s| {
-    //                     crate::library::get_taglist_sort(
-    //                         &p.1.tagstring,
-    //                         &self.lib_weak.upgrade().unwrap().get_filter_tree()[p.1.id].tracks,
-    //                     )
-    //                     .remove(*s)
-    //                 })
-    //                 .collect::<Vec<String>>(),
-    //         })
-    //         .collect::<Vec<Filter>>()
-    // }
+    fn insert(&mut self, before: bool) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
+        if self.queuetable.active && library.filter_count() != 0 {
+            let tag = self.multi_bar_input("Tagstring").trim().to_string();
+            if !tag.is_empty() {
+                library
+                    .insert_sort_tagstring(tag, self.queuetable.index + if before { 0 } else { 1 });
+                self.queuetable.index = min(
+                    self.queuetable.index + if before { 0 } else { 1 },
+                    library.get_sort_tagstrings().len().saturating_sub(1),
+                );
+            }
+        } else {
+            let tag = self.multi_bar_input("Filter").trim().to_string();
+            if !tag.is_empty() {
+                library.insert_filter(
+                    Filter {
+                        tag,
+                        items: Vec::new(),
+                    },
+                    self.panes.index + if before { 0 } else { 1 },
+                );
+                self.update_from_library();
+                self.panes.index = min(
+                    self.panes.index + if before { 0 } else { 1 },
+                    library.filter_count().saturating_sub(1),
+                );
+            }
+            self.queuetable.active = false;
+            self.panes.active = true;
+        }
+    }
 
-    // fn insert_filter(&mut self, before: bool) {
-    //     let library = match self.lib_weak.upgrade() {
-    //         Some(l) => l,
-    //         None => return,
-    //     };
-    //     if !self.queuetable.active || self.panes.is_empty() {
-    //         let tag = self.multi_bar_input("Filter").trim().to_string();
-    //         if !tag.is_empty() {
-    //             let mut filters = self.rebuild_filters();
-    //             filters.insert(
-    //                 min(
-    //                     self.panes_index + if before { 0 } else { 1 },
-    //                     self.panes.len().saturating_sub(if before { 1 } else { 0 }),
-    //                 ),
-    //                 Filter {
-    //                     tag,
-    //                     items: Vec::new(),
-    //                 },
-    //             );
-    //             library.set_filters(filters);
-    //             self.update_from_library();
-    //             self.panes_index = min(
-    //                 self.panes_index + if before { 0 } else { 1 },
-    //                 self.panes.len().saturating_sub(1),
-    //             );
-    //         }
-    //         self.queuetable.active = false;
-    //     }
-    // }
-
-    // fn delete_filter(&mut self) {
-    //     let library = match self.lib_weak.upgrade() {
-    //         Some(l) => l,
-    //         None => return,
-    //     };
-    //     if !self.queuetable.active {
-    //         if !self.panes.is_empty() {
-    //             self.panes.remove(self.panes_index);
-    //             self.panes_index = self.panes_index.saturating_sub(1);
-    //             library.set_filters(self.rebuild_filters());
-    //             self.update_from_library();
-    //             if self.panes.is_empty() {
-    //                 self.queuetable.active = true
-    //             }
-    //         }
-    //     }
-    // }
+    fn delete(&mut self) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
+        if self.queuetable.active {
+            library.remove_sort_tagstring(self.queuetable.index);
+            self.queuetable.index = self.queuetable.index.saturating_sub(1);
+        } else {
+            library.remove_filter(self.panes.index);
+            self.update_from_library();
+        }
+    }
 
     // ## UI Data FNs ## }}}
 
@@ -399,7 +379,7 @@ impl<T: Backend> UI<T> {
                         Constraint::Length(1),
                         Constraint::Length(1),
                         Constraint::Length(if self.debug { 1 } else { 0 }),
-                        Constraint::Length(if self.panes.positions.len() == 0 {
+                        Constraint::Length(if library.filter_count() == 0 {
                             0
                         } else {
                             size.height
@@ -635,7 +615,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.panes.positions.len() != 0 {
+                if library.filter_count() != 0 {
                     self.panes.active = !self.panes.active;
                     self.queuetable.active = !self.queuetable.active;
                 }
@@ -646,7 +626,11 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queuetable.active {
+                if self.queuetable.active {
+                    self.queuetable.index = self.queuetable.index.saturating_sub(1);
+                    self.draw()
+                }
+                {
                     self.panes.index = self.panes.index.saturating_sub(1);
                     self.draw();
                 }
@@ -656,11 +640,13 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if !self.queuetable.active {
-                    self.panes.index = min(
-                        self.panes.index + 1,
-                        library.get_filter_tree().len().saturating_sub(1),
-                    );
+                if self.queuetable.active {
+                    self.queuetable.index = (self.queuetable.index + 1)
+                        .min(library.get_sort_tagstrings().len().saturating_sub(1));
+                    self.draw();
+                } else {
+                    self.panes.index =
+                        (self.panes.index + 1).min(library.filter_count().saturating_sub(1));
                     self.draw();
                 }
             }
@@ -750,25 +736,9 @@ impl<T: Backend> UI<T> {
                 }
             }
 
-            km_s!('D') => {
-                library.set_filters(
-                    library
-                        .get_filter_tree()
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(num, ft)| {
-                            if num == self.panes.index {
-                                None
-                            } else {
-                                Some(ft.filter)
-                            }
-                        })
-                        .collect::<Vec<Filter>>(),
-                );
-                self.panes.index = self.panes.index.saturating_sub(1);
-            }
-            // km!('i') => self.insert_filter(false),
-            // km_s!('I') => self.insert_filter(true),
+            km_s!('D') => self.delete(),
+            km!('i') => self.insert(false),
+            km_s!('I') => self.insert(true),
             km!('?') => self.message("Help", HELP),
             km!('/') => self.search(),
 
@@ -791,23 +761,10 @@ impl<T: Backend> UI<T> {
                     MouseEventKind::Down(button) => match button {
                         MouseButton::Left => match event {
                             ZoneEventType::Search => self.search(),
-                            // ZoneEventType::Insert(before) => {
-                            //     if self.queuetable.active {
-                            //         self.queuetable.active = false
-                            //     } else {
-                            //         self.insert_filter(before)
-                            //     }
-                            // }
-                            // ZoneEventType::Delete => {
-                            //     if self.queuetable.active {
-                            //         self.queuetable.active = false
-                            //     } else {
-                            //         self.delete_filter()
-                            //     }
-                            // }
+                            ZoneEventType::Insert(before) => self.insert(before),
+                            ZoneEventType::Delete => self.delete(),
                             ZoneEventType::Help => self.message("Help", HELP),
                             ZoneEventType::None => (),
-                            _ => (),
                         },
                         MouseButton::Right => (),
                         MouseButton::Middle => (),
@@ -854,6 +811,7 @@ pub fn tui(library: Arc<Library>) {
         Theme::new(Color::Yellow),
         log_level > 0,
     )));
+    ui.lock().unwrap().draw();
 
     let uiw_libevt = Arc::downgrade(&ui);
 
@@ -884,6 +842,7 @@ pub fn tui(library: Arc<Library>) {
                         LibEvt::Play => ui.lock().unwrap().draw(),
                         LibEvt::Pause => ui.lock().unwrap().draw(),
                         LibEvt::Stop => ui.lock().unwrap().draw(),
+                        LibEvt::Sort => ui.lock().unwrap().draw(),
                         LibEvt::Filter(resized) => {
                             if resized {
                                 ui.lock().unwrap().update_from_library()

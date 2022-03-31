@@ -77,15 +77,20 @@ impl ContainedWidget for QueueTable {
                     .map(|(vnum, r)| {
                         Row::new(
                             r.into_iter()
-                                .map(|cell| {
-                                    Cell::from(cell).style(if self.active {
+                                .enumerate()
+                                .map(|(hnum, cell)| {
+                                    Cell::from(cell).style(if self.active && hnum == self.index {
                                         if vnum == self.position {
                                             theme.active_sel
                                         } else {
                                             theme.active
                                         }
                                     } else {
-                                        theme.base
+                                        if vnum == self.position {
+                                            theme.base_sel
+                                        } else {
+                                            theme.base
+                                        }
                                     })
                                 })
                                 .collect::<Vec<Cell>>(),
@@ -97,8 +102,9 @@ impl ContainedWidget for QueueTable {
             .header(
                 Row::new(
                     tags.iter()
-                        .map(|cell| {
-                            Cell::from(cell.clone()).style(if self.active {
+                        .enumerate()
+                        .map(|(hnum, cell)| {
+                            Cell::from(cell.clone()).style(if self.active && hnum == self.index {
                                 theme.active_hi
                             } else {
                                 theme.base_hi

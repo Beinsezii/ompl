@@ -62,6 +62,7 @@ pub enum LibEvt {
     Stop,
     Volume,
     Filter(bool),
+    Sort,
 }
 
 pub struct Library {
@@ -239,8 +240,44 @@ impl Library {
         }
     }
 
+    pub fn filter_count(&self) -> usize {
+        self.filtered_tree.read().unwrap().len()
+    }
+
     pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
         self.filtered_tree.read().unwrap().clone()
+    }
+
+    pub fn get_filtered_tracks(&self, pos: usize) -> Option<FilteredTracks> {
+        self.filtered_tree.read().unwrap().get(pos).cloned()
+    }
+
+    pub fn get_filter(&self, pos: usize) -> Option<Filter> {
+        self.filtered_tree
+            .read()
+            .unwrap()
+            .get(pos)
+            .map(|f| f.filter.clone())
+    }
+
+    pub fn remove_filter(&self, pos: usize) {
+        let mut ft = self.filtered_tree.write().unwrap();
+        if pos < ft.len() {
+            ft.remove(pos);
+        }
+    }
+
+    pub fn insert_filter(&self, filter: Filter, pos: usize) {
+        let mut filters = self
+            .filtered_tree
+            .read()
+            .unwrap()
+            .iter()
+            .map(|ft| ft.filter.clone())
+            .collect::<Vec<Filter>>();
+        let len = filters.len();
+        filters.insert(pos.min(len), filter);
+        self.set_filters(filters);
     }
 
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
@@ -267,10 +304,26 @@ impl Library {
 
     pub fn set_sort_tagstrings(&self, tagstrings: Vec<String>) {
         *self.sort_tagstrings.write().unwrap() = tagstrings;
+        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
     }
 
     pub fn get_sort_tagstrings(&self) -> Vec<String> {
         self.sort_tagstrings.read().unwrap().clone()
+    }
+
+    pub fn insert_sort_tagstring(&self, tagstring: String, pos: usize) {
+        let mut sts = self.sort_tagstrings.write().unwrap();
+        let len = sts.len();
+        sts.insert(pos.min(len), tagstring);
+        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
+    }
+
+    pub fn remove_sort_tagstring(&self, pos: usize) {
+        let mut sts = self.sort_tagstrings.write().unwrap();
+        if pos < sts.len() {
+            sts.remove(pos);
+        }
+        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
     }
 
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {

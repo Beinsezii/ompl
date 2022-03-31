@@ -46,7 +46,7 @@ pub struct FilterTreeView {
 
 impl FilterTreeView {
     pub fn new(library: Arc<Library>) -> Self {
-        let count = library.get_filter_tree().len();
+        let count = library.filter_count();
         Self {
             lib_weak: Arc::downgrade(&library),
             area: Rect::default(),
