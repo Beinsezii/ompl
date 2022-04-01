@@ -316,28 +316,24 @@ impl<T: Backend> UI<T> {
         if self.queuetable.active && library.filter_count() != 0 {
             let tag = self.multi_bar_input("Tagstring").trim().to_string();
             if !tag.is_empty() {
-                library
-                    .insert_sort_tagstring(tag, self.queuetable.index + if before { 0 } else { 1 });
-                self.queuetable.index = min(
-                    self.queuetable.index + if before { 0 } else { 1 },
-                    library.get_sort_tagstrings().len().saturating_sub(1),
-                );
+                let pos = self.queuetable.index + if before { 0 } else { 1 };
+                library.insert_sort_tagstring(tag, pos);
+                self.queuetable.index =
+                    min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
             }
         } else {
             let tag = self.multi_bar_input("Filter").trim().to_string();
             if !tag.is_empty() {
+                self.panes.insert(before);
+                let pos = self.panes.index + if before { 0 } else { 1 };
                 library.insert_filter(
                     Filter {
                         tag,
                         items: Vec::new(),
                     },
-                    self.panes.index + if before { 0 } else { 1 },
+                    pos,
                 );
-                self.update_from_library();
-                self.panes.index = min(
-                    self.panes.index + if before { 0 } else { 1 },
-                    library.filter_count().saturating_sub(1),
-                );
+                self.panes.index = min(pos, library.filter_count().saturating_sub(1));
             }
             self.queuetable.active = false;
             self.panes.active = true;
@@ -351,10 +347,13 @@ impl<T: Backend> UI<T> {
         };
         if self.queuetable.active {
             library.remove_sort_tagstring(self.queuetable.index);
-            self.queuetable.index = self.queuetable.index.saturating_sub(1);
         } else {
+            self.panes.remove();
             library.remove_filter(self.panes.index);
-            self.update_from_library();
+            if library.filter_count() == 0 {
+                self.queuetable.active = true;
+                self.panes.active = false;
+            }
         }
     }
 
@@ -805,6 +804,8 @@ pub fn tui(library: Arc<Library>) {
     )
     .unwrap();
 
+    let libweak_evt = Arc::downgrade(&library);
+
     let ui = Arc::new(Mutex::new(UI::from_library(
         library,
         Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
@@ -838,17 +839,20 @@ pub fn tui(library: Arc<Library>) {
             match libevt_r.recv() {
                 Ok(action) => match uiw_libevt.upgrade() {
                     Some(ui) => match action {
-                        LibEvt::Volume => ui.lock().unwrap().draw(),
-                        LibEvt::Play => ui.lock().unwrap().draw(),
-                        LibEvt::Pause => ui.lock().unwrap().draw(),
-                        LibEvt::Stop => ui.lock().unwrap().draw(),
-                        LibEvt::Sort => ui.lock().unwrap().draw(),
-                        LibEvt::Filter(resized) => {
-                            if resized {
-                                ui.lock().unwrap().update_from_library()
-                            } else {
-                                ui.lock().unwrap().draw()
+                        LibEvt::Volume
+                        | LibEvt::Play
+                        | LibEvt::Pause
+                        | LibEvt::Stop
+                        | LibEvt::Sort => ui.lock().unwrap().draw(),
+                        LibEvt::Filter(_resized) => {
+                            let mut uiw = ui.lock().unwrap();
+                            let i = uiw.panes.index;
+                            for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
+                                uiw.panes.index = x;
+                                uiw.panes.scroll_by_n(0);
                             }
+                            uiw.panes.index = i;
+                            uiw.draw();
                         }
                     },
                     None => break,

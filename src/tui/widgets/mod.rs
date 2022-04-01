@@ -18,7 +18,7 @@ pub trait ClickableWidget: Widget {
 
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw<T: tui::backend::Backend>(&self, frame: &mut tui::terminal::Frame<T>, theme: Theme);
+    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<T>, theme: Theme);
 }
 
 pub trait Clickable {

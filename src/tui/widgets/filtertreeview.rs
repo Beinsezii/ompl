@@ -107,6 +107,21 @@ impl FilterTreeView {
             }
         }
     }
+
+    /// Used when a filter is removed to save positions
+    pub fn remove(&mut self) {
+        if self.index < self.positions.len() {
+            self.positions.remove(self.index);
+            self.views.remove(self.index);
+        }
+    }
+
+    /// Used when a filter is to create new positions
+    pub fn insert(&mut self, before: bool) {
+        let pos = self.index + if before { 0 } else { 1 };
+        self.positions.insert(pos.min(self.positions.len()), 0);
+        self.views.insert(pos.min(self.views.len()), 0);
+    }
 }
 
 // ### struct FilterTreeView }}}
@@ -129,16 +144,24 @@ impl Scrollable for FilterTreeView {
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {
-    fn draw<T: Backend>(&self, frame: &mut Frame<T>, theme: Theme) {
+    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, theme: Theme) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
         };
+
         let ft = library.get_filter_tree();
         let count = ft.len();
+
+        self.index = self.index.min(count.saturating_sub(1));
+
         if count == 0 {
             return;
         };
+
+        // clamp scroll
+        self.scroll_by_n(0);
+
         let filters = ft.iter().map(|f| f.filter.clone()).collect::<Vec<Filter>>();
         let data = tree2view(ft, library.get_tracks()).1;
 

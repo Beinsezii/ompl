@@ -4,6 +4,7 @@ use crate::library::Library;
 use std::sync::{Arc, Weak};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use rodio::Sample;
 use tui::{
     backend::Backend,
     layout::{Constraint, Rect},
@@ -35,20 +36,26 @@ impl QueueTable {
 }
 
 impl ContainedWidget for QueueTable {
-    fn draw<T: Backend>(&self, frame: &mut Frame<T>, theme: Theme) {
+    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, theme: Theme) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
         };
 
+        // clamp scroll
+        self.scroll_by_n(0);
+
         let mut unsort = false;
         let mut tags = library.get_sort_tagstrings();
+
         // if nothing then fetch title since title will always exist
         if tags.is_empty() {
             unsort = true;
             tags.push("title".to_string())
         }
         let count = tags.len();
+
+        self.index = self.index.min(count.saturating_sub(1));
 
         let items = tags
             .iter()
@@ -149,20 +156,38 @@ impl Clickable for QueueTable {
 
         let point = Rect::new(event.column, event.row, 1, 1);
 
+        let prior = self.active;
+
         if self.area.intersects(point) {
             self.active = true;
+
+            #[allow(non_snake_case)]
+            let (zX, zY) = (event.column - self.area.x, event.row - self.area.y);
+            let len = library.get_sort_tagstrings().len();
+            // trust me
+            self.index = (((zX.min(self.area.width.saturating_sub(4)) as f32
+                / self.area.width.saturating_sub(2) as f32)
+                * len as f32) as usize
+                % len.max(1))
+            .min(len.saturating_sub(1));
+
             match event.kind {
-                MouseEventKind::ScrollUp => self.scroll_up(),
-                MouseEventKind::ScrollDown => self.scroll_down(),
-                #[allow(non_snake_case)]
+                MouseEventKind::ScrollUp => {
+                    self.scroll_up();
+                    return true;
+                }
+                MouseEventKind::ScrollDown => {
+                    self.scroll_down();
+                    return true;
+                }
                 MouseEventKind::Down(MouseButton::Left) => {
-                    let (zX, zY) = (event.column - self.area.x, event.row - self.area.y);
                     if zX >= 1 && zX < self.area.width && zY >= 2 && zY < self.area.height {
                         if let Some(track) = library.get_queue().get(zY as usize + self.view - 2) {
                             self.position = zY as usize + self.view - 2;
                             library.play_track(Some(track.clone()))
                         }
                     }
+                    return true;
                 }
                 _ => (),
             }
@@ -170,6 +195,6 @@ impl Clickable for QueueTable {
             self.active = false;
         }
 
-        true
+        prior != self.active
     }
 }

@@ -260,21 +260,25 @@ impl Library {
             .map(|f| f.filter.clone())
     }
 
-    pub fn remove_filter(&self, pos: usize) {
-        let mut ft = self.filtered_tree.write().unwrap();
-        if pos < ft.len() {
-            ft.remove(pos);
-        }
-    }
-
-    pub fn insert_filter(&self, filter: Filter, pos: usize) {
-        let mut filters = self
-            .filtered_tree
+    pub fn get_filters(&self) -> Vec<Filter> {
+        self.filtered_tree
             .read()
             .unwrap()
             .iter()
             .map(|ft| ft.filter.clone())
-            .collect::<Vec<Filter>>();
+            .collect::<Vec<Filter>>()
+    }
+
+    pub fn remove_filter(&self, pos: usize) {
+        let mut filters = self.get_filters();
+        if pos < filters.len() {
+            filters.remove(pos);
+        }
+        self.set_filters(filters);
+    }
+
+    pub fn insert_filter(&self, filter: Filter, pos: usize) {
+        let mut filters = self.get_filters();
         let len = filters.len();
         filters.insert(pos.min(len), filter);
         self.set_filters(filters);
@@ -289,13 +293,7 @@ impl Library {
     }
 
     pub fn set_filter_items(&self, pos: usize, items: Vec<String>) {
-        let mut filters = self
-            .filtered_tree
-            .read()
-            .unwrap()
-            .iter()
-            .map(|ft| ft.filter.clone())
-            .collect::<Vec<Filter>>();
+        let mut filters = self.get_filters();
         if let Some(f) = filters.get_mut(pos) {
             f.items = items;
             self.set_filters(filters)
