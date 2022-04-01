@@ -2,7 +2,7 @@ pub use super::theme::Theme;
 mod statusbar;
 pub use statusbar::StatusBar;
 mod filtertreeview;
-pub use filtertreeview::{FilterTreeView, tree2view};
+pub use filtertreeview::FilterTreeView;
 mod queuetable;
 pub use queuetable::QueueTable;
 

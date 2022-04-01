@@ -1,5 +1,5 @@
 use super::{Clickable, ContainedWidget, Scrollable, Theme};
-use crate::library::{get_taglist_sort, Filter, FilteredTracks, Library, Track};
+use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
 
@@ -10,27 +10,6 @@ use tui::{
     terminal::Frame,
     widgets::{Block, Borders, List, ListItem},
 };
-
-/// converts filteredtracks into a formate usable by the tree view
-/// the data index is offset by -1 according to tagstrings
-/// so the first tagstring will display *all* data rather than first filter level
-/// so on blah blah.
-pub fn tree2view(
-    tree: Vec<FilteredTracks>,
-    tracks: Vec<Arc<Track>>,
-) -> (Vec<String>, Vec<Vec<Arc<Track>>>) {
-    let mut data = vec![tracks];
-    let mut tags = Vec::new();
-
-    for ft in tree.into_iter() {
-        tags.push(ft.filter.tag);
-        data.push(ft.tracks);
-    }
-
-    data.pop();
-
-    (tags, data)
-}
 
 // ### struct FilterTreeView {{{
 
@@ -59,9 +38,9 @@ impl FilterTreeView {
 
     pub fn toggle_current(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = tree2view(library.get_filter_tree(), library.get_tracks());
+            let (tags, data) = library.get_filter_tree_display();
             if let Some(mut fi) = library.get_filter_items(self.index) {
-                let item = get_taglist_sort(&tags[self.index], &data[self.index])
+                let item = get_taglist_sort(&tags[self.index].tag, &data[self.index])
                     .remove(self.positions[self.index] as usize);
 
                 match fi.contains(&item) {
@@ -76,10 +55,10 @@ impl FilterTreeView {
 
     pub fn select_current(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = tree2view(library.get_filter_tree(), library.get_tracks());
+            let (tags, data) = library.get_filter_tree_display();
             library.set_filter_items(
                 self.index,
-                vec![get_taglist_sort(&tags[self.index], &data[self.index])
+                vec![get_taglist_sort(&tags[self.index].tag, &data[self.index])
                     .remove(self.positions[self.index])],
             );
         }
@@ -95,11 +74,11 @@ impl FilterTreeView {
 
     pub fn invert_selection(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = tree2view(library.get_filter_tree(), library.get_tracks());
+            let (tags, data) = library.get_filter_tree_display();
             if let Some(fi) = library.get_filter_items(self.index) {
                 library.set_filter_items(
                     self.index,
-                    get_taglist_sort(&tags[self.index], &data[self.index])
+                    get_taglist_sort(&tags[self.index].tag, &data[self.index])
                         .into_iter()
                         .filter(|i| !fi.contains(i))
                         .collect(),
@@ -130,12 +109,12 @@ impl FilterTreeView {
 impl Scrollable for FilterTreeView {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
         self.lib_weak.upgrade().map(|library| {
-            let (tags, data) = tree2view(library.get_filter_tree(), library.get_tracks());
+            let (tags, data) = library.get_filter_tree_display();
             (
                 &mut self.positions[self.index],
                 &mut self.views[self.index],
                 self.area.height.saturating_sub(2).into(),
-                get_taglist_sort(&tags[self.index], &data[self.index]).len(),
+                get_taglist_sort(&tags[self.index].tag, &data[self.index]).len(),
             )
         })
     }
@@ -150,8 +129,7 @@ impl ContainedWidget for FilterTreeView {
             None => return,
         };
 
-        let ft = library.get_filter_tree();
-        let count = ft.len();
+        let count = library.filter_count();
 
         self.index = self.index.min(count.saturating_sub(1));
 
@@ -162,8 +140,7 @@ impl ContainedWidget for FilterTreeView {
         // clamp scroll
         self.scroll_by_n(0);
 
-        let filters = ft.iter().map(|f| f.filter.clone()).collect::<Vec<Filter>>();
-        let data = tree2view(ft, library.get_tracks()).1;
+        let (filters, data) = library.get_filter_tree_display();
 
         // make sure last one always fills
         let mut constraints =
@@ -238,7 +215,7 @@ impl Clickable for FilterTreeView {
 
         if self.area.intersects(point) {
             self.active = true;
-            let (tags, data) = tree2view(library.get_filter_tree(), library.get_tracks());
+            let (tags, data) = library.get_filter_tree_display();
             for (num, zone) in Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(vec![Constraint::Ratio(1, data.len() as u32); data.len()])
@@ -262,7 +239,7 @@ impl Clickable for FilterTreeView {
                         MouseEventKind::Down(button) => {
                             let (zX, zY) = (event.column - zone.x, event.row - zone.y);
                             // click title
-                            if zX >= 1 && zX <= tags[num].len() as u16 && zY == 0 {
+                            if zX >= 1 && zX <= tags[num].tag.len() as u16 && zY == 0 {
                                 match button {
                                     MouseButton::Left => {
                                         self.invert_selection();
@@ -278,7 +255,7 @@ impl Clickable for FilterTreeView {
                                 && zY > 0
                                 && zY < zone.height - 1
                                 && usize::from(zY)
-                                    < get_taglist_sort(&tags[num], &data[num])
+                                    < get_taglist_sort(&tags[num].tag, &data[num])
                                         .len()
                                         .saturating_sub(self.views[num])
                                         + 1

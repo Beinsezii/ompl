@@ -248,6 +248,20 @@ impl Library {
         self.filtered_tree.read().unwrap().clone()
     }
 
+    pub fn get_filter_tree_display(&self) -> (Vec<Filter>, Vec<Vec<Arc<Track>>>) {
+        let mut data = vec![self.get_tracks()];
+        let mut tags = Vec::new();
+
+        for ft in self.get_filter_tree().into_iter() {
+            tags.push(ft.filter);
+            data.push(ft.tracks);
+        }
+
+        data.pop();
+
+        (tags, data)
+    }
+
     pub fn get_filtered_tracks(&self, pos: usize) -> Option<FilteredTracks> {
         self.filtered_tree.read().unwrap().get(pos).cloned()
     }

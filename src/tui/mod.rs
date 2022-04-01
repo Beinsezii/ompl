@@ -24,7 +24,7 @@ mod theme;
 use theme::Theme;
 mod widgets;
 use widgets::ClickableWidget;
-use widgets::{tree2view, FilterTreeView, QueueTable};
+use widgets::{FilterTreeView, QueueTable};
 use widgets::{Clickable, ContainedWidget, Scrollable};
 
 // ### FNs ### {{{
@@ -516,11 +516,11 @@ impl<T: Backend> UI<T> {
                 } else {
                     if let Some(library) = self.lib_weak.upgrade() {
                         let (tags, data) =
-                            tree2view(library.get_filter_tree(), library.get_tracks());
+                            library.get_filter_tree_display();
                         (
                             &mut self.panes.positions[self.panes.index],
                             crate::library::get_taglist_sort(
-                                &tags[self.panes.index],
+                                &tags[self.panes.index].tag,
                                 &data[self.panes.index],
                             ),
                         )
