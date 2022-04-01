@@ -7,8 +7,6 @@
         * needs some shortcuts like Ctrl-Backspace, Ctrl-C/V
         * maybe "searchable" should be a widget trait...?
 * Scrollables need a g/G shortcut for top/bottom like in Vim
-* Widgets should draw() using &mut self so scrollables can fix view clipping
-    * should be a Scrollable method.
 
 ### MAIN
 * modifiable sort_tagstrings
@@ -23,11 +21,6 @@
     * should be as simple as tui() returning a bool that on true makes server .join()
 
 ### LIBRARY
-* would probably benefit from some extra filter fns besides just "CLONE WHOLE TREE WITH TRACKS AND EVERYTHING" and "REBULD EVERYTHING FROM SCRATCH"
-    * probably at least get_filter(pos), get_filters(), get_[single?]_filtered_tracks(pos). would save cloneing the whole tracklists every time.
-        * get_unfiltered_tracks()??? basically what tree2view() does, purely for display purposes.
-        * maybe also get_filter_count() since that's used a lot. maybe just make all of the above and then count how many times they're used...
-        * might be nice to set one individual filter/update items. idk how useful this is since it'll basically just have to be a frontend to update_filters anyway.
 * should be able to reload
 * should be able to handle songs being removed.
     * could just check if exists before sending to player, and remove() if not. technically would double filesystem calls, but they're infrequent *and* it'll hit the same spot twice for caching purposes. i mean it queries hundreds of files on startup in a second, it should be fine...
