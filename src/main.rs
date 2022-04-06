@@ -158,6 +158,15 @@ pub enum Action {
         #[clap(long)]
         now: bool,
     },
+    Sort {
+        #[clap(
+            long = "sort",
+            short,
+            multiple_occurrences(false),
+            multiple_values(true)
+        )]
+        sort_tagstrings: Vec<String>,
+    },
 }
 
 // ### SHARED }}}
@@ -189,6 +198,14 @@ struct MainArgs {
 
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
     filters: Vec<library::Filter>,
+
+    #[clap(
+        long = "sort",
+        short,
+        multiple_occurrences(false),
+        multiple_values(true)
+    )]
+    sort_tagstrings: Vec<String>,
 
     #[clap(long, short, default_value = "0.5")]
     /// Starting volume
@@ -290,6 +307,9 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     library.next()
                                 }
                             }
+                            Action::Sort { sort_tagstrings } => {
+                                library.set_sort_tagstrings(sort_tagstrings)
+                            }
                         };
                     }
                     Err(e) => {
@@ -318,6 +338,7 @@ fn instance_main(listener: TcpListener, port: u16) {
     l2!("Starting main...");
     let library = Library::new(&main_args.library, Some(main_args.filters));
     library.volume_set(main_args.volume);
+    library.set_sort_tagstrings(main_args.sort_tagstrings);
     if main_args.now {
         library.play()
     }
