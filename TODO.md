@@ -6,11 +6,8 @@
     * A input bar that appears or not like the debug bar
         * needs some shortcuts like Ctrl-Backspace, Ctrl-C/V
         * maybe "searchable" should be a widget trait...?
-* Scrollables need a g/G shortcut for top/bottom like in Vim
 
 ### MAIN
-* modifiable sort_tagstrings
-    * since there's no items, could be one CLI command like --sort=title,artist,album
 * method to print current filters for re-use
     * might need the --filter command to be updated into a single command.
       something like  --filter=album=Alb,Alb2||artist=billy||title
