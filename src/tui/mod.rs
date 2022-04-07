@@ -634,6 +634,25 @@ impl<T: Backend> UI<T> {
                 }
                 self.draw();
             }
+
+            km!('g') => {
+                if self.queuetable.active {
+                    self.queuetable.scroll_by_n_lock(i32::MIN)
+                } else {
+                    self.panes.scroll_by_n(i32::MIN)
+                };
+                self.draw();
+            }
+            km_s!('G') => {
+                if self.queuetable.active {
+                    // i32::max will overflow since it gets added to pos. easy avoidance lol.
+                    self.queuetable.scroll_by_n_lock(i16::MAX.into())
+                } else {
+                    self.panes.scroll_by_n(i16::MAX.into())
+                };
+                self.draw();
+            }
+
             km!('f')
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
