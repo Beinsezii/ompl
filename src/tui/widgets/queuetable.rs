@@ -4,7 +4,6 @@ use crate::library::Library;
 use std::sync::{Arc, Weak};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use rodio::Sample;
 use tui::{
     backend::Backend,
     layout::{Constraint, Rect},
