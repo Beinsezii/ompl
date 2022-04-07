@@ -212,42 +212,10 @@ impl MultiBar {
 
 // ## MultiBar ## }}}
 
-// ## DebugBar ## {{{
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct DebugBar {
-    parent: Rect,
-    draw_count: Rect,
-}
-
-impl DebugBar {
-    pub fn from_rect(rect: Rect) -> Self {
-        let s = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(100), // draw_count
-            ])
-            .split(rect);
-        Self {
-            parent: rect,
-            draw_count: s[0],
-        }
-    }
-    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>, draw_count: u128) {
-        frame.render_widget(
-            Paragraph::new(format!(" Draws {} ", draw_count)),
-            self.draw_count,
-        );
-    }
-}
-
-// ## DebugBar ## }}}
-
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
     status_bar: StatusBar,
     multi_bar: MultiBar,
-    debug_bar: DebugBar,
     panes: FilterTreeView,
     queuetable: QueueTable,
     theme: Theme,
@@ -267,7 +235,6 @@ impl<T: Backend> UI<T> {
             lib_weak: Arc::downgrade(&library),
             status_bar: StatusBar::new(&library, "title"),
             multi_bar: MultiBar::default(),
-            debug_bar: DebugBar::default(),
             panes: FilterTreeView::new(library.clone()),
             queuetable: QueueTable::new(library.clone()),
             theme,
@@ -359,18 +326,26 @@ impl<T: Backend> UI<T> {
                         Constraint::Min(1),
                     ])
                     .split(size);
+
                 self.status_bar.area = zones[0];
                 self.status_bar.draw(f, self.theme);
-                self.panes.area = zones[3];
-                self.panes.draw(f, self.theme);
-                self.queuetable.area = zones[4];
-                self.queuetable.draw(f, self.theme);
+
                 let bar_mode = self.multi_bar.mode.clone();
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.mode = bar_mode;
                 self.multi_bar.draw(f);
-                self.debug_bar = DebugBar::from_rect(zones[2]);
-                self.debug_bar.draw(f, self.draw_count);
+
+                f.render_widget(
+                    Paragraph::new(format!("Draws: {}", self.draw_count)).style(self.theme.base),
+                    zones[2],
+                );
+
+                self.panes.area = zones[3];
+                self.panes.draw(f, self.theme);
+
+                self.queuetable.area = zones[4];
+                self.queuetable.draw(f, self.theme);
+
             })
             .unwrap();
         self.terminal = terminal;
