@@ -6,16 +6,6 @@ pub use filtertreeview::FilterTreeView;
 mod queuetable;
 pub use queuetable::QueueTable;
 
-use tui::widgets::Widget;
-
-pub trait ClickableWidget: Widget {
-    fn process_event<T: AsRef<crate::Library>>(
-        event: crossterm::event::MouseEvent,
-        area: tui::layout::Rect,
-        library: T,
-    ) -> bool;
-}
-
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
     fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<T>, theme: Theme);

@@ -23,9 +23,8 @@ use tui::Terminal;
 mod theme;
 use theme::Theme;
 mod widgets;
-use widgets::ClickableWidget;
-use widgets::{FilterTreeView, QueueTable};
 use widgets::{Clickable, ContainedWidget, Scrollable};
+use widgets::{FilterTreeView, QueueTable, StatusBar};
 
 // ### FNs ### {{{
 
@@ -246,7 +245,7 @@ impl DebugBar {
 
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
-    status_bar_area: Rect,
+    status_bar: StatusBar,
     multi_bar: MultiBar,
     debug_bar: DebugBar,
     panes: FilterTreeView,
@@ -266,7 +265,7 @@ impl<T: Backend> UI<T> {
     ) -> Self {
         Self {
             lib_weak: Arc::downgrade(&library),
-            status_bar_area: Rect::default(),
+            status_bar: StatusBar::new(&library, "title"),
             multi_bar: MultiBar::default(),
             debug_bar: DebugBar::default(),
             panes: FilterTreeView::new(library.clone()),
@@ -279,34 +278,6 @@ impl<T: Backend> UI<T> {
     }
 
     // ## UI Data FNs ## {{{
-
-    #[deprecated]
-    fn update_from_library(&mut self) {
-        if let Some(library) = self.lib_weak.upgrade() {
-            // probably not necessary to create a new one. Could work by having draw() take &mut
-            // self and fix errors.
-            let mut panes = FilterTreeView::new(library.clone());
-            std::mem::swap(&mut panes, &mut self.panes);
-            self.panes.index = panes
-                .index
-                .min(self.panes.positions.len().saturating_sub(1));
-            if self.panes.positions.len() == 0 {
-                self.queuetable.active = true;
-            } else {
-                self.panes.active = panes.active;
-            }
-
-            // ditto
-            let mut queue = QueueTable::new(library.clone());
-            std::mem::swap(&mut queue, &mut self.queuetable);
-            self.queuetable.active = queue.active;
-            self.queuetable.position = queue
-                .position
-                .min(library.get_queue().len().saturating_sub(1));
-
-            self.draw();
-        }
-    }
 
     fn insert(&mut self, before: bool) {
         let library = match self.lib_weak.upgrade() {
@@ -388,11 +359,8 @@ impl<T: Backend> UI<T> {
                         Constraint::Min(1),
                     ])
                     .split(size);
-                self.status_bar_area = zones[0];
-                f.render_widget(
-                    widgets::StatusBar::new(&library, "title"),
-                    self.status_bar_area,
-                );
+                self.status_bar.area = zones[0];
+                self.status_bar.draw(f, self.theme);
                 self.panes.area = zones[3];
                 self.panes.draw(f, self.theme);
                 self.queuetable.area = zones[4];
@@ -515,8 +483,7 @@ impl<T: Backend> UI<T> {
                     // )
                 } else {
                     if let Some(library) = self.lib_weak.upgrade() {
-                        let (tags, data) =
-                            library.get_filter_tree_display();
+                        let (tags, data) = library.get_filter_tree_display();
                         (
                             &mut self.panes.positions[self.panes.index],
                             crate::library::get_taglist_sort(
@@ -575,26 +542,24 @@ impl<T: Backend> UI<T> {
                     ZoneEventType::None
                 }
             } else {
-                if let Some(library) = self.lib_weak.upgrade() {
-                    let queue = self.queuetable.active;
+                let queue = self.queuetable.active;
 
-                    if [
-                        widgets::StatusBar::process_event(event, self.status_bar_area, &library),
-                        self.panes.process_event(event),
-                        self.queuetable.process_event(event),
-                    ]
-                    .iter()
-                    .any(|r| *r)
-                    // if you use || it can early return???
-                    {
-                        if !self.queuetable.active && !self.panes.active {
-                            match queue {
-                                true => self.queuetable.active = true,
-                                false => self.panes.active = true,
-                            }
+                if [
+                    self.status_bar.process_event(event),
+                    self.panes.process_event(event),
+                    self.queuetable.process_event(event),
+                ]
+                .iter()
+                .any(|r| *r)
+                // if you use || it can early return???
+                {
+                    if !self.queuetable.active && !self.panes.active {
+                        match queue {
+                            true => self.queuetable.active = true,
+                            false => self.panes.active = true,
                         }
-                        self.draw()
                     }
+                    self.draw()
                 }
                 ZoneEventType::None
             },

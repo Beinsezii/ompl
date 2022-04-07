@@ -1,53 +1,68 @@
+use super::{Clickable, ContainedWidget};
 use crate::library::Library;
 
-use super::ClickableWidget;
-use crossterm::event;
-use tui::{buffer::Buffer, layout::Rect, widgets::Widget};
+use std::sync::{Arc, Weak};
 
-#[derive(Clone, Debug, PartialEq)]
+use crossterm::event;
+use tui::{layout::Rect, widgets::Paragraph};
+
+#[derive(Clone)]
 pub struct StatusBar {
-    volume: f32,
-    playing: bool,
-    tagstring: String,
+    lib_weak: Weak<Library>,
+    pub tagstring: String,
+    pub area: Rect,
 }
 
 impl StatusBar {
-    pub fn new<T: AsRef<Library>, U: Into<String>>(library: T, tagstring: U) -> Self {
-        let library: &Library = library.as_ref();
+    pub fn new<T: Into<String>>(library: &Arc<Library>, tagstring: T) -> Self {
         Self {
-            volume: library.volume_get(),
-            playing: library.playing(),
-            tagstring: library
-                .track_get()
-                .map(|t| t.tagstring(tagstring))
-                .unwrap_or(String::from("???")),
+            lib_weak: Arc::downgrade(library),
+            tagstring: tagstring.into(),
+            area: Rect::default(),
         }
     }
 }
 
-impl Widget for StatusBar {
-    fn render(self, area: Rect, buff: &mut Buffer) {
-        buff.set_string(
-            area.x,
-            area.y,
-            format!(
+impl ContainedWidget for StatusBar {
+    fn draw<T: tui::backend::Backend>(
+        &mut self,
+        frame: &mut tui::terminal::Frame<T>,
+        theme: super::Theme,
+    ) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
+
+        frame.render_widget(
+            Paragraph::new(format!(
                 //1234567 8901234567890123
                 " -- {:.2} ++ | :< # {} >: | {}",
-                self.volume,
-                if self.playing { "::" } else { "/>" },
-                self.tagstring
-            ),
-            tui::style::Style::default(),
-        )
+                library.volume_get(),
+                if library.playing() { "::" } else { "/>" },
+                library
+                    .track_get()
+                    .map(|t| t.tagstring(&self.tagstring))
+                    .unwrap_or("???".to_string())
+            ))
+            .style(theme.base),
+            self.area,
+        );
     }
 }
 
-impl ClickableWidget for StatusBar {
-    fn process_event<T: AsRef<Library>>(event: event::MouseEvent, area: Rect, library: T) -> bool {
-        let library: &Library = library.as_ref();
+impl Clickable for StatusBar {
+    fn process_event(&mut self, event: event::MouseEvent) -> bool {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return false,
+        };
 
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
-            if area.intersects(Rect::new(event.column, event.row, 1, 1)) {
+            if self
+                .area
+                .intersects(Rect::new(event.column, event.row, 1, 1))
+            {
                 match event.column {
                     1..=2 => library.volume_sub(0.05),
                     9..=10 => library.volume_add(0.05),
