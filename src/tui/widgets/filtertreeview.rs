@@ -1,4 +1,4 @@
-use super::{Clickable, ContainedWidget, Scrollable, Theme};
+use super::{Clickable, ContainedWidget, Scrollable, Searchable, Theme};
 use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
@@ -105,7 +105,8 @@ impl FilterTreeView {
 
 // ### struct FilterTreeView }}}
 
-// ### impl Scrollable ### {{{
+// ### impl Scrollable, Searchable ### {{{
+
 impl Scrollable for FilterTreeView {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
         self.lib_weak.upgrade().map(|library| {
@@ -119,7 +120,20 @@ impl Scrollable for FilterTreeView {
         })
     }
 }
-// ### impl Scrollable ### }}}
+
+impl Searchable for FilterTreeView {
+    fn get_items<'a>(&self) -> Vec<String> {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return Vec::new(),
+        };
+        let (tags, data) = library.get_filter_tree_display();
+        let i = self.index.min(library.filter_count());
+        get_taglist_sort(&tags[i].tag, &data[i])
+    }
+}
+
+// ### impl Scrollable, Searchable ### }}}
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {

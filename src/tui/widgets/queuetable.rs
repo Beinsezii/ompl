@@ -1,4 +1,4 @@
-use super::{Clickable, ContainedWidget, Scrollable, Theme};
+use super::{Clickable, ContainedWidget, Scrollable, Searchable, Theme};
 use crate::library::Library;
 
 use std::sync::{Arc, Weak};
@@ -10,6 +10,8 @@ use tui::{
     terminal::Frame,
     widgets::{Block, Borders, Cell, Row, Table},
 };
+
+// ### struct QueueTable {{{
 
 #[derive(Clone)]
 pub struct QueueTable {
@@ -32,8 +34,37 @@ impl QueueTable {
             view: 0,
         }
     }
+
+    fn get_rows(&self) -> Vec<Vec<String>> {
+        let mut rows = Vec::<Vec<String>>::new();
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return rows,
+        };
+
+        let mut tags = library.get_sort_tagstrings();
+
+        // if nothing then fetch title since title will always exist
+        if tags.is_empty() {
+            tags.push("title".to_string())
+        }
+
+        let items = tags
+            .iter()
+            .map(|t| library.get_taglist(t))
+            .collect::<Vec<Vec<String>>>();
+
+        for x in 0..items[0].len() {
+            rows.push(items.iter().map(|i| i[x].clone()).collect::<Vec<String>>());
+        }
+
+        rows
+    }
 }
 
+// ### struct QueueTable }}}
+
+// ### impl ContainedWidget {{{
 impl ContainedWidget for QueueTable {
     fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, theme: Theme) {
         let library = match self.lib_weak.upgrade() {
@@ -44,32 +75,17 @@ impl ContainedWidget for QueueTable {
         // clamp scroll
         self.scroll_by_n(0);
 
-        let mut unsort = false;
         let mut tags = library.get_sort_tagstrings();
 
-        // if nothing then fetch title since title will always exist
-        if tags.is_empty() {
-            unsort = true;
-            tags.push("title".to_string())
-        }
-        let count = tags.len();
+        let count = tags.len().max(1);
 
         self.index = self.index.min(count.saturating_sub(1));
 
-        let items = tags
-            .iter()
-            .map(|t| library.get_taglist(t))
-            .collect::<Vec<Vec<String>>>();
-
-        // only read for header after this point
-        if unsort {
+        if tags.is_empty() {
             tags = vec!["[unsorted]".to_string()]
         }
 
-        let mut rows = Vec::<Vec<String>>::new();
-        for x in 0..items[0].len() {
-            rows.push(items.iter().map(|i| i[x].clone()).collect::<Vec<String>>());
-        }
+        let rows = self.get_rows();
 
         let width = (self.area.width.saturating_sub(4) / count as u16).saturating_sub(1);
 
@@ -125,6 +141,9 @@ impl ContainedWidget for QueueTable {
         );
     }
 }
+// ### impl ContainedWidget }}}
+
+// ### impl Scrollable, Searchable {{{
 
 impl Scrollable for QueueTable {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
@@ -139,6 +158,18 @@ impl Scrollable for QueueTable {
     }
 }
 
+impl Searchable for QueueTable {
+    fn get_items<'a>(&self) -> Vec<String> {
+        self.get_rows()
+            .into_iter()
+            .map(|v| v[self.index].clone())
+            .collect::<Vec<String>>()
+    }
+}
+
+// ### impl Scrollable, Searchable }}}
+
+// ### impl Clickable {{{
 impl Clickable for QueueTable {
     fn process_event(&mut self, event: MouseEvent) -> bool {
         match event.kind {
@@ -197,3 +228,4 @@ impl Clickable for QueueTable {
         prior != self.active
     }
 }
+// ### impl Clickable }}}

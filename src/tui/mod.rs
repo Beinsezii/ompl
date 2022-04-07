@@ -23,7 +23,7 @@ use tui::Terminal;
 mod theme;
 use theme::Theme;
 mod widgets;
-use widgets::{Clickable, ContainedWidget, Scrollable};
+use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
 use widgets::{FilterTreeView, QueueTable, StatusBar};
 
 // ### FNs ### {{{
@@ -472,44 +472,12 @@ impl<T: Backend> UI<T> {
         {
             "" => (),
             input => {
-                let (index, items) = if self.queuetable.active {
-                    return;
-                    // (
-                    //     &mut self.queuetable.position,
-                    //     self.lib_weak
-                    //         .upgrade()
-                    //         .unwrap()
-                    //         .get_taglist_sort(&self.queue_state.tagstring),
-                    // )
+                if self.queuetable.active {
+                    self.queuetable.find(input);
                 } else {
-                    if let Some(library) = self.lib_weak.upgrade() {
-                        let (tags, data) = library.get_filter_tree_display();
-                        (
-                            &mut self.panes.positions[self.panes.index],
-                            crate::library::get_taglist_sort(
-                                &tags[self.panes.index].tag,
-                                &data[self.panes.index],
-                            ),
-                        )
-                    } else {
-                        return;
-                    }
+                    self.panes.find(input);
                 };
-
-                for x in 0..=1 {
-                    for (n, i) in items.iter().enumerate() {
-                        if if x == 0 {
-                            i.trim().to_ascii_lowercase().starts_with(&input)
-                        } else {
-                            i.trim().to_ascii_lowercase().contains(&input)
-                        } {
-                            *index = n;
-                            // self.lock_view(view);
-                            self.draw();
-                            return;
-                        }
-                    }
-                }
+                self.draw();
             }
         }
     }

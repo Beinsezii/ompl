@@ -48,6 +48,28 @@ pub trait Scrollable {
     }
 }
 
+pub trait Searchable: Scrollable {
+    fn get_items<'a>(&self) -> Vec<String>;
+
+    fn find(&mut self, query: &str) {
+        let items = self.get_items();
+
+        for x in 0..=1 {
+            for (n, i) in items.iter().enumerate() {
+                if if x == 0 {
+                    i.trim().to_ascii_lowercase().starts_with(query)
+                } else {
+                    i.trim().to_ascii_lowercase().contains(query)
+                } {
+                    self.scroll_by_n(i32::MIN);
+                    self.scroll_by_n_lock(n as i32);
+                    return;
+                }
+            }
+        }
+    }
+}
+
 pub fn scroll_by_n(n: i32, position: &mut usize, view: &mut usize, height: usize, length: usize) {
     *position = (n + *position as i32).max(0).min(length as i32 - 1) as usize;
     *view = (n + *view as i32)
