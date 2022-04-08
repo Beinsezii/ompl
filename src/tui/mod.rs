@@ -16,8 +16,8 @@ use crossterm::{
 
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::{Color, Style};
-use tui::widgets::{Block, BorderType, Borders, Paragraph};
+use tui::style::Color;
+use tui::widgets::{Block, Borders, Clear, Paragraph};
 use tui::Terminal;
 
 mod theme;
@@ -115,26 +115,9 @@ struct ZoneEvent {
 
 // ## MultiBar ## {{{
 
-#[derive(Clone, Debug, PartialEq)]
-enum MBDrawMode {
-    Default,
-    Input {
-        title: String,
-        contents: String,
-        style: Style,
-    },
-}
-
-impl Default for MBDrawMode {
-    fn default() -> Self {
-        Self::Default
-    }
-}
-
 #[derive(Clone, Debug, Default, PartialEq)]
 struct MultiBar {
     parent: Rect,
-    mode: MBDrawMode,
     help: Rect,
     help_div: Rect,
     search: Rect,
@@ -165,7 +148,6 @@ impl MultiBar {
             .split(rect);
         Self {
             parent: rect,
-            mode: MBDrawMode::default(),
             help: s[1],
             help_div: s[2],
             search: s[3],
@@ -177,36 +159,14 @@ impl MultiBar {
         }
     }
     pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>) {
-        match &self.mode {
-            MBDrawMode::Default => {
-                frame.render_widget(Paragraph::new("Help"), self.help);
-                frame.render_widget(Paragraph::new(" | "), self.help_div);
-                frame.render_widget(Paragraph::new("Search"), self.search);
-                frame.render_widget(Paragraph::new(" | "), self.search_div);
-                frame.render_widget(Paragraph::new("Insert"), self.insert);
-                frame.render_widget(Paragraph::new("[Before]"), self.insert_before);
-                frame.render_widget(Paragraph::new(" | "), self.insert_div);
-                frame.render_widget(Paragraph::new("Delete"), self.delete);
-            }
-            MBDrawMode::Input {
-                title,
-                contents,
-                style,
-            } => {
-                let rects = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints(vec![
-                        Constraint::Length((title.len() + 3) as u16),
-                        Constraint::Length(0),
-                    ])
-                    .split(self.parent);
-                frame.render_widget(
-                    Paragraph::new(format!(" {}: ", title)).style(*style),
-                    rects[0],
-                );
-                frame.render_widget(Paragraph::new(format!("{}", contents)), rects[1]);
-            }
-        }
+        frame.render_widget(Paragraph::new("Help"), self.help);
+        frame.render_widget(Paragraph::new(" | "), self.help_div);
+        frame.render_widget(Paragraph::new("Search"), self.search);
+        frame.render_widget(Paragraph::new(" | "), self.search_div);
+        frame.render_widget(Paragraph::new("Insert"), self.insert);
+        frame.render_widget(Paragraph::new("[Before]"), self.insert_before);
+        frame.render_widget(Paragraph::new(" | "), self.insert_div);
+        frame.render_widget(Paragraph::new("Delete"), self.delete);
     }
 }
 
@@ -252,7 +212,7 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         if self.queuetable.active && library.filter_count() != 0 {
-            let tag = self.multi_bar_input("Tagstring").trim().to_string();
+            let tag = self.input("Tagstring").trim().to_string();
             if !tag.is_empty() {
                 let pos = self.queuetable.index + if before { 0 } else { 1 };
                 library.insert_sort_tagstring(tag, pos);
@@ -260,7 +220,7 @@ impl<T: Backend> UI<T> {
                     min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
             }
         } else {
-            let tag = self.multi_bar_input("Filter").trim().to_string();
+            let tag = self.input("Filter").trim().to_string();
             if !tag.is_empty() {
                 self.panes.insert(before);
                 let pos = self.panes.index + if before { 0 } else { 1 };
@@ -299,6 +259,10 @@ impl<T: Backend> UI<T> {
 
     // ## draw ## {{{
     fn draw(&mut self) {
+        self.draw_inject(|_| {});
+    }
+
+    fn draw_inject<F: FnOnce(&mut tui::terminal::Frame<T>)>(&mut self, injection: F) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
@@ -330,9 +294,7 @@ impl<T: Backend> UI<T> {
                 self.status_bar.area = zones[0];
                 self.status_bar.draw(f, self.theme);
 
-                let bar_mode = self.multi_bar.mode.clone();
                 self.multi_bar = MultiBar::from_rect(zones[1]);
-                self.multi_bar.mode = bar_mode;
                 self.multi_bar.draw(f);
 
                 f.render_widget(
@@ -346,6 +308,7 @@ impl<T: Backend> UI<T> {
                 self.queuetable.area = zones[4];
                 self.queuetable.draw(f, self.theme);
 
+                injection(f);
             })
             .unwrap();
         self.terminal = terminal;
@@ -355,25 +318,15 @@ impl<T: Backend> UI<T> {
     // ## Popops ## {{{
 
     pub fn message(&mut self, title: &str, message: &str) {
-        let mut terminal = self.terminal.take();
-
-        terminal
-            .as_mut()
-            .unwrap()
-            .draw(|f| {
+        loop {
+            self.draw_inject(|f| {
+                f.render_widget(Clear, f.size());
                 f.render_widget(
-                    Paragraph::new(message).block(
-                        Block::default()
-                            .border_type(BorderType::Plain)
-                            .borders(Borders::ALL)
-                            .title(title),
-                    ),
+                    Paragraph::new(message)
+                        .block(Block::default().borders(Borders::ALL).title(title)),
                     f.size(),
                 )
-            })
-            .unwrap();
-
-        loop {
+            });
             match get_event(None) {
                 Some(Event::Mouse(MouseEvent {
                     kind: MouseEventKind::Moved,
@@ -387,64 +340,69 @@ impl<T: Backend> UI<T> {
                     kind: MouseEventKind::Drag(_),
                     ..
                 })) => (),
+                Some(Event::Resize(..)) => (),
                 _ => break,
             }
         }
-
-        self.terminal = terminal;
         self.draw();
     }
 
-    pub fn multi_bar_input(&mut self, title: &str) -> String {
+    fn input(&mut self, query: &str) -> String {
         let mut result = String::new();
-        self.multi_bar.mode = MBDrawMode::Input {
-            title: title.to_owned(),
-            contents: result.clone(),
-            style: self.theme.active,
-        };
-        self.draw();
-        let esc = loop {
-            if let Some(event) = get_event(None) {
-                match event {
-                    km_c!('c') => break false,
-                    Event::Key(KeyEvent { code, .. }) => match code {
-                        KeyCode::Esc => break true,
-                        KeyCode::Tab => break true,
-                        KeyCode::Enter => break true,
-                        KeyCode::Backspace => drop(result.pop()),
-                        KeyCode::Char(c) => result.push(c),
-                        _ => continue,
-                    },
-                    Event::Mouse(MouseEvent {
-                        kind: MouseEventKind::Down(_),
-                        ..
-                    }) => break false,
-                    _ => continue,
-                }
-                self.multi_bar.mode = MBDrawMode::Input {
-                    title: title.to_owned(),
-                    contents: result.clone(),
-                    style: self.theme.active,
+
+        let submit = 'outer: loop {
+            let style = self.theme.active;
+            self.draw_inject(|f| {
+                let size = f.size();
+                let area = Rect {
+                    x: 0,
+                    y: size.height.saturating_sub(3) / 2,
+                    height: 3,
+                    width: size.width,
                 };
-                self.draw();
-            };
+                f.render_widget(Clear, area);
+                f.render_widget(
+                    Paragraph::new(format!("{}: {}", query, result))
+                        .style(style)
+                        .block(Block::default().borders(Borders::ALL)),
+                    area,
+                );
+            });
+
+            loop {
+                if let Some(event) = get_event(None) {
+                    match event {
+                        km_c!('c') => break 'outer false,
+                        Event::Key(KeyEvent { code, .. }) => match code {
+                            KeyCode::Esc => break 'outer false,
+                            KeyCode::Enter => break 'outer true,
+                            KeyCode::Backspace => drop(result.pop()),
+                            KeyCode::Char(c) => result.push(c),
+                            _ => continue,
+                        },
+                        Event::Mouse(MouseEvent {
+                            kind: MouseEventKind::Down(_),
+                            ..
+                        }) => break 'outer false,
+                        Event::Resize(..) => break,
+                        _ => continue,
+                    }
+                }
+                break;
+            }
         };
-        self.multi_bar.mode = MBDrawMode::Default;
+
         self.draw();
-        if esc {
+
+        if submit {
             result
         } else {
             String::new()
         }
     }
 
-    pub fn search(&mut self) {
-        match self
-            .multi_bar_input("Search")
-            .trim()
-            .to_ascii_lowercase()
-            .as_str()
-        {
+    fn search(&mut self) {
+        match self.input("Search").trim().to_ascii_lowercase().as_str() {
             "" => (),
             input => {
                 if self.queuetable.active {
