@@ -91,6 +91,8 @@ impl ContainedWidget for QueueTable {
 
         let constraints = vec![Constraint::Length(width); count];
 
+        frame.render_widget(Block::default().borders(Borders::ALL), self.area);
+
         frame.render_widget(
             Table::new(
                 rows.into_iter()
@@ -127,17 +129,21 @@ impl ContainedWidget for QueueTable {
                         .enumerate()
                         .map(|(hnum, cell)| {
                             Cell::from(cell.clone()).style(if self.active && hnum == self.index {
-                                theme.active_hi
+                                theme.active
                             } else {
-                                theme.base_hi
+                                theme.base
                             })
                         })
                         .collect::<Vec<Cell>>(),
                 ), // .bottom_margin(1),
             )
-            .widths(&constraints)
-            .block(Block::default().title("Queue").borders(Borders::ALL)),
-            self.area,
+            .widths(&constraints),
+            Rect {
+                x: self.area.x + 1,
+                y: self.area.y,
+                width: self.area.width.saturating_sub(2),
+                height: self.area.height.saturating_sub(1),
+            },
         );
     }
 }
@@ -151,7 +157,7 @@ impl Scrollable for QueueTable {
             (
                 &mut self.position,
                 &mut self.view,
-                self.area.height.saturating_sub(3).into(),
+                self.area.height.saturating_sub(2).into(),
                 library.get_queue().len(),
             )
         })
@@ -211,9 +217,9 @@ impl Clickable for QueueTable {
                     return true;
                 }
                 MouseEventKind::Down(MouseButton::Left) => {
-                    if zX >= 1 && zX < self.area.width && zY >= 2 && zY < self.area.height {
-                        if let Some(track) = library.get_queue().get(zY as usize + self.view - 2) {
-                            self.position = zY as usize + self.view - 2;
+                    if zX >= 1 && zX < self.area.width && zY >= 1 && zY < self.area.height {
+                        if let Some(track) = library.get_queue().get(zY as usize + self.view - 1) {
+                            self.position = zY as usize + self.view - 1;
                             library.play_track(Some(track.clone()))
                         }
                     }
