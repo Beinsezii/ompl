@@ -21,6 +21,7 @@
 * should be able to reload
 * should be able to handle songs being removed.
     * could just check if exists before sending to player, and remove() if not. technically would double filesystem calls, but they're infrequent *and* it'll hit the same spot twice for caching purposes. i mean it queries hundreds of files on startup in a second, it should be fine...
+* should be able to play sequentially instead of always random. Good time to add now that queue sorting exists.
 
 ## Long-term aka unhinged ramblings
 
