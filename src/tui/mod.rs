@@ -3,7 +3,7 @@ use std::io;
 use std::io::Write;
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::library::{Filter, LibEvt, Library};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
@@ -273,6 +273,7 @@ impl<T: Backend> UI<T> {
             .as_mut()
             .unwrap()
             .draw(|f| {
+                let time_headers = Instant::now();
                 let size = f.size();
                 let zones = Layout::default()
                     .direction(Direction::Vertical)
@@ -297,16 +298,31 @@ impl<T: Backend> UI<T> {
                 self.multi_bar = MultiBar::from_rect(zones[1]);
                 self.multi_bar.draw(f);
 
-                f.render_widget(
-                    Paragraph::new(format!("Draws: {}", self.draw_count)).style(self.theme.base),
-                    zones[2],
-                );
+                let time_headers2 = Instant::now();
 
+                let time_panes = Instant::now();
                 self.panes.area = zones[3];
                 self.panes.draw(f, self.theme);
+                let time_panes2 = Instant::now();
 
+                let time_queue = Instant::now();
                 self.queuetable.area = zones[4];
                 self.queuetable.draw(f, self.theme);
+                let time_queue2 = Instant::now();
+
+                if self.debug {
+                    f.render_widget(
+                        Paragraph::new(format!(
+                            "Draws: {} timeH: {:.2}ms timeP: {:.2}ms timeQ: {:.2}ms",
+                            self.draw_count,
+                            (time_headers2 - time_headers).as_secs_f64() * 1000.0,
+                            (time_panes2 - time_panes).as_secs_f64() * 1000.0,
+                            (time_queue2 - time_queue).as_secs_f64() * 1000.0,
+                        ))
+                        .style(self.theme.base),
+                        zones[2],
+                    );
+                }
 
                 injection(f);
             })
@@ -784,7 +800,7 @@ pub fn tui(library: Arc<Library>) {
 
     // lets you read panic messages
     // yes this is the dumbest solution
-    if log_level > 0 {
+    if log_level > 1 {
         std::thread::sleep(std::time::Duration::from_secs(5));
     }
 
