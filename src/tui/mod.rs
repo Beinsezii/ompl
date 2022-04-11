@@ -83,7 +83,7 @@ pub const HELP: &str = &"\
 * g/G scroll to top/bottom
 * f | select item
 * F | select only item
-* v/V | inVert/clear selection
+* v/V | invert/clear selection
 * Tab | change focus
 * i/I | insert after/before
 * D | delete
