@@ -318,13 +318,31 @@ impl<T: Backend> UI<T> {
     // ## Popops ## {{{
 
     pub fn message(&mut self, title: &str, message: &str) {
+        let message = message.trim();
         loop {
+            let style = self.theme.active;
             self.draw_inject(|f| {
-                f.render_widget(Clear, f.size());
+                let size = f.size();
+                let mut height: u16 = 0;
+                let mut width: u16 = 0;
+                for line in message.split('\n') {
+                    height += 1;
+                    width = width.max(line.len() as u16);
+                }
+
+                let area = Rect {
+                    x: size.width.saturating_sub(width + 2) / 2,
+                    y: size.height.saturating_sub(height + 2) / 2,
+                    width: (width + 2).min(size.width),
+                    height: (height + 2).min(size.height),
+                };
+
+                f.render_widget(Clear, area);
                 f.render_widget(
                     Paragraph::new(message)
+                        .style(style)
                         .block(Block::default().borders(Borders::ALL).title(title)),
-                    f.size(),
+                    area,
                 )
             });
             match get_event(None) {
