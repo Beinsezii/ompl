@@ -7,6 +7,7 @@ use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use tui::{
     backend::Backend,
     layout::{Constraint, Rect},
+    layout::{Direction, Layout},
     terminal::Frame,
     widgets::{Block, Borders, Cell, Row, Table},
 };
@@ -87,11 +88,20 @@ impl ContainedWidget for QueueTable {
 
         let rows = self.get_rows();
 
-        let width = (self.area.width.saturating_sub(4) / count as u16).saturating_sub(1);
+        let mut constraints_blocks =
+            vec![Constraint::Length(self.area.width / count as u16); count.saturating_sub(1)];
+        constraints_blocks.push(Constraint::Min(1));
 
-        let constraints = vec![Constraint::Length(width); count];
-
-        frame.render_widget(Block::default().borders(Borders::ALL), self.area);
+        let constraints_table = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(constraints_blocks)
+            .split(self.area)
+            .into_iter()
+            .map(|zone| {
+                frame.render_widget(Block::default().borders(Borders::ALL), zone);
+                Constraint::Length(zone.width.saturating_sub(2))
+            })
+            .collect::<Vec<Constraint>>();
 
         frame.render_widget(
             Table::new(
@@ -137,7 +147,7 @@ impl ContainedWidget for QueueTable {
                         .collect::<Vec<Cell>>(),
                 ), // .bottom_margin(1),
             )
-            .widths(&constraints),
+            .widths(&constraints_table),
             Rect {
                 x: self.area.x + 1,
                 y: self.area.y,
