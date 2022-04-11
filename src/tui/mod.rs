@@ -352,19 +352,31 @@ impl<T: Backend> UI<T> {
 
         let submit = 'outer: loop {
             let style = self.theme.active;
+            let active = self.queuetable.active;
             self.draw_inject(|f| {
                 let size = f.size();
                 let area = Rect {
                     x: 0,
-                    y: size.height.saturating_sub(3) / 2,
+                    y: if active {
+                        size.height.saturating_sub(3)
+                    } else {
+                        // -5 -> headers(2), height(3)
+                        size.height.saturating_sub(5) / 2
+                    },
                     height: 3,
-                    width: size.width,
+                    // +5 -> borders(2), pad(1), ": "(2)
+                    width: ((result.len() + query.len()) as u16 + 5).min(size.width),
                 };
                 f.render_widget(Clear, area);
+                let text = format!("{}: {}", query, result);
                 f.render_widget(
-                    Paragraph::new(format!("{}: {}", query, result))
-                        .style(style)
-                        .block(Block::default().borders(Borders::ALL)),
+                    Paragraph::new(
+                        &text[text
+                            .len()
+                            .saturating_sub(size.width.saturating_sub(2) as usize)..],
+                    )
+                    .style(style)
+                    .block(Block::default().borders(Borders::ALL)),
                     area,
                 );
             });
