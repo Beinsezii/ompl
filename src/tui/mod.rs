@@ -73,21 +73,21 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
-TUI Controls:
-* ? - Show this help
-* Ctrl+c - Exit
-* a - Play/Pause
-* x - Stop
-* n - Next
-* p - Previous
-* v/V - Volume Increase/Decrease
-* h/j/k/l - left/down/up/right
-* f - [De]select active item
-* F - [De]select all
-* Tab - [De]select queue
-* i/I - Insert filter after/before
-* D - Delete Filter
-* / - Search
+* ? | show this help
+* Ctrl+c/q | exit
+* a | play/pause
+* x | stop
+* n/p | next/previous
+* -/+ | volume decrease/increase
+* h/j/k/l | left/down/up/right
+* g/G scroll to top/bottom
+* f | select item
+* F | select only item
+* v/V | inVert/clear selection
+* Tab | change focus
+* i/I | insert after/before
+* D | delete
+* / | search
 ";
 
 // ### UI ### {{{
