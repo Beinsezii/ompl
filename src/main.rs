@@ -159,12 +159,7 @@ pub enum Action {
         now: bool,
     },
     Sort {
-        #[clap(
-            long = "sort",
-            short,
-            multiple_occurrences(false),
-            multiple_values(true)
-        )]
+        #[clap(multiple_occurrences(false), multiple_values(true), required(true))]
         sort_tagstrings: Vec<String>,
     },
 }
