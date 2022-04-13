@@ -92,90 +92,9 @@ pub const HELP: &str = &"\
 
 // ### UI ### {{{
 
-// ## Events ## {{{
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ZoneEventType {
-    Search,
-    Insert(bool),
-    Delete,
-    Help,
-
-    None,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct ZoneEvent {
-    kind: MouseEventKind,
-    mods: KeyModifiers,
-    event: ZoneEventType,
-}
-
-// ## Events ## }}}
-
-// ## MultiBar ## {{{
-
-#[derive(Clone, Debug, Default, PartialEq)]
-struct MultiBar {
-    parent: Rect,
-    help: Rect,
-    help_div: Rect,
-    search: Rect,
-    search_div: Rect,
-    insert: Rect,
-    insert_before: Rect,
-    insert_div: Rect,
-    delete: Rect,
-}
-
-impl MultiBar {
-    pub fn from_rect(rect: Rect) -> Self {
-        let s = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Length(4),  // help
-                Constraint::Length(3),  // help_div
-                Constraint::Length(6),  // search
-                Constraint::Length(3),  // serach_div
-                Constraint::Length(13), // insert
-                Constraint::Length(1),
-                Constraint::Length(8),  // insert_before
-                Constraint::Length(3),  // insert_div
-                Constraint::Length(13), // delete
-                Constraint::Length(0),
-            ])
-            .split(rect);
-        Self {
-            parent: rect,
-            help: s[1],
-            help_div: s[2],
-            search: s[3],
-            search_div: s[4],
-            insert: s[5],
-            insert_before: s[7],
-            insert_div: s[8],
-            delete: s[9],
-        }
-    }
-    pub fn draw<T: Backend>(&self, frame: &mut tui::terminal::Frame<T>) {
-        frame.render_widget(Paragraph::new("Help"), self.help);
-        frame.render_widget(Paragraph::new(" | "), self.help_div);
-        frame.render_widget(Paragraph::new("Search"), self.search);
-        frame.render_widget(Paragraph::new(" | "), self.search_div);
-        frame.render_widget(Paragraph::new("Insert"), self.insert);
-        frame.render_widget(Paragraph::new("[Before]"), self.insert_before);
-        frame.render_widget(Paragraph::new(" | "), self.insert_div);
-        frame.render_widget(Paragraph::new("Delete"), self.delete);
-    }
-}
-
-// ## MultiBar ## }}}
-
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
     status_bar: StatusBar,
-    multi_bar: MultiBar,
     panes: FilterTreeView,
     queuetable: QueueTable,
     theme: Theme,
@@ -194,7 +113,6 @@ impl<T: Backend> UI<T> {
         Self {
             lib_weak: Arc::downgrade(&library),
             status_bar: StatusBar::new(&library, "title"),
-            multi_bar: MultiBar::default(),
             panes: FilterTreeView::new(library.clone()),
             queuetable: QueueTable::new(library.clone()),
             theme,
@@ -295,8 +213,7 @@ impl<T: Backend> UI<T> {
                 self.status_bar.area = zones[0];
                 self.status_bar.draw(f, self.theme);
 
-                self.multi_bar = MultiBar::from_rect(zones[1]);
-                self.multi_bar.draw(f);
+                f.render_widget(Paragraph::new("MenuBar Placeholder"), zones[1]);
 
                 let time_headers2 = Instant::now();
 
@@ -462,57 +379,6 @@ impl<T: Backend> UI<T> {
     }
 
     // ## Popops ## }}}
-
-    // ## convert_event ## {{{
-    fn convert_event(&mut self, event: MouseEvent) -> ZoneEvent {
-        let point = Rect {
-            x: event.column,
-            y: event.row,
-            height: 1,
-            width: 1,
-        };
-        ZoneEvent {
-            kind: event.kind,
-            mods: event.modifiers,
-            event: if self.multi_bar.parent.intersects(point) {
-                if self.multi_bar.help.intersects(point) {
-                    ZoneEventType::Help
-                } else if self.multi_bar.search.intersects(point) {
-                    ZoneEventType::Search
-                } else if self.multi_bar.insert.intersects(point) {
-                    ZoneEventType::Insert(false)
-                } else if self.multi_bar.insert_before.intersects(point) {
-                    ZoneEventType::Insert(true)
-                } else if self.multi_bar.delete.intersects(point) {
-                    ZoneEventType::Delete
-                } else {
-                    ZoneEventType::None
-                }
-            } else {
-                let queue = self.queuetable.active;
-
-                if [
-                    self.status_bar.process_event(event),
-                    self.panes.process_event(event),
-                    self.queuetable.process_event(event),
-                ]
-                .iter()
-                .any(|r| *r)
-                // if you use || it can early return???
-                {
-                    if !self.queuetable.active && !self.panes.active {
-                        match queue {
-                            true => self.queuetable.active = true,
-                            false => self.panes.active = true,
-                        }
-                    }
-                    self.draw()
-                }
-                ZoneEventType::None
-            },
-        }
-    }
-    // ## convert_event ## }}}
 
     // ## process_event ## {{{
     fn process_event(&mut self, event: Event) {
@@ -682,31 +548,27 @@ impl<T: Backend> UI<T> {
             // # Key Events # }}}
 
             // # Mouse Events # {{{
-            Event::Mouse(event) => match self.convert_event(event) {
-                ZoneEvent {
-                    kind,
-                    event,
-                    mods: KeyModifiers::NONE,
-                } => match kind {
-                    MouseEventKind::Down(button) => match button {
-                        MouseButton::Left => match event {
-                            ZoneEventType::Search => self.search(),
-                            ZoneEventType::Insert(before) => self.insert(before),
-                            ZoneEventType::Delete => self.delete(),
-                            ZoneEventType::Help => self.message("Help", HELP),
-                            ZoneEventType::None => (),
-                        },
-                        MouseButton::Right => (),
-                        MouseButton::Middle => (),
-                    },
+            Event::Mouse(event) => {
+                let queue = self.queuetable.active;
 
-                    MouseEventKind::ScrollDown => (),
-                    MouseEventKind::ScrollUp => (),
-
-                    _ => (),
-                },
-                _ => (),
-            },
+                if [
+                    self.status_bar.process_event(event),
+                    self.panes.process_event(event),
+                    self.queuetable.process_event(event),
+                ]
+                .iter()
+                .any(|r| *r)
+                // if you use || it can early return???
+                {
+                    if !self.queuetable.active && !self.panes.active {
+                        match queue {
+                            true => self.queuetable.active = true,
+                            false => self.panes.active = true,
+                        }
+                    }
+                    self.draw()
+                }
+            }
             // # Mouse Events # }}}
             Event::Resize(..) => self.draw(),
             _ => (),
