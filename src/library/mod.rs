@@ -61,12 +61,11 @@ pub enum LibEvt {
     Pause,
     Stop,
     Volume,
-    Filter(bool),
-    Sort,
+    Filter,
 }
 
 pub struct Library {
-    pub tracks: Vec<Arc<Track>>,
+    tracks: RwLock<Vec<Arc<Track>>>,
     history: Mutex<Vec<Arc<Track>>>,
     player: Player,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
@@ -98,7 +97,7 @@ impl Library {
         let (next_s, next_r) = channel::bounded(1);
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
-            tracks,
+            tracks: RwLock::new(tracks),
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
             sort_tagstrings: RwLock::new(Vec::new()),
@@ -184,7 +183,6 @@ impl Library {
         let now = Instant::now();
         let mut cache = true;
         let mut filtered_tree = Vec::<FilteredTracks>::new();
-        let resized = filters.len() == self.filtered_tree.read().unwrap().len();
 
         for (i, f) in filters.into_iter().enumerate() {
             // if filters continuously match existing, don't rebuild.
@@ -197,8 +195,9 @@ impl Library {
                 }
             }
 
+            let itracks = self.tracks.read().unwrap();
             let iter = if i == 0 {
-                self.tracks.iter()
+                itracks.iter()
             } else {
                 filtered_tree[i - 1].tracks.iter()
             };
@@ -218,7 +217,7 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
-        self.bus.lock().unwrap().broadcast(LibEvt::Filter(!resized));
+        self.bus.lock().unwrap().broadcast(LibEvt::Filter);
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
     // # set_filters # }}}
@@ -314,9 +313,23 @@ impl Library {
         }
     }
 
+    fn sort(&self) {
+        self.tracks.write().unwrap().sort_by(|a, b| {
+            let mut result = std::cmp::Ordering::Equal;
+            for ts in self.sort_tagstrings.read().unwrap().iter() {
+                result = result.then(a.tagstring(ts).cmp(&b.tagstring(ts)))
+            }
+            result
+        });
+        // force full filter rebuild without caching.
+        let filters = self.get_filters();
+        *self.filtered_tree.write().unwrap() = vec![];
+        self.set_filters(filters);
+    }
+
     pub fn set_sort_tagstrings(&self, tagstrings: Vec<String>) {
         *self.sort_tagstrings.write().unwrap() = tagstrings;
-        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
+        self.sort();
     }
 
     pub fn get_sort_tagstrings(&self) -> Vec<String> {
@@ -324,27 +337,31 @@ impl Library {
     }
 
     pub fn insert_sort_tagstring(&self, tagstring: String, pos: usize) {
-        let mut sts = self.sort_tagstrings.write().unwrap();
-        let len = sts.len();
-        sts.insert(pos.min(len), tagstring);
-        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
+        {
+            let mut sts = self.sort_tagstrings.write().unwrap();
+            let len = sts.len();
+            sts.insert(pos.min(len), tagstring);
+        }
+        self.sort();
     }
 
     pub fn remove_sort_tagstring(&self, pos: usize) {
-        let mut sts = self.sort_tagstrings.write().unwrap();
-        if pos < sts.len() {
-            sts.remove(pos);
+        {
+            let mut sts = self.sort_tagstrings.write().unwrap();
+            if pos < sts.len() {
+                sts.remove(pos);
+            }
         }
-        self.bus.lock().unwrap().broadcast(LibEvt::Sort);
+        self.sort();
     }
 
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
-        self.tracks.clone()
+        self.tracks.read().unwrap().clone()
     }
 
     /// Will be sorted by sort_tagstrings
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
-        let mut ptr: &Vec<Arc<Track>> = &self.tracks;
+        let mut ptr: &Vec<Arc<Track>> = &self.tracks.write().unwrap();
         let tree = self.filtered_tree.read().unwrap();
         for ft in tree.iter().rev() {
             if !ft.tracks.is_empty() {
@@ -352,15 +369,7 @@ impl Library {
                 break;
             }
         }
-        let mut result = ptr.clone();
-        result.sort_by(|a, b| {
-            let mut result = std::cmp::Ordering::Equal;
-            for ts in self.sort_tagstrings.read().unwrap().iter() {
-                result = result.then(a.tagstring(ts).cmp(&b.tagstring(ts)))
-            }
-            result
-        });
-        result
+        ptr.clone()
     }
 
     /// Fetch all tags from filtered queue. Will map 1:1 with get_queue()

@@ -770,12 +770,10 @@ pub fn tui(library: Arc<Library>) {
             match libevt_r.recv() {
                 Ok(action) => match uiw_libevt.upgrade() {
                     Some(ui) => match action {
-                        LibEvt::Volume
-                        | LibEvt::Play
-                        | LibEvt::Pause
-                        | LibEvt::Stop
-                        | LibEvt::Sort => ui.lock().unwrap().draw(),
-                        LibEvt::Filter(_resized) => {
+                        LibEvt::Volume | LibEvt::Play | LibEvt::Pause | LibEvt::Stop => {
+                            ui.lock().unwrap().draw()
+                        }
+                        LibEvt::Filter => {
                             let mut uiw = ui.lock().unwrap();
                             let i = uiw.panes.index;
                             for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
