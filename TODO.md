@@ -1,17 +1,12 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
-* Merge refactor after MenuBar to begin work on Main/Library stuff.
-    * Once many features land in MenuBar, key shortcuts should be removed in favor of the numeric ones.
-        * Help, maybe insert/delete. Keep '/' for search.
 * Revisit draw logic. Currently draws every click cause of pane/queue buggery.
     * since we already capture active states, we could just check for those changing && events.
     * Would need a special handler for scroll.
 * Input bar CTRL-V/C/Back.
     * Copy/paste should be a feature flag, enabled by default.
 * Stop button should highlight when stopped (not paused),
-QueueTable shouldn't color the blocks,
-FilterTreeView should indicate when nothing selected.
     * Way to color individual cells? Would writing ' ' work?
 
 ### MAIN
