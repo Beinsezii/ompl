@@ -94,7 +94,7 @@ pub const HELP: &str = &"\
 
 #[derive(Clone)]
 enum MAction {
-    Insert,
+    Insert(bool),
     Delete,
     Help,
 }
@@ -123,7 +123,13 @@ impl<T: Backend> UI<T> {
             (
                 String::from("Field"),
                 MTree::Tree(vec![
-                    (String::from("Insert"), MTree::Action(MAction::Insert)),
+                    (
+                        String::from("Insert..."),
+                        MTree::Tree(vec![
+                            (String::from("After"), MTree::Action(MAction::Insert(false))),
+                            (String::from("Before"), MTree::Action(MAction::Insert(true))),
+                        ]),
+                    ),
                     (String::from("Delete"), MTree::Action(MAction::Delete)),
                 ]),
             ),
@@ -639,7 +645,7 @@ impl<T: Backend> UI<T> {
         if let Some(action) = self.menubar.receive() {
             match action {
                 MAction::Help => self.message("Help", HELP),
-                MAction::Insert => self.insert(false),
+                MAction::Insert(b) => self.insert(b),
                 MAction::Delete => self.delete(),
             }
         }
