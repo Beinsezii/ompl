@@ -1,11 +1,18 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
-* Rework multi-bar into two separate widgets
-    * A 'menu' bar that navigates a tree internally using numbers 0-9
-    * A input bar that appears or not like the debug bar
-        * needs some shortcuts like Ctrl-Backspace, Ctrl-C/V
-        * maybe "searchable" should be a widget trait...?
+* Merge refactor after MenuBar to begin work on Main/Library stuff.
+    * Once many features land in MenuBar, key shortcuts should be removed in favor of the numeric ones.
+        * Help, maybe insert/delete. Keep '/' for search.
+* Revisit draw logic. Currently draws every click cause of pane/queue buggery.
+    * since we already capture active states, we could just check for those changing && events.
+    * Would need a special handler for scroll.
+* Input bar CTRL-V/C/Back.
+    * Copy/paste should be a feature flag, enabled by default.
+* Stop button should highlight when stopped (not paused),
+QueueTable shouldn't color the blocks,
+FilterTreeView should indicate when nothing selected.
+    * Way to color individual cells? Would writing ' ' work?
 
 ### MAIN
 * method to print current filters for re-use
@@ -16,6 +23,7 @@
         * if main compiles but the port is occupied, this should be stated in the error message
 * CTRL-Z to close the TUI whilst keeping the daemon open. would be dope to re-open it later but idk how to read key shortcuts without crossterm.
     * should be as simple as tui() returning a bool that on true makes server .join()
+* Logging overhaul. 3rd-party crate?
 
 ### LIBRARY
 * should be able to reload
@@ -26,6 +34,7 @@
 ## Long-term aka unhinged ramblings
 
 ### TUI
+* Investigate separating into default feature flag
 * Could use a method of opening without CLI commands. Handy for Windows specifially.
     * Could just barf filters, library path, and volume into a .json file at the os-appropriate config home, then if ompl is run with no args or --resume it loads the TUI from there.
     * TUI will need a way to set library path from within.
