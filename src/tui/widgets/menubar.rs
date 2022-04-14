@@ -1,7 +1,4 @@
 use super::{Clickable, ContainedWidget};
-use crate::library::Library;
-
-use std::sync::{Arc, Weak};
 
 use crossterm::event;
 use tui::{layout::Rect, widgets::Paragraph};
@@ -14,16 +11,14 @@ pub enum MTree<T> {
 
 #[derive(Clone)]
 pub struct MenuBar<T> {
-    lib_weak: Weak<Library>,
     tree: MTree<T>,
     nav: Vec<usize>,
     pub area: Rect,
 }
 
 impl<T: Clone> MenuBar<T> {
-    pub fn new(library: &Arc<Library>, tree: MTree<T>) -> Self {
+    pub fn new(tree: MTree<T>) -> Self {
         Self {
-            lib_weak: Arc::downgrade(library),
             tree,
             nav: vec![],
             area: Rect::default(),
@@ -99,11 +94,6 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
         frame: &mut tui::terminal::Frame<B>,
         theme: super::Theme,
     ) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
-
         if let Some(tree) = self.nav_to_tree() {
             frame.render_widget(
                 Paragraph::new(
@@ -128,11 +118,6 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
 
 impl<T: Clone> Clickable for MenuBar<T> {
     fn process_event(&mut self, event: event::MouseEvent) -> bool {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return false,
-        };
-
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
             if self
                 .area

@@ -130,7 +130,7 @@ impl<T: Backend> UI<T> {
         ]);
         Self {
             lib_weak: Arc::downgrade(&library),
-            menubar: MenuBar::new(&library, tree),
+            menubar: MenuBar::new(tree),
             status_bar: StatusBar::new(&library, "title"),
             panes: FilterTreeView::new(library.clone()),
             queuetable: QueueTable::new(library.clone()),
