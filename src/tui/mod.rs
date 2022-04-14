@@ -10,7 +10,7 @@ use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 use crossterm::{
     cursor, event,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind},
+    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind},
     queue, terminal,
 };
 
@@ -24,7 +24,7 @@ mod theme;
 use theme::Theme;
 mod widgets;
 use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
-use widgets::{FilterTreeView, QueueTable, StatusBar};
+use widgets::{FilterTreeView, MTree, MenuBar, QueueTable, StatusBar};
 
 // ### FNs ### {{{
 
@@ -92,8 +92,16 @@ pub const HELP: &str = &"\
 
 // ### UI ### {{{
 
+#[derive(Clone)]
+enum MAction {
+    Insert,
+    Delete,
+    Help,
+}
+
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
+    menubar: MenuBar<MAction>,
     status_bar: StatusBar,
     panes: FilterTreeView,
     queuetable: QueueTable,
@@ -110,8 +118,19 @@ impl<T: Backend> UI<T> {
         theme: Theme,
         debug: bool,
     ) -> Self {
+        let tree = MTree::Tree(vec![
+            (String::from("Help"), MTree::Action(MAction::Help)),
+            (
+                String::from("Field"),
+                MTree::Tree(vec![
+                    (String::from("Insert"), MTree::Action(MAction::Insert)),
+                    (String::from("Delete"), MTree::Action(MAction::Delete)),
+                ]),
+            ),
+        ]);
         Self {
             lib_weak: Arc::downgrade(&library),
+            menubar: MenuBar::new(&library, tree),
             status_bar: StatusBar::new(&library, "title"),
             panes: FilterTreeView::new(library.clone()),
             queuetable: QueueTable::new(library.clone()),
@@ -213,7 +232,8 @@ impl<T: Backend> UI<T> {
                 self.status_bar.area = zones[0];
                 self.status_bar.draw(f, self.theme);
 
-                f.render_widget(Paragraph::new("MenuBar Placeholder"), zones[1]);
+                self.menubar.area = zones[1];
+                self.menubar.draw(f, self.theme);
 
                 let time_headers2 = Instant::now();
 
@@ -545,6 +565,48 @@ impl<T: Backend> UI<T> {
             km!('=') => library.volume_add(0.05),
             km!('-') => library.volume_sub(0.05),
 
+            // yay vim macros
+            km!('0') => {
+                self.menubar.up();
+                self.draw();
+            }
+            km!('1') => {
+                self.menubar.down(0);
+                self.draw();
+            }
+            km!('2') => {
+                self.menubar.down(1);
+                self.draw();
+            }
+            km!('3') => {
+                self.menubar.down(2);
+                self.draw();
+            }
+            km!('4') => {
+                self.menubar.down(3);
+                self.draw();
+            }
+            km!('5') => {
+                self.menubar.down(4);
+                self.draw();
+            }
+            km!('6') => {
+                self.menubar.down(5);
+                self.draw();
+            }
+            km!('7') => {
+                self.menubar.down(6);
+                self.draw();
+            }
+            km!('8') => {
+                self.menubar.down(7);
+                self.draw();
+            }
+            km!('9') => {
+                self.menubar.down(8);
+                self.draw();
+            }
+
             // # Key Events # }}}
 
             // # Mouse Events # {{{
@@ -553,6 +615,7 @@ impl<T: Backend> UI<T> {
 
                 if [
                     self.status_bar.process_event(event),
+                    self.menubar.process_event(event),
                     self.panes.process_event(event),
                     self.queuetable.process_event(event),
                 ]
@@ -572,6 +635,13 @@ impl<T: Backend> UI<T> {
             // # Mouse Events # }}}
             Event::Resize(..) => self.draw(),
             _ => (),
+        }
+        if let Some(action) = self.menubar.receive() {
+            match action {
+                MAction::Help => self.message("Help", HELP),
+                MAction::Insert => self.insert(false),
+                MAction::Delete => self.delete(),
+            }
         }
     }
     // ## process_event ## }}}

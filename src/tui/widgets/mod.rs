@@ -1,6 +1,8 @@
 pub use super::theme::Theme;
 mod statusbar;
 pub use statusbar::StatusBar;
+mod menubar;
+pub use menubar::{MenuBar, MTree};
 mod filtertreeview;
 pub use filtertreeview::FilterTreeView;
 mod queuetable;
