@@ -125,7 +125,25 @@ impl<T: Clone> Clickable for MenuBar<T> {
             {
                 match event.column {
                     1..=4 => self.up(),
-                    _ => (),
+                    x => {
+                        if let Some(tree) = self.nav_to_tree() {
+                            // " 0.<- | " == 7
+                            let mut base = 8;
+                            for (num, (string, _)) in tree.iter().enumerate() {
+                                // add 2 for num + '.'
+                                // WARNING won't work if you ever create trees with > 9 items in a
+                                // single level. Won't fix for now as that'd need new event code
+                                // too.
+                                if (base..(base + string.len() + 2)).contains(&x.into()) {
+                                    self.down(num);
+                                    break;
+                                } else {
+                                    // 2 for num + '.', 3 for " | "
+                                    base += string.len() + 5
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
