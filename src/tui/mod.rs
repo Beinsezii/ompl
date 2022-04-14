@@ -73,7 +73,7 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
-* ? | show this help
+* 0-9 | navigate top menu
 * Ctrl+c/q | exit
 * a | play/pause
 * x | stop
@@ -94,9 +94,10 @@ pub const HELP: &str = &"\
 
 #[derive(Clone)]
 enum MAction {
-    Insert(bool),
     Delete,
     Help,
+    Insert(bool),
+    Search,
 }
 
 struct UI<T: Backend> {
@@ -120,15 +121,17 @@ impl<T: Backend> UI<T> {
     ) -> Self {
         let tree = MTree::Tree(vec![
             (String::from("Help"), MTree::Action(MAction::Help)),
+            (String::from("Search"), MTree::Action(MAction::Search)),
             (
                 String::from("Field"),
                 MTree::Tree(vec![
                     (
-                        String::from("Insert..."),
-                        MTree::Tree(vec![
-                            (String::from("After"), MTree::Action(MAction::Insert(false))),
-                            (String::from("Before"), MTree::Action(MAction::Insert(true))),
-                        ]),
+                        String::from("Insesrt After"),
+                        MTree::Action(MAction::Insert(false)),
+                    ),
+                    (
+                        String::from("Insert Before"),
+                        MTree::Action(MAction::Insert(true)),
                     ),
                     (String::from("Delete"), MTree::Action(MAction::Delete)),
                 ]),
@@ -561,7 +564,6 @@ impl<T: Backend> UI<T> {
             km_s!('D') => self.delete(),
             km!('i') => self.insert(false),
             km_s!('I') => self.insert(true),
-            km!('?') => self.message("Help", HELP),
             km!('/') => self.search(),
 
             km!('a') => library.play_pause(),
@@ -644,9 +646,10 @@ impl<T: Backend> UI<T> {
         }
         if let Some(action) = self.menubar.receive() {
             match action {
+                MAction::Delete => self.delete(),
                 MAction::Help => self.message("Help", HELP),
                 MAction::Insert(b) => self.insert(b),
-                MAction::Delete => self.delete(),
+                MAction::Search => self.search(),
             }
         }
     }
