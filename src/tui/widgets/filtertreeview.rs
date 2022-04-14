@@ -203,7 +203,16 @@ impl ContainedWidget for FilterTreeView {
                         .skip(self.views[num])
                         .collect::<Vec<ListItem>>(),
                 )
-                .block(Block::default().title(filter.tag).borders(Borders::ALL)),
+                .block(
+                    Block::default()
+                        .title(filter.tag)
+                        .borders(Borders::ALL)
+                        .style(if self.active && num == self.index {
+                            theme.active
+                        } else {
+                            theme.base
+                        }),
+                ),
                 area,
             )
         }

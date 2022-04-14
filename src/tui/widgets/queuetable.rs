@@ -97,8 +97,19 @@ impl ContainedWidget for QueueTable {
             .constraints(constraints_blocks)
             .split(self.area)
             .into_iter()
-            .map(|zone| {
-                frame.render_widget(Block::default().borders(Borders::ALL), zone);
+            .enumerate()
+            .map(|(num, zone)| {
+                frame.render_widget(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(tags[num].clone())
+                        .style(if self.active && num == self.index {
+                            theme.active
+                        } else {
+                            theme.base
+                        }),
+                    zone,
+                );
                 Constraint::Length(zone.width.saturating_sub(2))
             })
             .collect::<Vec<Constraint>>();
@@ -133,26 +144,12 @@ impl ContainedWidget for QueueTable {
                     .collect::<Vec<Row>>(),
             )
             .column_spacing(2)
-            .header(
-                Row::new(
-                    tags.iter()
-                        .enumerate()
-                        .map(|(hnum, cell)| {
-                            Cell::from(cell.clone()).style(if self.active && hnum == self.index {
-                                theme.active
-                            } else {
-                                theme.base
-                            })
-                        })
-                        .collect::<Vec<Cell>>(),
-                ), // .bottom_margin(1),
-            )
             .widths(&constraints_table),
             Rect {
                 x: self.area.x + 1,
-                y: self.area.y,
+                y: self.area.y + 1,
                 width: self.area.width.saturating_sub(2),
-                height: self.area.height.saturating_sub(1),
+                height: self.area.height.saturating_sub(2),
             },
         );
     }
