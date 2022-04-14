@@ -107,11 +107,11 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
         if let Some(tree) = self.nav_to_tree() {
             frame.render_widget(
                 Paragraph::new(
-                    String::from(" [0] <- | ")
+                    String::from(" 0.<- | ")
                         + &tree
                             .iter()
                             .enumerate()
-                            .map(|(n, t)| format!("[{}] {}", n + 1, t.0))
+                            .map(|(n, t)| format!("{}.{}", n + 1, t.0))
                             .collect::<Vec<String>>()
                             .join(" | "),
                 ),
@@ -139,7 +139,7 @@ impl<T: Clone> Clickable for MenuBar<T> {
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
                 match event.column {
-                    1..=6 => self.up(),
+                    1..=4 => self.up(),
                     _ => (),
                 }
             }
