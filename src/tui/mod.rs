@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::io;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -74,7 +75,8 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
 
 pub const HELP: &str = &"\
 * 0-9 | navigate top menu
-* Ctrl+c/q | exit
+* Ctrl+c/q | exit program
+* Ctrl+z | exit only TUI
 * a | play/pause
 * x | stop
 * n/p | next/previous
@@ -659,7 +661,7 @@ impl<T: Backend> UI<T> {
 // ### UI ### }}}
 
 // ### tui ### {{{
-pub fn tui(library: Arc<Library>) {
+pub fn tui(library: Arc<Library>) -> bool {
     let mut libevt_r = library.get_receiver();
     l2!("Entering interactive terminal...");
     let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
@@ -676,6 +678,7 @@ pub fn tui(library: Arc<Library>) {
     )
     .unwrap();
 
+    let join = Arc::new(AtomicBool::new(false));
     let libweak_evt = Arc::downgrade(&library);
 
     let ui = Arc::new(Mutex::new(UI::from_library(
@@ -692,11 +695,15 @@ pub fn tui(library: Arc<Library>) {
     let egg_tui = egg.clone();
     let egg_evt = egg.clone();
 
+    let join_tui = join.clone();
     thread::spawn(move || {
         let _egg_tui = egg_tui;
         loop {
             if let Some(ev) = get_event(None) {
                 if ev == km_c!('c') || ev == km_c!('q') {
+                    break;
+                } else if ev == km_c!('z') {
+                    join_tui.store(true, Ordering::Relaxed);
                     break;
                 }
                 // process_event will draw for us
@@ -756,5 +763,6 @@ pub fn tui(library: Arc<Library>) {
     terminal::disable_raw_mode().unwrap();
 
     LOG_LEVEL.store(log_level, LOG_ORD);
+    join.load(Ordering::Relaxed)
 }
 // ### tui ### }}}

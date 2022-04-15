@@ -449,7 +449,9 @@ fn instance_main(listener: TcpListener, main_args: MainArgs) {
     if main_args.daemon {
         jh.join().unwrap();
     } else {
-        tui::tui(library);
+        if tui::tui(library) {
+            jh.join().unwrap();
+        }
     }
 }
 
