@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ErrorKind, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -14,6 +14,7 @@ mod tui;
 use library::Library;
 
 const ID: &str = "OMPL SERVER 0.4.0";
+const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
 
@@ -113,12 +114,6 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
 
 // ### SHARED {{{
 
-#[derive(Debug)]
-enum Instance {
-    Main(TcpListener),
-    Sub(TcpStream),
-}
-
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum VolumeCmd {
     Get,
@@ -169,7 +164,17 @@ pub enum Action {
 // ### SERVER ### {{{
 
 #[derive(Parser, Debug, Clone)]
-#[clap(author, about, version, after_help(tui::HELP))]
+#[clap(
+    author,
+    about,
+    version,
+    before_help("OMPL Server Help"),
+    long_about(
+        "Server-exclusive actions are all regular args\n\
+        Server requires the --library or -l flags set\n\
+        Use `ompl --help` to see both client and server helps together"
+    )
+)]
 struct MainArgs {
     #[clap(short, long)]
     /// Path to music libary folder
@@ -188,7 +193,7 @@ struct MainArgs {
     no_media: bool,
 
     /// Port with which to communicate with other OMPL instances
-    #[clap(long, default_value = "18346")]
+    #[clap(long, default_value = PORT)]
     port: u16,
 
     #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
@@ -326,8 +331,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
     l2!("Server exiting");
 }
 
-fn instance_main(listener: TcpListener, port: u16) {
-    let main_args = MainArgs::parse();
+fn instance_main(listener: TcpListener, main_args: MainArgs) {
     LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
     l2!("Starting main...");
@@ -340,7 +344,7 @@ fn instance_main(listener: TcpListener, port: u16) {
 
     let server_library = library.clone();
     let jh = thread::spawn(move || server(listener, server_library));
-    l2!(format!("Listening on port {}", port));
+    l2!(format!("Listening on port {}", main_args.port));
 
     // ## souvlaki ## {{{
     if !main_args.no_media {
@@ -373,7 +377,7 @@ fn instance_main(listener: TcpListener, port: u16) {
         };
 
         match MediaControls::new(PlatformConfig {
-            dbus_name: &format!("ompl.port{}", port),
+            dbus_name: &format!("ompl.port{}", main_args.port),
             display_name: "OMPL",
             hwnd,
         }) {
@@ -454,18 +458,28 @@ fn instance_main(listener: TcpListener, port: u16) {
 // ### CLIENT ### {{{
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-#[clap(author, about, version, after_help(tui::HELP))]
+#[clap(
+    author,
+    about,
+    version,
+    long_about(
+        "Client-exclusive actions are all subcommands\n\
+        Client requires at least one subcommand passed\n\
+        Use `ompl help COMMAND` for more detailed subcommand information\n\
+        Use `ompl --help` to see both client and server helps together"
+    ),
+    before_help("OMPL Client Help")
+)]
 struct SubArgs {
     #[clap(subcommand)]
     action: Action,
 
     /// Port with which to communicate with other OMPL instances
-    #[clap(long, default_value = "18346")]
+    #[clap(long, default_value = PORT)]
     port: u16,
 }
 
-fn instance_sub(mut stream: TcpStream) {
-    let sub_args = SubArgs::parse();
+fn instance_sub(mut stream: TcpStream, sub_args: SubArgs) {
     // confirmation ID
     let mut confirmation = vec![0u8; ID.bytes().count()];
     stream.read_exact(&mut confirmation).unwrap();
@@ -494,34 +508,52 @@ fn instance_sub(mut stream: TcpStream) {
 
 // ### MAIN ### {{{
 fn main() {
-    let mut port = 18346;
-    let mut p = false;
-    for arg in std::env::args() {
-        if p {
-            match arg.parse::<u16>() {
-                Ok(a) => port = a,
-                Err(e) => panic!("Invalid port: {:?}", e),
-            }
-            break;
-        } else {
-            if arg == "--port" {
-                p = true
+    let main_args = MainArgs::try_parse();
+    let sub_args = SubArgs::try_parse();
+
+    match main_args {
+        Ok(margs) => {
+            match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), margs.port)) {
+                Ok(listener) => instance_main(listener, margs),
+                Err(_) => panic!(
+                    "\n\nCouldn't bind server socket to port {}.\n\
+                    Try another port, or perhaps an instance is already running?\n\n",
+                    margs.port
+                ),
             }
         }
-    }
-    let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), port);
-
-    let instance = match TcpListener::bind(socket) {
-        Ok(v) => Instance::Main(v),
-        Err(_) => match TcpStream::connect(socket) {
-            Ok(v) => Instance::Sub(v),
-            Err(_) => panic!("Couldn't bind socket or connect to existing. Try another port?"),
+        Err(m_e) => match sub_args {
+            Ok(sargs) => {
+                match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), sargs.port))
+                {
+                    Ok(stream) => instance_sub(stream, sargs),
+                    Err(_) => panic!(
+                        "\n\nCouldn't connect client socket to port {}.\n\
+                        Are you sure there's an OMPL server running here?\n\n",
+                        sargs.port
+                    ),
+                }
+            }
+            Err(s_e) => {
+                if s_e.kind() == ErrorKind::DisplayHelp && m_e.kind() != ErrorKind::DisplayHelp {
+                    // if using help subcommand don't also print main error
+                    s_e.print().unwrap();
+                } else if s_e.kind() == ErrorKind::DisplayHelp
+                    && m_e.kind() == ErrorKind::DisplayHelp
+                {
+                    // --help or -h
+                    m_e.print().unwrap();
+                    println!();
+                    s_e.print().unwrap();
+                } else {
+                    // dual errors
+                    println!("OMPL Main Error\n");
+                    m_e.print().unwrap();
+                    println!("\nOMPL Client Error\n");
+                    s_e.print().unwrap();
+                }
+            }
         },
-    };
-
-    match instance {
-        Instance::Main(m) => instance_main(m, port),
-        Instance::Sub(s) => instance_sub(s),
     }
 }
 // ### MAIN ### }}}
