@@ -13,9 +13,6 @@
 * method to print current filters for re-use
     * might need the --filter command to be updated into a single command.
       something like  --filter=album=Alb,Alb2||artist=billy||title
-* help should show both client and server help
-    * compile both client and main helps then choose?
-        * if main compiles but the port is occupied, this should be stated in the error message
 * CTRL-Z to close the TUI whilst keeping the daemon open. would be dope to re-open it later but idk how to read key shortcuts without crossterm.
     * should be as simple as tui() returning a bool that on true makes server .join()
 * Logging overhaul. 3rd-party crate?
