@@ -359,9 +359,9 @@ impl Library {
         self.tracks.read().unwrap().clone()
     }
 
-    /// Will be sorted by sort_tagstrings
+    /// Will get from last non-empty FilteredTracks
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
-        let mut ptr: &Vec<Arc<Track>> = &self.tracks.write().unwrap();
+        let mut ptr: &Vec<Arc<Track>> = &self.tracks.read().unwrap();
         let tree = self.filtered_tree.read().unwrap();
         for ft in tree.iter().rev() {
             if !ft.tracks.is_empty() {
