@@ -1,6 +1,9 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
+* MenuBar should differentiate between actions and groups.
+    * Probably make actions "active" style.
+    * Block out back button if at top level?
 * Revisit draw logic. Currently draws every click cause of pane/queue buggery.
     * since we already capture active states, we could just check for those changing && events.
     * Would need a special handler for scroll.
