@@ -97,13 +97,16 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
         if let Some(tree) = self.nav_to_tree() {
             frame.render_widget(
                 Paragraph::new(
-                    String::from(" 0.<- | ")
-                        + &tree
-                            .iter()
-                            .enumerate()
-                            .map(|(n, t)| format!("{}.{}", n + 1, t.0))
-                            .collect::<Vec<String>>()
-                            .join(" | "),
+                    String::from(if !self.nav.is_empty() {
+                        " 0.<- | "
+                    } else {
+                        " "
+                    }) + &tree
+                        .iter()
+                        .enumerate()
+                        .map(|(n, t)| format!("{}.{}", n + 1, t.0))
+                        .collect::<Vec<String>>()
+                        .join(" | "),
                 ),
                 self.area,
             );
@@ -123,7 +126,7 @@ impl<T: Clone> Clickable for MenuBar<T> {
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
-                match event.column {
+                match event.column + if !self.nav.is_empty() { 0 } else { 7 } {
                     1..=4 => self.up(),
                     x => {
                         if let Some(tree) = self.nav_to_tree() {
