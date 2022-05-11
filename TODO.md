@@ -1,11 +1,6 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
-* MenuBar should differentiate between actions and groups.
-    * Probably make actions "active" style.
-    * Block out back button if at top level?
-* Stop button should highlight when stopped (not paused),
-    * Way to color individual cells? Would writing ' ' work?
 * Layout splitting doesn't round properly. Ex: center of 4 panes will be off by 1 compared to 2 queue.
 * Input bar CTRL-V/C/Back.
     * Copy/paste should be a feature flag, enabled by default.
