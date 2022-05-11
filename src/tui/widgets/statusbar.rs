@@ -48,6 +48,16 @@ impl ContainedWidget for StatusBar {
             .style(theme.base),
             self.area,
         );
+        if library.stopped() && self.area.width > 17 {
+            frame.render_widget(
+                Paragraph::new("#").style(theme.base_hi),
+                Rect {
+                    x: self.area.x + 17,
+                    width: 1,
+                    ..self.area
+                },
+            )
+        }
     }
 }
 
