@@ -95,6 +95,7 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
         theme: super::Theme,
     ) {
         if let Some(tree) = self.nav_to_tree() {
+            let mut lens: Vec<usize> = vec![];
             frame.render_widget(
                 Paragraph::new(
                     String::from(if !self.nav.is_empty() {
@@ -104,12 +105,34 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                     }) + &tree
                         .iter()
                         .enumerate()
-                        .map(|(n, t)| format!("{}.{}", n + 1, t.0))
+                        .map(|(n, t)| {
+                            lens.push(t.0.len());
+                            format!("{}.{}", n + 1, t.0)
+                        })
                         .collect::<Vec<String>>()
                         .join(" | "),
                 ),
                 self.area,
             );
+            // change style of number to active if action.
+            for (n, i) in tree.iter().enumerate() {
+                if let MTree::Action(_) = i.1 {
+                    // " | n." == 5
+                    let offset = 5 * n
+                        + lens[..n].iter().sum::<usize>()
+                        + if self.nav.is_empty() { 1 } else { 8 };
+                    if offset + 1 < self.area.width.into() {
+                        frame.render_widget(
+                            Paragraph::new((n + 1).to_string() + ".").style(theme.active),
+                            Rect {
+                                x: offset as u16 + self.area.x,
+                                width: 2,
+                                ..self.area
+                            },
+                        );
+                    }
+                }
+            }
         } else {
             frame.render_widget(
                 Paragraph::new("MenuBar Placeholder").style(theme.base),
