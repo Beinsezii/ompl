@@ -8,6 +8,7 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     terminal::Frame,
+    text::Span,
     widgets::{Block, Borders, List, ListItem},
 };
 
@@ -205,7 +206,20 @@ impl ContainedWidget for FilterTreeView {
                 )
                 .block(
                     Block::default()
-                        .title(filter.tag)
+                        .title(Span::styled(
+                            filter.tag,
+                            if self.active && num == self.index {
+                                match filter.items.is_empty() {
+                                    true => theme.active,
+                                    false => theme.active_hi,
+                                }
+                            } else {
+                                match filter.items.is_empty() {
+                                    true => theme.base,
+                                    false => theme.base_hi,
+                                }
+                            },
+                        ))
                         .borders(Borders::ALL)
                         .style(if self.active && num == self.index {
                             theme.active
