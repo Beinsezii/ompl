@@ -4,7 +4,11 @@ use crate::library::Library;
 use std::sync::{Arc, Weak};
 
 use crossterm::event;
-use tui::{layout::Rect, widgets::Paragraph};
+use tui::{
+    layout::Rect,
+    text::{Span, Spans},
+    widgets::Paragraph,
+};
 
 #[derive(Clone)]
 pub struct StatusBar {
@@ -35,29 +39,27 @@ impl ContainedWidget for StatusBar {
         };
 
         frame.render_widget(
-            Paragraph::new(format!(
-                //1234567 8901234567890123
-                " -- {:.2} ++ | :< # {} >: | {}",
-                library.volume_get(),
-                if library.playing() { "::" } else { "/>" },
-                library
-                    .track_get()
-                    .map(|t| t.tagstring(&self.tagstring))
-                    .unwrap_or("???".to_string())
-            ))
-            .style(theme.base),
+            Paragraph::new(Spans::from(vec![
+                Span::from(format!(" -- {:.2} ++ | :< ", library.volume_get())),
+                Span::styled(
+                    "#",
+                    if library.stopped() {
+                        theme.base_hi
+                    } else {
+                        theme.base
+                    },
+                ),
+                Span::from(format!(
+                    " {} >: | {}",
+                    if library.playing() { "::" } else { "/>" },
+                    library
+                        .track_get()
+                        .map(|t| t.tagstring(&self.tagstring))
+                        .unwrap_or("???".to_string())
+                )),
+            ])),
             self.area,
         );
-        if library.stopped() && self.area.width > 17 {
-            frame.render_widget(
-                Paragraph::new("#").style(theme.base_hi),
-                Rect {
-                    x: self.area.x + 17,
-                    width: 1,
-                    ..self.area
-                },
-            )
-        }
     }
 }
 
@@ -73,6 +75,8 @@ impl Clickable for StatusBar {
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
+                // 123456789 1234567890123
+                // -- 0.12 ++ | :< # /> >: |
                 match event.column {
                     1..=2 => library.volume_sub(0.05),
                     9..=10 => library.volume_add(0.05),
