@@ -100,7 +100,10 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
     tracks
 }
 
-pub fn get_taglist<T: Into<String>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
+pub fn get_taglist<T: Into<String>, U: Deref<Target = Track>>(
+    tagstring: T,
+    tracks: &Vec<U>,
+) -> Vec<String> {
     let tagstring = tagstring.into();
     tracks
         .iter()
@@ -108,7 +111,10 @@ pub fn get_taglist<T: Into<String>, U: Deref<Target = Track>>(tagstring: T, trac
         .collect::<Vec<String>>()
 }
 
-pub fn get_taglist_sort<T: Into<String>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
+pub fn get_taglist_sort<T: Into<String>, U: Deref<Target = Track>>(
+    tagstring: T,
+    tracks: &Vec<U>,
+) -> Vec<String> {
     let mut result = get_taglist(tagstring, tracks);
     result.sort();
     result.dedup();

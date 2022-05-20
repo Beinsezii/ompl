@@ -181,7 +181,7 @@ impl Library {
                 drop(tracks);
                 self.next();
                 self.force_build_filters();
-                return
+                return;
             }
         }
 
@@ -262,6 +262,24 @@ impl Library {
                 }
             },
         }
+    }
+
+    pub fn append_library<T: AsRef<Path>>(&self, path: T) {
+        let mut new_tracks: Vec<Track> = get_tracks(path);
+
+        new_tracks
+            .par_iter_mut()
+            .for_each(|track| track.load_meta());
+
+        let mut tracks = self.tracks.write().unwrap();
+        new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| {
+            if !tracks.contains(&t) {
+                tracks.push(t)
+            }
+        });
+        drop(tracks);
+
+        self.sort();
     }
 
     pub fn filter_count(&self) -> usize {

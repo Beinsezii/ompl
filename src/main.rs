@@ -157,6 +157,9 @@ pub enum Action {
         #[clap(multiple_occurrences(false), multiple_values(true), required(true))]
         sort_tagstrings: Vec<String>,
     },
+    Append {
+        path: PathBuf,
+    },
 }
 
 // ### SHARED }}}
@@ -310,6 +313,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::Sort { sort_tagstrings } => {
                                 library.set_sort_tagstrings(sort_tagstrings)
                             }
+                            Action::Append { path } => library.append_library(path),
                         };
                     }
                     Err(e) => {

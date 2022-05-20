@@ -1,6 +1,7 @@
 use std::cmp::min;
 use std::io;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::thread;
@@ -100,6 +101,7 @@ enum MAction {
     Help,
     Insert(bool),
     Search,
+    Append,
 }
 
 struct UI<T: Backend> {
@@ -137,6 +139,13 @@ impl<T: Backend> UI<T> {
                     ),
                     (String::from("Delete"), MTree::Action(MAction::Delete)),
                 ]),
+            ),
+            (
+                String::from("Library"),
+                MTree::Tree(vec![(
+                    String::from("Append"),
+                    MTree::Action(MAction::Append),
+                )]),
             ),
         ]);
         Self {
@@ -652,6 +661,11 @@ impl<T: Backend> UI<T> {
                 MAction::Help => self.message("Help", HELP),
                 MAction::Insert(b) => self.insert(b),
                 MAction::Search => self.search(),
+                MAction::Append => {
+                    if let Some(library) = self.lib_weak.upgrade() {
+                        library.append_library(PathBuf::from(self.input("Path")));
+                    }
+                }
             }
         }
     }
