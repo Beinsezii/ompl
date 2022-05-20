@@ -77,33 +77,21 @@ pub struct Library {
 impl Library {
     // # new # {{{
     pub fn new<T: AsRef<Path>>(path: T, initial_filters: Option<Vec<Filter>>) -> Arc<Self> {
-        l2!("Constructing library...");
         let lib_now = Instant::now();
-        let mut tracks: Vec<Track> = get_tracks(path);
 
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
-
-        l2!("Fetching metadata...");
-        let met_now = Instant::now();
-        // rayon cuts this down by about 3x on my 4-core machine.
-        // *should* be good enough for most cases. Assuming you have a recent computer, it'd take
-        // no more than a couple secs for a 10,000 track library. Could probably be optimized
-        // further using a unique solution a la my gimp plugin PixelBuster v2.
-        // Also, WalkDir hits pretty hard. Accounts for 1/3 of runtime after rayon.
-        tracks.par_iter_mut().for_each(|track| track.load_meta());
-        l1!(format!("Metadata loaded in {:?}", Instant::now() - met_now));
-
-        let tracks: Vec<Arc<Track>> = tracks.into_iter().map(|t| Arc::new(t)).collect();
 
         let (next_s, next_r) = channel::bounded(1);
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
-            tracks: RwLock::new(tracks),
+            tracks: RwLock::new(Vec::new()),
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
             sort_tagstrings: RwLock::new(Vec::new()),
             bus,
         });
+
+        result.append_library(path);
 
         if let Some(f) = initial_filters {
             result.set_filters(f)
