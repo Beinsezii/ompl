@@ -17,7 +17,7 @@ rayon = "1"
 rodio = "0.15"
 serde = { version = "1", features = ["derive"] }
 souvlaki = "0.5"
-tui = { version = "0.17", default-features = false, features = ['crossterm'] }
+tui = { version = "0.18", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 
 [dev-dependencies]
