@@ -731,6 +731,10 @@ pub fn tui(library: Arc<Library>) -> bool {
                             uiw.panes.index = i;
                             uiw.draw();
                         }
+                        LibEvt::Error(message) => {
+                            let mut uiw = ui.lock().unwrap();
+                            uiw.message("Library Error", &message)
+                        }
                     },
                     None => break,
                 },

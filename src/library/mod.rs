@@ -55,13 +55,14 @@ fn track_nexter(library: Arc<Library>, next_r: Receiver<()>) {
 
 // ### FNs ### }}}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum LibEvt {
     Play,
     Pause,
     Stop,
     Volume,
     Filter,
+    Error(String),
 }
 
 pub struct Library {
@@ -163,9 +164,27 @@ impl Library {
     }
 
     pub fn play_track(&self, track: Option<Arc<Track>>) {
-        if let Some(track) = self.player.track_get() {
-            self.history.lock().unwrap().push(track)
+        if let Some(prev_track) = self.player.track_get() {
+            self.history.lock().unwrap().push(prev_track)
         }
+        if let Some(track) = track.as_ref() {
+            if !track.path().exists() {
+                self.bus.lock().unwrap().broadcast(LibEvt::Error(format!(
+                    "Track no longer found at {}\nRemoving from library",
+                    track.path().to_str().unwrap()
+                )));
+
+                let mut tracks = self.tracks.write().unwrap();
+                if let Some(id) = tracks.iter().position(|t| t == track) {
+                    tracks.remove(id);
+                }
+                drop(tracks);
+                self.next();
+                self.force_build_filters();
+                return
+            }
+        }
+
         self.player.stop();
         self.player.track_set(track);
         self.play();
@@ -219,6 +238,12 @@ impl Library {
         *self.filtered_tree.write().unwrap() = filtered_tree;
         self.bus.lock().unwrap().broadcast(LibEvt::Filter);
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
+    }
+
+    fn force_build_filters(&self) {
+        let filters = self.get_filters();
+        *self.filtered_tree.write().unwrap() = vec![];
+        self.set_filters(filters);
     }
     // # set_filters # }}}
 
@@ -321,10 +346,7 @@ impl Library {
             }
             result
         });
-        // force full filter rebuild without caching.
-        let filters = self.get_filters();
-        *self.filtered_tree.write().unwrap() = vec![];
-        self.set_filters(filters);
+        self.force_build_filters()
     }
 
     pub fn set_sort_tagstrings(&self, tagstrings: Vec<String>) {
