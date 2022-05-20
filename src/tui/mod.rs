@@ -103,6 +103,7 @@ enum MAction {
     Search,
     Append,
     Debug,
+    Accent(Color),
 }
 
 struct UI<T: Backend> {
@@ -145,7 +146,38 @@ impl<T: Backend> UI<T> {
             ),
             (
                 String::from("UI"),
-                MTree::Tree(vec![(String::from("Debug"), MTree::Action(MAction::Debug))]),
+                MTree::Tree(vec![
+                    (
+                        String::from("Accent"),
+                        MTree::Tree(vec![
+                            (
+                                String::from("Red"),
+                                MTree::Action(MAction::Accent(Color::Red)),
+                            ),
+                            (
+                                String::from("Green"),
+                                MTree::Action(MAction::Accent(Color::Green)),
+                            ),
+                            (
+                                String::from("Yellow"),
+                                MTree::Action(MAction::Accent(Color::Yellow)),
+                            ),
+                            (
+                                String::from("Blue"),
+                                MTree::Action(MAction::Accent(Color::Blue)),
+                            ),
+                            (
+                                String::from("Magenta"),
+                                MTree::Action(MAction::Accent(Color::Magenta)),
+                            ),
+                            (
+                                String::from("Cyan"),
+                                MTree::Action(MAction::Accent(Color::Cyan)),
+                            ),
+                        ]),
+                    ),
+                    (String::from("Debug"), MTree::Action(MAction::Debug)),
+                ]),
             ),
         ]);
         Self {
@@ -669,6 +701,10 @@ impl<T: Backend> UI<T> {
                     if let Some(library) = self.lib_weak.upgrade() {
                         library.append_library(PathBuf::from(self.input("Path")));
                     }
+                }
+                MAction::Accent(color) => {
+                    self.theme = Theme::new(color);
+                    self.draw();
                 }
             }
         }
