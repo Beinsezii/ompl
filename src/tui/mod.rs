@@ -102,6 +102,7 @@ enum MAction {
     Insert(bool),
     Search,
     Append,
+    Debug,
 }
 
 struct UI<T: Backend> {
@@ -117,12 +118,7 @@ struct UI<T: Backend> {
 }
 
 impl<T: Backend> UI<T> {
-    fn from_library(
-        library: Arc<Library>,
-        terminal: Terminal<T>,
-        theme: Theme,
-        debug: bool,
-    ) -> Self {
+    fn from_library(library: Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
         let tree = MTree::Tree(vec![
             (String::from("Help"), MTree::Action(MAction::Help)),
             (String::from("Search"), MTree::Action(MAction::Search)),
@@ -147,6 +143,10 @@ impl<T: Backend> UI<T> {
                     MTree::Action(MAction::Append),
                 )]),
             ),
+            (
+                String::from("UI"),
+                MTree::Tree(vec![(String::from("Debug"), MTree::Action(MAction::Debug))]),
+            ),
         ]);
         Self {
             lib_weak: Arc::downgrade(&library),
@@ -156,7 +156,7 @@ impl<T: Backend> UI<T> {
             queuetable: QueueTable::new(library.clone()),
             theme,
             terminal: Some(terminal),
-            debug,
+            debug: false,
             draw_count: 0,
         }
     }
@@ -661,6 +661,10 @@ impl<T: Backend> UI<T> {
                 MAction::Help => self.message("Help", HELP),
                 MAction::Insert(b) => self.insert(b),
                 MAction::Search => self.search(),
+                MAction::Debug => {
+                    self.debug = !self.debug;
+                    self.draw()
+                }
                 MAction::Append => {
                     if let Some(library) = self.lib_weak.upgrade() {
                         library.append_library(PathBuf::from(self.input("Path")));
@@ -699,7 +703,6 @@ pub fn tui(library: Arc<Library>) -> bool {
         library,
         Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
         Theme::new(Color::Yellow),
-        log_level > 0,
     )));
     ui.lock().unwrap().draw();
 
