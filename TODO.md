@@ -12,14 +12,9 @@
 * method to print current filters for re-use
     * might need the --filter command to be updated into a single command.
       something like  --filter=album=Alb,Alb2||artist=billy||title
-* CTRL-Z to close the TUI whilst keeping the daemon open. would be dope to re-open it later but idk how to read key shortcuts without crossterm.
-    * should be as simple as tui() returning a bool that on true makes server .join()
 * Logging overhaul. 3rd-party crate?
 
 ### LIBRARY
-* should be able to reload
-* should be able to handle songs being removed.
-    * could just check if exists before sending to player, and remove() if not. technically would double filesystem calls, but they're infrequent *and* it'll hit the same spot twice for caching purposes. i mean it queries hundreds of files on startup in a second, it should be fine...
 * should be able to play sequentially instead of always random. Good time to add now that queue sorting exists.
 
 ## Long-term aka unhinged ramblings
