@@ -84,6 +84,7 @@ pub const HELP: &str = &"\
 * x | stop
 * n/p | next/previous
 * -/+ | volume decrease/increase
+* r | toggle shuffle
 * h/j/k/l | left/down/up/right
 * g/G scroll to top/bottom
 * f | select item
@@ -667,6 +668,7 @@ impl<T: Backend> UI<T> {
             km!('p') => library.previous(),
             km!('=') => library.volume_add(0.05),
             km!('-') => library.volume_sub(0.05),
+            km!('r') => library.shuffle_toggle(),
 
             // yay vim macros
             km!('0') => {
@@ -828,9 +830,11 @@ pub fn tui(library: Arc<Library>) -> bool {
             match libevt_r.recv() {
                 Ok(action) => match uiw_libevt.upgrade() {
                     Some(ui) => match action {
-                        LibEvt::Volume | LibEvt::Play | LibEvt::Pause | LibEvt::Stop => {
-                            ui.lock().unwrap().draw()
-                        }
+                        LibEvt::Volume
+                        | LibEvt::Play
+                        | LibEvt::Pause
+                        | LibEvt::Stop
+                        | LibEvt::Shuffle => ui.lock().unwrap().draw(),
                         LibEvt::Update => {
                             let mut uiw = ui.lock().unwrap();
                             let i = uiw.panes.index;

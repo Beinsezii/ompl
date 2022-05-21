@@ -128,8 +128,17 @@ pub enum VolumeCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum ShuffleCmd {
+    Get,
+    True,
+    False,
+    Toggle,
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
     Volume,
+    Shuffle,
     Track,
     Tagstring { tagstring: String },
     File,
@@ -150,6 +159,8 @@ pub enum Action {
     Exit,
     #[clap(subcommand)]
     Volume(VolumeCmd),
+    #[clap(subcommand)]
+    Shuffle(ShuffleCmd),
     #[clap(subcommand)]
     Print(PrintCmd),
     Filter {
@@ -279,6 +290,12 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 VolumeCmd::Sub { amount } => library.volume_sub(amount),
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
+                            Action::Shuffle(shuf_cmd) => match shuf_cmd {
+                                ShuffleCmd::Get => response = library.shuffle_get().to_string(),
+                                ShuffleCmd::True => library.shuffle_set(true),
+                                ShuffleCmd::False => library.shuffle_set(false),
+                                ShuffleCmd::Toggle => library.shuffle_toggle(),
+                            },
                             Action::Print(print_cmd) => match print_cmd {
                                 PrintCmd::Status => {
                                     response = if library.playing() {
@@ -313,6 +330,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
+                                PrintCmd::Shuffle => response = library.shuffle_get().to_string(),
                                 PrintCmd::Volume => {
                                     response = format!("{:.2}", library.volume_get())
                                 }

@@ -40,7 +40,16 @@ impl ContainedWidget for StatusBar {
 
         frame.render_widget(
             Paragraph::new(Spans::from(vec![
-                Span::from(format!(" -- {:.2} ++ | :< ", library.volume_get())),
+                Span::from(format!(" -- {:.2} ++ | ", library.volume_get())),
+                Span::styled(
+                    "><",
+                    if library.shuffle_get() {
+                        theme.base_hi
+                    } else {
+                        theme.base
+                    },
+                ),
+                Span::from(" :< "),
                 Span::styled(
                     "#",
                     if library.stopped() {
@@ -75,15 +84,16 @@ impl Clickable for StatusBar {
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
-                // 123456789 1234567890123
-                // -- 0.12 ++ | :< # /> >: |
+                // 123456789 1234567890123456
+                // -- 0.12 ++ | >< :< # /> >: |
                 match event.column {
                     1..=2 => library.volume_sub(0.05),
                     9..=10 => library.volume_add(0.05),
-                    14..=15 => library.previous(),
-                    17..=17 => library.stop(),
-                    19..=20 => library.play_pause(),
-                    22..=23 => library.next(),
+                    14..=15 => library.shuffle_toggle(),
+                    17..=18 => library.previous(),
+                    20..=20 => library.stop(),
+                    22..=23 => library.play_pause(),
+                    25..=26 => library.next(),
                     _ => (),
                 }
             }

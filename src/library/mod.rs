@@ -1,5 +1,8 @@
 use std::path::Path;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex, RwLock,
+};
 use std::thread;
 use std::time::Instant;
 
@@ -60,6 +63,7 @@ pub enum LibEvt {
     Play,
     Pause,
     Stop,
+    Shuffle,
     Volume,
     Update,
     Error(String),
@@ -72,6 +76,7 @@ pub struct Library {
     filtered_tree: RwLock<Vec<FilteredTracks>>,
     sort_tagstrings: RwLock<Vec<String>>,
     bus: Mutex<Bus<LibEvt>>,
+    shuffle: AtomicBool,
 }
 
 impl Library {
@@ -89,6 +94,7 @@ impl Library {
             filtered_tree: RwLock::new(Vec::new()),
             sort_tagstrings: RwLock::new(Vec::new()),
             bus,
+            shuffle: AtomicBool::new(true),
         });
 
         result.append_library(path);
@@ -129,7 +135,11 @@ impl Library {
         }
     }
     pub fn next(&self) {
-        self.play_track(self.get_random());
+        if self.shuffle.load(Ordering::Relaxed) {
+            self.play_track(self.get_random())
+        } else {
+            self.play_track(self.get_sequential())
+        };
     }
     pub fn previous(&self) {
         self.player.stop();
@@ -149,6 +159,19 @@ impl Library {
     }
     pub fn volume_sub(&self, amount: f32) {
         self.volume_set(self.volume_get() - amount);
+    }
+
+    pub fn shuffle_get(&self) -> bool {
+        self.shuffle.load(Ordering::Relaxed)
+    }
+
+    pub fn shuffle_set(&self, shuffle: bool) {
+        self.shuffle.store(shuffle, Ordering::Relaxed);
+        self.bus.lock().unwrap().broadcast(LibEvt::Shuffle);
+    }
+
+    pub fn shuffle_toggle(&self) {
+        self.shuffle_set(!self.shuffle_get())
     }
 
     pub fn play_track(&self, track: Option<Arc<Track>>) {
@@ -250,6 +273,23 @@ impl Library {
                 }
             },
         }
+    }
+
+    pub fn get_sequential(&self) -> Option<Arc<Track>> {
+        let tracks = self.get_queue();
+        let mut i = 0;
+        if let Some(track) = self.track_get() {
+            for (n, t) in tracks.iter().enumerate() {
+                if t == &track {
+                    i = n + 1
+                }
+            }
+        }
+        if i >= tracks.len() {
+            i = 0
+        }
+
+        tracks.get(i).cloned()
     }
 
     pub fn append_library<T: AsRef<Path>>(&self, path: T) {
