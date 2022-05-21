@@ -2,8 +2,6 @@
 
 ### TUI
 * Layout splitting doesn't round properly. Ex: center of 4 panes will be off by 1 compared to 2 queue.
-* Input bar CTRL-V/C/Back.
-    * Copy/paste should be a feature flag, enabled by default.
 * Revisit draw logic. Currently draws every click cause of pane/queue buggery.
     * since we already capture active states, we could just check for those changing && events.
     * Would need a special handler for scroll.
@@ -20,7 +18,6 @@
 ## Long-term aka unhinged ramblings
 
 ### TUI
-* Investigate separating into default feature flag
 * Could use a method of opening without CLI commands. Handy for Windows specifially.
     * Could just barf filters, library path, and volume into a .json file at the os-appropriate config home, then if ompl is run with no args or --resume it loads the TUI from there.
     * TUI will need a way to set library path from within.
