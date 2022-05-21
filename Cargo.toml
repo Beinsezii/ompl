@@ -20,6 +20,12 @@ souvlaki = "0.5"
 tui = { version = "0.18", default-features = false, features = ['crossterm'] }
 walkdir = "2"
 
+copypasta = {version = "0.7", optional=true}
+
+[features]
+clipboard = ["copypasta"]
+default = ["clipboard"]
+
 [dev-dependencies]
 lazy_static = "1"
 

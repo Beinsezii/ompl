@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 use crate::library::{Filter, LibEvt, Library};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
+#[cfg(feature = "clipboard")]
+use copypasta::{ClipboardContext, ClipboardProvider};
+
 use crossterm::{
     cursor, event,
     event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind},
@@ -57,7 +60,6 @@ macro_rules! km_s {
         })
     };
 }
-
 /// get crossterm event with optional poll duration.
 fn get_event(duration: Option<Duration>) -> Option<Event> {
     match duration {
@@ -91,6 +93,10 @@ pub const HELP: &str = &"\
 * i/I | insert after/before
 * D | delete
 * / | search
+
+* input
+  * Ctrl-y/p | copy/paste
+  * Ctrl-x | delete word
 ";
 
 // ### UI ### {{{
@@ -116,6 +122,8 @@ struct UI<T: Backend> {
     terminal: Option<Terminal<T>>,
     debug: bool,
     draw_count: u128,
+    #[cfg(feature = "clipboard")]
+    clipboard: Option<ClipboardContext>,
 }
 
 impl<T: Backend> UI<T> {
@@ -190,6 +198,8 @@ impl<T: Backend> UI<T> {
             terminal: Some(terminal),
             debug: false,
             draw_count: 0,
+            #[cfg(feature = "clipboard")]
+            clipboard: ClipboardContext::new().ok(),
         }
     }
 
@@ -408,6 +418,34 @@ impl<T: Backend> UI<T> {
                 if let Some(event) = get_event(None) {
                     match event {
                         km_c!('c') => break 'outer false,
+                        #[cfg(feature = "clipboard")]
+                        km_c!('p') => {
+                            if let Some(clip) = self.clipboard.as_mut() {
+                                if let Ok(contents) = clip.get_contents() {
+                                    result = contents
+                                }
+                            }
+                        }
+                        #[cfg(feature = "clipboard")]
+                        km_c!('y') => {
+                            if let Some(clip) = self.clipboard.as_mut() {
+                                drop(clip.set_contents(result.clone()));
+                            }
+                        }
+                        // // seriously why the fuck does this print 'h'
+                        // Event::Key(KeyEvent {
+                        //     code: KeyCode::Backspace,
+                        //     modifiers: KeyModifiers::CONTROL,
+                        // }) => loop {
+                        km_c!('x') => loop {
+                            if let Some(c) = result.pop() {
+                                if !c.is_alphanumeric() {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        },
                         Event::Key(KeyEvent { code, .. }) => match code {
                             KeyCode::Esc => break 'outer false,
                             KeyCode::Enter => break 'outer true,
