@@ -5,15 +5,20 @@
 * Revisit draw logic. Currently draws every click cause of pane/queue buggery.
     * since we already capture active states, we could just check for those changing && events.
     * Would need a special handler for scroll.
+* Theme needs an overhaul for clear FG/BG/Accent setting instead of just rebuilding the whole struct.
 
 ### MAIN
 * method to print current filters for re-use
     * might need the --filter command to be updated into a single command.
       something like  --filter=album=Alb,Alb2||artist=billy||title
+        * could I just parse the multiple occurrences using the existing parser instead of -f's?
 * Logging overhaul. 3rd-party crate?
+* When the codesplosions are done, every project file needs #![warn(missing_docs)]
+    * also variants, methods, and fields all need sorting and clustering beyond just whim
 
 ### LIBRARY
-* should be able to play sequentially instead of always random. Good time to add now that queue sorting exists.
+* tagstring engine needs refinement. Currently a song titled "Song title <bonus>" will show "Song title ???"
+    * Take tagstring as read-only and build new string out of stuff? That way tag data is never read by parser.
 
 ## Long-term aka unhinged ramblings
 
