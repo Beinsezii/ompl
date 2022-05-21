@@ -212,7 +212,7 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         if self.queuetable.active && library.filter_count() != 0 {
-            let tag = self.input("Tagstring").trim().to_string();
+            let tag = self.input("Tagstring", false).trim().to_string();
             if !tag.is_empty() {
                 let pos = self.queuetable.index + if before { 0 } else { 1 };
                 library.insert_sort_tagstring(tag, pos);
@@ -220,7 +220,7 @@ impl<T: Backend> UI<T> {
                     min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
             }
         } else {
-            let tag = self.input("Filter").trim().to_string();
+            let tag = self.input("Filter", false).trim().to_string();
             if !tag.is_empty() {
                 self.panes.insert(before);
                 let pos = self.panes.index + if before { 0 } else { 1 };
@@ -381,7 +381,7 @@ impl<T: Backend> UI<T> {
         self.draw();
     }
 
-    fn input(&mut self, query: &str) -> String {
+    fn input(&mut self, query: &str, header: bool) -> String {
         let mut result = String::new();
 
         let submit = 'outer: loop {
@@ -391,15 +391,23 @@ impl<T: Backend> UI<T> {
                 let size = f.size();
                 let area = Rect {
                     x: 0,
-                    y: if active {
+                    y: if header {
+                        2.min(size.height.saturating_sub(3))
+                    } else if active {
                         size.height.saturating_sub(3)
                     } else {
                         // -5 -> headers(2), height(3)
                         size.height.saturating_sub(5) / 2
                     },
-                    height: 3,
+                    height: 3.min(size.height),
                     // +5 -> borders(2), pad(1), ": "(2)
-                    width: ((result.len() + query.len()) as u16 + 5).min(size.width),
+                    width: if header {
+                        (size.width / 4)
+                            .max((result.len() + query.len()) as u16 + 5)
+                            .min(size.width)
+                    } else {
+                        ((result.len() + query.len()) as u16 + 5).min(size.width)
+                    },
                 };
                 f.render_widget(Clear, area);
                 let text = format!("{}: {}", query, result);
@@ -476,7 +484,12 @@ impl<T: Backend> UI<T> {
     }
 
     fn search(&mut self) {
-        match self.input("Search").trim().to_ascii_lowercase().as_str() {
+        match self
+            .input("Search", false)
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
             "" => (),
             input => {
                 if self.queuetable.active {
@@ -738,7 +751,7 @@ impl<T: Backend> UI<T> {
                 }
                 MAction::Append => {
                     if let Some(library) = self.lib_weak.upgrade() {
-                        library.append_library(PathBuf::from(self.input("Path")));
+                        library.append_library(PathBuf::from(self.input("Path", true)));
                     }
                 }
                 MAction::Purge => {
