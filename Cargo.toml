@@ -10,21 +10,24 @@ bincode = "1"
 bus = "2"
 clap = { version = "3", features = ["derive", "unicode"] }
 crossbeam = "0.8"
-crossterm = "0.23"
 id3 = "1"
 rand = "0.8"
 rayon = "1"
 rodio = "0.15"
 serde = { version = "1", features = ["derive"] }
 souvlaki = "0.5"
-tui = { version = "0.18", default-features = false, features = ['crossterm'] }
 walkdir = "2"
+
+crossterm = {version = "0.23", optional = true}
+tui = { version = "0.18", default-features = false, features = ['crossterm'] , optional = true}
 
 copypasta = {version = "0.7", optional=true}
 
 [features]
-clipboard = ["copypasta"]
-default = ["clipboard"]
+tui = ["dep:tui", "dep:crossterm"]
+clipboard = ["dep:copypasta", "tui"]
+
+default = ["tui", "clipboard"]
 
 [dev-dependencies]
 lazy_static = "1"

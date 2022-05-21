@@ -10,8 +10,10 @@ use std::sync::{
 use std::thread;
 
 mod library;
-mod tui;
 use library::Library;
+
+#[cfg(feature = "tui")]
+mod tui;
 
 const ID: &str = "OMPL SERVER 0.4.0";
 const PORT: &str = "18346";
@@ -189,6 +191,7 @@ struct MainArgs {
 
     #[clap(long, short)]
     /// [D]aemon / no-gui mode.
+    /// Does nothing if UI is disabled at compile-time.
     daemon: bool,
 
     #[clap(long, short)]
@@ -450,6 +453,7 @@ fn instance_main(listener: TcpListener, main_args: MainArgs) {
     // ## souvlaki ## }}}
 
     l2!("Main server started");
+    #[cfg(feature = "tui")]
     if main_args.daemon {
         jh.join().unwrap();
     } else {
@@ -457,6 +461,9 @@ fn instance_main(listener: TcpListener, main_args: MainArgs) {
             jh.join().unwrap();
         }
     }
+
+    #[cfg(not(feature = "tui"))]
+    jh.join().unwrap();
 }
 
 // ### SERVER ### }}}
