@@ -135,15 +135,19 @@ impl Library {
         }
     }
     pub fn next(&self) {
-        if self.shuffle.load(Ordering::Relaxed) {
+        if self.shuffle_get() {
             self.play_track(self.get_random())
         } else {
-            self.play_track(self.get_sequential())
+            self.play_track(self.get_sequential(false))
         };
     }
     pub fn previous(&self) {
         self.player.stop();
-        self.player.track_set(self.history.lock().unwrap().pop());
+        if self.shuffle_get() {
+            self.player.track_set(self.history.lock().unwrap().pop());
+        } else {
+            self.player.track_set(self.get_sequential(true))
+        }
         self.play();
     }
 
@@ -275,8 +279,11 @@ impl Library {
         }
     }
 
-    pub fn get_sequential(&self) -> Option<Arc<Track>> {
-        let tracks = self.get_queue();
+    pub fn get_sequential(&self, reverse: bool) -> Option<Arc<Track>> {
+        let mut tracks = self.get_queue();
+        if reverse {
+            tracks = tracks.into_iter().rev().collect()
+        }
         let mut i = 0;
         if let Some(track) = self.track_get() {
             for (n, t) in tracks.iter().enumerate() {
