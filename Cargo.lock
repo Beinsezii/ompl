@@ -1215,7 +1215,6 @@ dependencies = [
  "crossbeam",
  "crossterm",
  "id3",
- "lazy_static",
  "rand",
  "raw-window-handle 0.4.3",
  "rayon",

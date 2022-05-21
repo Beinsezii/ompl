@@ -9,6 +9,9 @@ use std::sync::{
 };
 use std::thread;
 
+#[cfg(feature = "media-controls")]
+use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
+
 mod library;
 use library::Library;
 
@@ -190,12 +193,11 @@ struct MainArgs {
     now: bool,
 
     #[clap(long, short)]
-    /// [D]aemon / no-gui mode.
-    /// Does nothing if UI is disabled at compile-time.
+    /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
     daemon: bool,
 
     #[clap(long, short)]
-    /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS
+    /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
     no_media: bool,
 
     /// Port with which to communicate with other OMPL instances
@@ -354,10 +356,8 @@ fn instance_main(listener: TcpListener, main_args: MainArgs) {
     l2!(format!("Listening on port {}", main_args.port));
 
     // ## souvlaki ## {{{
+    #[cfg(feature = "media-controls")]
     if !main_args.no_media {
-        use souvlaki::{
-            MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig,
-        };
         l2!("Initializing media controls...");
         let mut libevt_r = library.get_receiver();
 
