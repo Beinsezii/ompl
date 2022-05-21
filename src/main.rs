@@ -132,6 +132,7 @@ pub enum PrintCmd {
     Volume,
     Track,
     Tagstring { tagstring: String },
+    File,
     Status,
     Playing,
     Stopped,
@@ -293,6 +294,12 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     response = library
                                         .track_get()
                                         .map(|t| format!("{}", t))
+                                        .unwrap_or("???".to_string())
+                                }
+                                PrintCmd::File => {
+                                    response = library
+                                        .track_get()
+                                        .map(|t| t.path().to_str().unwrap_or("???").to_string())
                                         .unwrap_or("???".to_string())
                                 }
                                 PrintCmd::Tagstring { tagstring } => {
