@@ -108,6 +108,7 @@ enum MAction {
     Insert(bool),
     Search,
     Append,
+    Purge,
     Debug,
     Accent(Color),
 }
@@ -147,10 +148,10 @@ impl<T: Backend> UI<T> {
             ),
             (
                 String::from("Library"),
-                MTree::Tree(vec![(
-                    String::from("Append"),
-                    MTree::Action(MAction::Append),
-                )]),
+                MTree::Tree(vec![
+                    (String::from("Append"), MTree::Action(MAction::Append)),
+                    (String::from("Purge"), MTree::Action(MAction::Purge)),
+                ]),
             ),
             (
                 String::from("UI"),
@@ -740,6 +741,11 @@ impl<T: Backend> UI<T> {
                         library.append_library(PathBuf::from(self.input("Path")));
                     }
                 }
+                MAction::Purge => {
+                    if let Some(library) = self.lib_weak.upgrade() {
+                        library.purge();
+                    }
+                }
                 MAction::Accent(color) => {
                     self.theme = Theme::new(color);
                     self.draw();
@@ -812,7 +818,7 @@ pub fn tui(library: Arc<Library>) -> bool {
                         LibEvt::Volume | LibEvt::Play | LibEvt::Pause | LibEvt::Stop => {
                             ui.lock().unwrap().draw()
                         }
-                        LibEvt::Filter => {
+                        LibEvt::Update => {
                             let mut uiw = ui.lock().unwrap();
                             let i = uiw.panes.index;
                             for x in 0..libweak_evt.upgrade().unwrap().filter_count() {

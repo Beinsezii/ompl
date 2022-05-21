@@ -61,7 +61,7 @@ pub enum LibEvt {
     Pause,
     Stop,
     Volume,
-    Filter,
+    Update,
     Error(String),
 }
 
@@ -224,7 +224,7 @@ impl Library {
         }
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
-        self.bus.lock().unwrap().broadcast(LibEvt::Filter);
+        self.bus.lock().unwrap().broadcast(LibEvt::Update);
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
 
@@ -268,6 +268,12 @@ impl Library {
         drop(tracks);
 
         self.sort();
+    }
+
+    pub fn purge(&self) {
+        *self.tracks.write().unwrap() = Vec::new();
+        self.force_build_filters();
+        self.bus.lock().unwrap().broadcast(LibEvt::Update);
     }
 
     pub fn filter_count(&self) -> usize {

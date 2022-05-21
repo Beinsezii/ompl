@@ -166,6 +166,7 @@ pub enum Action {
     Append {
         path: PathBuf,
     },
+    Purge,
 }
 
 // ### SHARED }}}
@@ -326,6 +327,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 library.set_sort_tagstrings(sort_tagstrings)
                             }
                             Action::Append { path } => library.append_library(path),
+                            Action::Purge => library.purge(),
                         };
                     }
                     Err(e) => {
