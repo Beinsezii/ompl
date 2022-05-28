@@ -163,6 +163,9 @@ pub enum Action {
     Shuffle(ShuffleCmd),
     #[clap(subcommand)]
     Print(PrintCmd),
+    PlayFile {
+        file: PathBuf,
+    },
     Filter {
         #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
         filters: Vec<library::Filter>,
@@ -296,6 +299,18 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 ShuffleCmd::False => library.shuffle_set(false),
                                 ShuffleCmd::Toggle => library.shuffle_toggle(),
                             },
+                            Action::PlayFile { file } => {
+                                if file.is_file() {
+                                    library.play_track(
+                                        library::get_tracks(file).into_iter().last().map(
+                                            |mut t| {
+                                                t.load_meta();
+                                                Arc::new(t)
+                                            },
+                                        ),
+                                    )
+                                }
+                            }
                             Action::Print(print_cmd) => match print_cmd {
                                 PrintCmd::Status => {
                                     response = if library.playing() {

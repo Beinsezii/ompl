@@ -144,9 +144,12 @@ impl Library {
     pub fn previous(&self) {
         self.player.stop();
         if self.shuffle_get() {
-            self.player.track_set(self.history.lock().unwrap().pop());
+            let track = self.history.lock().unwrap().pop();
+            self.play_track(track);
+            // remove twice cause it gets re-added.
+            self.history.lock().unwrap().pop();
         } else {
-            self.player.track_set(self.get_sequential(true))
+            self.play_track(self.get_sequential(true))
         }
         self.play();
     }
