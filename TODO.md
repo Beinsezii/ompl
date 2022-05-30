@@ -6,6 +6,7 @@
     * since we already capture active states, we could just check for those changing && events.
     * Would need a special handler for scroll.
 * Theme needs an overhaul for clear FG/BG/Accent setting instead of just rebuilding the whole struct.
+    * perhaps Library should hold Theme instead of TUI for ipc reasons
 
 ### MAIN
 * method to print current filters for re-use
