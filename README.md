@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v 0.3.0
+# OMPL - Opinionated Music Player/Library v 0.4.0
 A music player organized exactly how *I* like it.
 
 ## Features
@@ -6,19 +6,21 @@ A music player organized exactly how *I* like it.
    * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
   * Fully functional CLI that interacts either with the TUI or a daemon
    * Both playback controls and content querying
+   * Should be possible to do everything through the TUI in the CLI and vice versa
+    * Some WIP areas present
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
-    * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track.rs#L18)
+    * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track/mod.rs#L18)
   * Pure Rust where possible. *Should* be portable.
-  * Interfaces as a media player for Linux MPRIS, Windows, and [untested] MacOS
+  * Interfaces as a media player for Linux MPRIS, Windows, and MacOS[untested]
   * Very fast - Handle a few thousand files effortlessly on a shitty 2006 acer laptop with a failing harddisk
     * Memory usage something like a few MBs
   * Shouldn't crash.
 
-## WIP/Blocking features for 1.0.0
-  * Theme customization
-  * Polish passes/hundred papercuts
-  * Possibly some form of retained settings/config file
-    * Personally just modifying the cli command in my startup config has been fine, but this is a very common thing among any somewhat major program.
+## WIP/Why this isn't 1.0 yet
+  * Full theme customization
+  * Code docs
+  * Some bugfix bs
+  * See [TODO.md](./TODO.md) for more details
   
 ## Usage
 <img src="./screenshot.png" height = 400px />
@@ -27,16 +29,12 @@ It is recommended you add the downloaded binary or cargo install dir to your `PA
 
 To start a simple example sorting by album run `ompl -l Path/To/Music -f album`
 
-To update the running program filters to genres "Epic" and "Game" while sorting results by title, run `ompl -f genre=Epic,Game -f title`
+To update the running program filters to genres "Epic" and "Game" while sorting results by album then title, run `ompl -f genre=Epic,Game -s album title`
 
 To start a *new* TUI if you want two songs playing at once like a crackhead, run `ompl -l Path/To/Music --port 12345` or whatever valid port # you want.
 Be careful to avoid commonly used ports such as 80, as other programs may be occupying these sockets.
 
-To view a full list of daeomon/tui initialization commands, run `ompl --help` while no TUI/Daemons are open on the active port.
-
-To view a full list of CLI commands, run `ompl --help` while the TUI/Daemon is already open on the active port
-
-Both helps will also print TUI keybinds.
+To view a full list of commands for both the server (main instancce) and client, run ompl --help
 
 ### Tagstrings
 OMPL can sort by literal tags or "tagstrings", a special markup language for creating 'presentable' strings given the presence or lack of specific tags.
