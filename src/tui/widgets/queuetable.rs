@@ -223,11 +223,16 @@ impl Clickable for QueueTable {
                     self.scroll_down();
                     return true;
                 }
-                MouseEventKind::Down(MouseButton::Left) => {
+                MouseEventKind::Down(butt) => {
                     if zX >= 1 && zX < self.area.width && zY >= 1 && zY < self.area.height {
                         if let Some(track) = library.get_queue().get(zY as usize + self.view - 1) {
+                            let old = self.position;
                             self.position = zY as usize + self.view - 1;
-                            library.play_track(Some(track.clone()))
+                            if butt == MouseButton::Left {
+                                library.play_track(Some(track.clone()))
+                            } else if butt == MouseButton::Right && old == self.position {
+                                self.scroll_by_n_lock(0);
+                            }
                         }
                     }
                     return true;
