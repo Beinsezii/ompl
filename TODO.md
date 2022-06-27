@@ -7,6 +7,8 @@
     * Would need a special handler for scroll.
 * Theme needs an overhaul for clear FG/BG/Accent setting instead of just rebuilding the whole struct.
     * perhaps Library should hold Theme instead of TUI for ipc reasons
+* Ability to 'move' panels with shift-h/l
+    * Probably just implement straight in TUI cause it's not useful in CLI. Or not. idk
 
 ### MAIN
 * method to print current filters for re-use
