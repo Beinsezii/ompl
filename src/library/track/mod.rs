@@ -141,10 +141,11 @@ pub fn sort_by_tag<T: AsRef<str>, U: Deref<Target = Track>>(tag: T, tracks: &mut
 
 // ## FNs }}}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Track {
     path: PathBuf,
     tags: Tags,
+    gain: f32,
 }
 
 impl Track {
@@ -152,6 +153,7 @@ impl Track {
         Self {
             path: path.into(),
             tags: Tags::new(),
+            gain: 1.0,
         }
     }
 
@@ -167,6 +169,16 @@ impl Track {
                     if let id3::Content::ExtendedText(text) = content {
                         self.tags
                             .insert(text.description.clone(), text.value.clone());
+                        if text.description.to_ascii_lowercase() == "replaygain_track_gain" {
+                            if let Ok(gain) =
+                                text.value[..text.value.len() - 2].trim().parse::<f32>()
+                            {
+                                // according to the internet, A2 = A1 * 10(GdB / 20)
+                                // where A1 is our volume set in library, G is the replaygain
+                                // offset, and A2 is the final result Rodio should eat.
+                                self.gain = 10f32.powf(gain / 20.0)
+                            }
+                        }
                     }
                 }
                 // id3 standard tag strings
@@ -214,17 +226,40 @@ impl Track {
         &self.path
     }
 
+    pub fn gain(&self) -> f32 {
+        self.gain
+    }
+
     // ## GET / SET ## }}}
 }
 
 impl std::fmt::Display for Track {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buff = format!("{}", self.path.to_str().unwrap_or("Invalid Path!"));
-        for (t_id, t_str) in TAG_IDS {
-            if let Some(tag) = self.tags().get(&t_id.to_ascii_lowercase()) {
-                buff.push_str(&format!("\n{}/{}: {}", t_id, t_str, tag));
+        let mut buff1 = format!("{}", self.path.to_str().unwrap_or("Invalid Path!"));
+        let mut buff2 = String::new();
+
+        let ids: Vec<&str> = TAG_IDS.iter().map(|tid| tid.0).collect();
+        let tags: Vec<&str> = TAG_IDS.iter().map(|tid| tid.1).collect();
+
+        for key in self.tags().keys() {
+            if let Some(p) = ids
+                .iter()
+                .position(|&x| x.to_ascii_lowercase() == key.to_ascii_lowercase())
+            {
+                buff1.push_str(&format!(
+                    "\n{}/{}: {}",
+                    ids[p],
+                    tags[p],
+                    self.tags().get(key).unwrap()
+                ));
+            } else if tags
+                .iter()
+                .position(|&x| x.to_ascii_lowercase() == key.to_ascii_lowercase())
+                .is_none()
+            {
+                buff2.push_str(&format!("\n{}: {}", key, self.tags().get(key).unwrap()))
             }
         }
-        write!(f, "{}", buff)
+        write!(f, "{}{}", buff1, buff2)
     }
 }

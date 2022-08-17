@@ -95,17 +95,17 @@ impl Player {
             *self.stream_handle.write().unwrap() = Some(han_ch_r.recv().unwrap());
         }
 
-        if let Some(reader) = self.track.read().unwrap().as_ref().map(|t| t.get_reader()) {
+        if let Some(track) = self.track.read().unwrap().as_ref() {
             match self
                 .stream_handle
                 .read()
                 .unwrap()
                 .as_ref()
                 .unwrap()
-                .play_once(reader)
+                .play_once(track.get_reader())
             {
                 Ok(sink) => {
-                    sink.set_volume(*self.volume_retained.read().unwrap());
+                    sink.set_volume(*self.volume_retained.read().unwrap() * track.gain());
                     *self.sink.write().unwrap() = Some(sink);
                 }
                 Err(e) => panic!("{}", e),
@@ -168,7 +168,16 @@ impl Player {
     pub fn volume_set(&self, volume: f32) {
         let volume = 0.0f32.max(1.0f32.min(volume.powi(3)));
         if let Some(sink) = &*self.sink.read().unwrap() {
-            sink.set_volume(volume)
+            sink.set_volume(
+                volume
+                    * self
+                        .track
+                        .read()
+                        .unwrap()
+                        .as_ref()
+                        .map(|t| t.gain())
+                        .unwrap_or(1.0),
+            )
         }
         *self.volume_retained.write().unwrap() = volume;
     }

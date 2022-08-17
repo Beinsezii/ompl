@@ -29,7 +29,7 @@ pub struct Filter {
     pub items: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct FilteredTracks {
     pub filter: Filter,
     pub tracks: Vec<Arc<Track>>,
