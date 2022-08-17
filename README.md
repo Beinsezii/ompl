@@ -1,15 +1,16 @@
-# OMPL - Opinionated Music Player/Library v 0.4.0
+# OMPL - Opinionated Music Player/Library v 0.4.1
 A music player organized exactly how *I* like it.
 
 ## Features
   * Fully functional TUI with mouse & tty support
-   * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
+    * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
   * Fully functional CLI that interacts either with the TUI or a daemon
-   * Both playback controls and content querying
-   * Should be possible to do everything through the TUI in the CLI and vice versa
-    * Some WIP areas present
+    * Both playback controls and content querying
+    * Should be possible to do everything through the TUI in the CLI and vice versa
+      * Some WIP areas present
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
     * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track/mod.rs#L18)
+    * Utilizes ReplayGain track (not album) tags
   * Pure Rust where possible. *Should* be portable.
   * Interfaces as a media player for Linux MPRIS, Windows, and MacOS[untested]
   * Very fast - Handle a few thousand files effortlessly on a shitty 2006 acer laptop with a failing harddisk
