@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v 0.4.1
+# OMPL - Opinionated Music Player/Library v 0.4.2
 A music player organized exactly how *I* like it.
 
 ## Features
@@ -10,6 +10,7 @@ A music player organized exactly how *I* like it.
       * Some WIP areas present
   * Support for audio formats present in [rodio](https://github.com/RustAudio/rodio) [".mp3", ".flac", ".ogg", ".wav"]
     * Supports all [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes or the common names that I definitely didn't just make up on the spot. See [here for the common names](./src/library/track/mod.rs#L18)
+    * Now also supports Vorbis comments for FLAC/OGG
     * Utilizes ReplayGain track (not album) tags
   * Pure Rust where possible. *Should* be portable.
   * Interfaces as a media player for Linux MPRIS, Windows, and MacOS[untested]
