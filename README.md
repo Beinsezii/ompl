@@ -53,7 +53,7 @@ Extra syntactical notes:
 
 ### Compiling
 Have Rust 2021 installed, clone repo and just run `cargo build`.
-`build_release.sh` will build in release mode for linux-x86_64-gnu and pc-windows-gnu, moving the binaries to ./bin/
+`build_bin.sh` will build in binaries in release mode for linux/windows, moving the binaries to ./bin/
 
 ## F.A.Q.
 Question|Answer
