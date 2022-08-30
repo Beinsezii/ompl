@@ -22,8 +22,6 @@
 ### LIBRARY
 * tagstring engine needs refinement. Currently a song titled "Song title <bonus>" will show "Song title ???"
     * Take tagstring as read-only and build new string out of stuff? That way tag data is never read by parser.
-* Should probably be able to read other tag formats besides id3. At least for FLAC/Vorbis, those are super common.
-    * Symphonia save me?
 
 ## Long-term aka unhinged ramblings
 
