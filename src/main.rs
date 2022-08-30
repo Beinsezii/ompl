@@ -208,6 +208,10 @@ struct MainArgs {
     /// Play immediately
     now: bool,
 
+    #[clap(short='H', long)]
+    /// Include hidden items ( '.' prefix )
+    hidden: bool,
+
     #[clap(long, short)]
     /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
     daemon: bool,
@@ -302,7 +306,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::PlayFile { file } => {
                                 if file.is_file() {
                                     library.play_track(
-                                        library::get_tracks(file).into_iter().last().map(
+                                        library::get_tracks(file, true).into_iter().last().map(
                                             |mut t| {
                                                 t.load_meta();
                                                 Arc::new(t)
@@ -386,12 +390,15 @@ fn instance_main(listener: TcpListener, main_args: MainArgs) {
     LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
 
     l2!("Starting main...");
-    let library = Library::new(&main_args.library, Some(main_args.filters));
+    let library = Library::new();
+    library.hidden_set(main_args.hidden);
     library.volume_set(main_args.volume);
+    library.set_filters(main_args.filters);
     library.set_sort_tagstrings(main_args.sort_tagstrings);
     if main_args.now {
         library.play()
     }
+    library.append_library(main_args.library);
 
     let server_library = library.clone();
     let jh = thread::spawn(move || server(listener, server_library));

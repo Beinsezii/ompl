@@ -77,11 +77,12 @@ pub struct Library {
     sort_tagstrings: RwLock<Vec<String>>,
     bus: Mutex<Bus<LibEvt>>,
     shuffle: AtomicBool,
+    hidden: AtomicBool,
 }
 
 impl Library {
     // # new # {{{
-    pub fn new<T: AsRef<Path>>(path: T, initial_filters: Option<Vec<Filter>>) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         let lib_now = Instant::now();
 
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
@@ -95,14 +96,9 @@ impl Library {
             sort_tagstrings: RwLock::new(Vec::new()),
             bus,
             shuffle: AtomicBool::new(true),
+            hidden: AtomicBool::new(false),
         });
 
-        result.append_library(path);
-
-        if let Some(f) = initial_filters {
-            result.set_filters(f)
-        }
-        result.player.track_set(result.get_random());
         result.volume_set(0.5);
 
         let result_c = result.clone();
@@ -179,6 +175,14 @@ impl Library {
 
     pub fn shuffle_toggle(&self) {
         self.shuffle_set(!self.shuffle_get())
+    }
+
+    pub fn hidden_get(&self) -> bool {
+        self.hidden.load(Ordering::Relaxed)
+    }
+
+    pub fn hidden_set(&self, include_hidden: bool) {
+        self.hidden.store(include_hidden, Ordering::Relaxed)
     }
 
     pub fn play_track(&self, track: Option<Arc<Track>>) {
@@ -303,7 +307,7 @@ impl Library {
     }
 
     pub fn append_library<T: AsRef<Path>>(&self, path: T) {
-        let mut new_tracks: Vec<Track> = get_tracks(path);
+        let mut new_tracks: Vec<Track> = get_tracks(path, self.hidden_get());
 
         new_tracks
             .par_iter_mut()
@@ -318,6 +322,14 @@ impl Library {
         drop(tracks);
 
         self.sort();
+
+        if self.player.track_get().is_none() {
+            self.player.track_set(if self.shuffle_get() {
+                self.get_random()
+            } else {
+                self.get_sequential(false)
+            });
+        }
     }
 
     pub fn purge(&self) {

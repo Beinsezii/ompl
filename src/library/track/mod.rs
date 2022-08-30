@@ -60,7 +60,7 @@ const TAG_IDS: &[(&'static str, &'static str)] = &[
 
 // ## FNs ## {{{
 
-pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
+pub fn get_tracks<T: AsRef<Path>>(path: T, include_hidden: bool) -> Vec<Track> {
     l2!("Finding tracks...");
     let now = Instant::now();
 
@@ -70,24 +70,28 @@ pub fn get_tracks<T: AsRef<Path>>(path: T) -> Vec<Track> {
         .filter_entry(|e| {
             e.file_name()
                 .to_str()
-                .map(|s| !s.starts_with("."))
+                .map(|s| include_hidden || !s.starts_with("."))
                 .unwrap_or(false)
         })
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| {
-                    let mut res = false;
-                    for t in TYPES.into_iter() {
-                        if s.ends_with(t) {
-                            res = true;
-                            break;
+            if e.path().is_dir() {
+                false
+            } else {
+                e.file_name()
+                    .to_str()
+                    .map(|s| {
+                        let mut res = false;
+                        for t in TYPES.into_iter() {
+                            if s.ends_with(t) {
+                                res = true;
+                                break;
+                            }
                         }
-                    }
-                    res
-                })
-                .unwrap_or(false)
+                        res
+                    })
+                    .unwrap_or(false)
+            }
         })
         .map(|e| Track::new(e.path()))
         .collect();
