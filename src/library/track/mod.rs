@@ -161,47 +161,33 @@ impl Track {
         }
     }
 
-    // # load_meta # {{{
+    // ## META ## {{{
     /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
+
+    // # load_meta # {{{
     pub fn load_meta(&mut self) {
-        if let Ok(frames) = id3::Tag::read_from_path(&self.path) {
-            for frame in frames.frames() {
-                let id = frame.id();
-                let content = frame.content();
-                // 'custom text' handling
-                if id == "TXXX" {
-                    if let id3::Content::ExtendedText(text) = content {
-                        self.tags
-                            .insert(text.description.clone(), text.value.clone());
-                        if text.description.to_ascii_lowercase() == "replaygain_track_gain" {
-                            if let Ok(gain) =
-                                text.value[..text.value.len() - 2].trim().parse::<f32>()
-                            {
-                                // according to the internet, A2 = A1 * 10(GdB / 20)
-                                // where A1 is our volume set in library, G is the replaygain
-                                // offset, and A2 is the final result Rodio should eat.
-                                self.gain = 10f32.powf(gain / 20.0)
-                            }
-                        }
-                    }
-                }
-                // id3 standard tag strings
-                else {
-                    for (t_id, t_str) in TAG_IDS {
-                        if t_id == &id {
-                            if let id3::Content::Text(t) = content {
-                                // lets you search for either the id3 ID or the 'pretty' name
-                                self.tags
-                                    .insert(t_str.to_ascii_lowercase().to_string(), t.to_string());
-                                self.tags
-                                    .insert(t_id.to_ascii_lowercase().to_string(), t.to_string());
-                            }
-                            break;
-                        }
-                    }
-                }
+        match self.path.extension().map(|e| e.to_str()).flatten() {
+            Some("mp3") | Some("wav") => self.load_meta_id3(),
+            Some("flac") => self.load_meta_vorbis::<symphonia::default::formats::FlacReader>(),
+            Some("ogg") => self.load_meta_vorbis::<symphonia::default::formats::OggReader>(),
+            _ => (),
+        }
+
+        if let Some(text) = self.tags.get("replaygain_track_gain") {
+            if let Ok(gain) = text[..text
+                .rfind(|c: char| c.is_numeric())
+                .unwrap_or(text.len() - 1)
+                + 1]
+                .trim_start()
+                .parse::<f32>()
+            {
+                // according to the internet, A2 = A1 * 10(GdB / 20)
+                // where A1 is our volume set in library, G is the replaygain
+                // offset, and A2 is the final result Rodio should eat.
+                self.gain = 10f32.powf(gain / 20.0)
             }
         }
+
         // use file stem if no title tag
         if !self.tags.contains_key("title") {
             if let Some(path_title) = self.path.file_stem().map(|os_s| os_s.to_str()).flatten() {
@@ -210,6 +196,61 @@ impl Track {
             }
         }
     }
+    // # load_meta # }}}
+
+    // # id3 # {{{
+    fn load_meta_id3(&mut self) {
+        if let Ok(frames) = id3::Tag::read_from_path(&self.path) {
+            for frame in frames.frames() {
+                let id = frame.id();
+                let content = frame.content();
+                // 'custom text' handling
+                if id == "TXXX" {
+                    if let id3::Content::ExtendedText(text) = content {
+                        self.tags
+                            .insert(text.description.to_ascii_lowercase(), text.value.clone());
+                    }
+                }
+                // id3 standard tag strings
+                else {
+                    for (t_id, t_str) in TAG_IDS {
+                        if t_id == &id {
+                            if let id3::Content::Text(t) = content {
+                                // lets you search for either the id3 ID or the 'pretty' name
+                                self.tags.insert(t_str.to_ascii_lowercase(), t.to_string());
+                                self.tags.insert(t_id.to_ascii_lowercase(), t.to_string());
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // # id3 # }}}
+
+    // # vorbis comment # {{{
+    fn load_meta_vorbis<R: symphonia::core::formats::FormatReader>(&mut self) {
+        let formatreader: Result<Result<R, _>, _> = File::open(&self.path).map(|file| {
+            symphonia::core::formats::FormatReader::try_new(
+                symphonia::core::io::MediaSourceStream::new(
+                    Box::new(file),
+                    symphonia::core::io::MediaSourceStreamOptions::default(),
+                ),
+                &symphonia::core::formats::FormatOptions::default(),
+            )
+        }); // flatten is still experimental
+        if let Ok(Ok(mut reader)) = formatreader {
+            if let Some(meta) = reader.metadata().skip_to_latest() {
+                for tag in meta.tags() {
+                    self.tags
+                        .insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
+                }
+            }
+        }
+    }
+    // # vorbis comment # }}}
+
     // # load_meta # }}}
 
     // ## GET / SET ## {{{

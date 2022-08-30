@@ -208,7 +208,7 @@ struct MainArgs {
     /// Play immediately
     now: bool,
 
-    #[clap(short='H', long)]
+    #[clap(short = 'H', long)]
     /// Include hidden items ( '.' prefix )
     hidden: bool,
 
