@@ -11,10 +11,6 @@
     * Probably just implement straight in TUI cause it's not useful in CLI. Or not. idk
 
 ### MAIN
-* method to print current filters for re-use
-    * might need the --filter command to be updated into a single command.
-      something like  --filter=album=Alb,Alb2||artist=billy||title
-        * could I just parse the multiple occurrences using the existing parser instead of -f's?
 * Logging overhaul. 3rd-party crate?
 * When the codesplosions are done, every project file needs #![warn(missing_docs)]
     * also variants, methods, and fields all need sorting and clustering beyond just whim

@@ -146,6 +146,8 @@ pub enum PrintCmd {
     Playing,
     Stopped,
     Paused,
+    Filters,
+    Sorts,
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -338,6 +340,19 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         String::new()
                                     }
                                 }
+                                PrintCmd::Filters => {
+                                    response = library
+                                        .get_filters()
+                                        .into_iter()
+                                        .map(|f| f.tag)
+                                        .collect::<Vec<String>>()
+                                        .join(" ")
+                                }
+
+                                PrintCmd::Sorts => {
+                                    response = library.get_sort_tagstrings().join(" ")
+                                }
+
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
