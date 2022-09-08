@@ -344,13 +344,19 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     response = library
                                         .get_filters()
                                         .into_iter()
-                                        .map(|f| f.tag)
+                                        .map(|f| {
+                                            if f.items.is_empty() {
+                                                f.tag
+                                            } else {
+                                                format!("{}={}", f.tag, f.items.join(","))
+                                            }
+                                        })
                                         .collect::<Vec<String>>()
-                                        .join(" ")
+                                        .join("\n")
                                 }
 
                                 PrintCmd::Sorts => {
-                                    response = library.get_sort_tagstrings().join(" ")
+                                    response = library.get_sort_tagstrings().join("\n")
                                 }
 
                                 PrintCmd::Playing => response = library.playing().to_string(),
