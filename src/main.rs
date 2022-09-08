@@ -1,4 +1,4 @@
-use clap::{ErrorKind, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -18,7 +18,7 @@ use library::Library;
 #[cfg(feature = "tui")]
 mod tui;
 
-const ID: &str = "OMPL SERVER 0.4.0";
+const ID: &str = "OMPL SERVER 0.5.0";
 const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
@@ -117,7 +117,7 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
 
 // ### PARSERS ### }}}
 
-// ### SHARED {{{
+// ### ARGS {{{
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum VolumeCmd {
@@ -150,6 +150,43 @@ pub enum PrintCmd {
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum Action {
+    Main {
+        /// Path to music libary folder
+        library: Option<PathBuf>,
+
+        #[clap(short = 'H', long)]
+        /// Include hidden items ( '.' prefix )
+        hidden: bool,
+
+        #[clap(long, short)]
+        /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
+        daemon: bool,
+
+        #[clap(long, short)]
+        /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
+        no_media: bool,
+
+        #[clap(long, short, multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
+        /// Starting filters
+        filters: Vec<library::Filter>,
+
+        #[clap(
+            long = "sort",
+            short,
+            multiple_occurrences(false),
+            multiple_values(true)
+        )]
+        /// Starting sort tagstrings
+        sort_tagstrings: Vec<String>,
+
+        #[clap(long, short, default_value = "0.5")]
+        /// Starting volume
+        volume: f32,
+
+        /// Verbosity level. Pass multiple times to get more verbose (spammy).
+        #[clap(long, short = 'V', multiple_occurrences(true), parse(from_occurrences))]
+        verbosity: u8,
+    },
     Play,
     Pause,
     Stop,
@@ -167,7 +204,7 @@ pub enum Action {
         file: PathBuf,
     },
     Filter {
-        #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
+        #[clap(long, short, multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
         filters: Vec<library::Filter>,
         /// Play next track immediately
         #[clap(long)]
@@ -183,66 +220,20 @@ pub enum Action {
     Purge,
 }
 
-// ### SHARED }}}
-
-// ### SERVER ### {{{
-
-#[derive(Parser, Debug, Clone)]
-#[clap(
-    author,
-    about,
-    version,
-    before_help("OMPL Server Help"),
-    long_about(
-        "Server-exclusive actions are all regular args\n\
-        Server requires the --library or -l flags set\n\
-        Use `ompl --help` to see both client and server helps together"
-    )
-)]
-struct MainArgs {
-    #[clap(short, long)]
-    /// Path to music libary folder
-    library: PathBuf,
-
-    #[clap(long)]
-    /// Play immediately
-    now: bool,
-
-    #[clap(short = 'H', long)]
-    /// Include hidden items ( '.' prefix )
-    hidden: bool,
-
-    #[clap(long, short)]
-    /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
-    daemon: bool,
-
-    #[clap(long, short)]
-    /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
-    no_media: bool,
+#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
+#[clap(author, about, version)]
+struct Args {
+    #[clap(subcommand)]
+    action: Action,
 
     /// Port with which to communicate with other OMPL instances
     #[clap(long, default_value = PORT)]
     port: u16,
-
-    #[clap(long, short, multiple_occurrences(true), multiple_values(false), parse(try_from_str = parse_filter))]
-    filters: Vec<library::Filter>,
-
-    #[clap(
-        long = "sort",
-        short,
-        multiple_occurrences(false),
-        multiple_values(true)
-    )]
-    sort_tagstrings: Vec<String>,
-
-    #[clap(long, short, default_value = "0.5")]
-    /// Starting volume
-    volume: f32,
-
-    /// Verbosity level. Pass multiple times to get more verbose (spammy).
-    #[clap(long, short = 'V', multiple_occurrences(true), parse(from_occurrences))]
-    verbosity: u8,
 }
+
+// ### ARGS }}}
+
+// ### SERVER ### {{{
 
 fn server(listener: TcpListener, library: Arc<Library>) {
     for stream in listener.incoming() {
@@ -273,9 +264,10 @@ fn server(listener: TcpListener, library: Arc<Library>) {
 
                 // # Process # {{{
                 l2!("Processing command...");
-                match bincode::deserialize::<SubArgs>(&data) {
-                    Ok(sub_args) => {
-                        match sub_args.action.clone() {
+                match bincode::deserialize::<Args>(&data) {
+                    Ok(args) => {
+                        match args.action.clone() {
+                            Action::Main { .. } => (),
                             Action::Exit => {
                                 // finalize response 2
                                 if let Err(e) = s.write_all(response.as_bytes()) {
@@ -386,168 +378,162 @@ fn server(listener: TcpListener, library: Arc<Library>) {
     l2!("Server exiting");
 }
 
-fn instance_main(listener: TcpListener, main_args: MainArgs) {
-    LOG_LEVEL.store(main_args.verbosity, LOG_ORD);
+fn instance_main(listener: TcpListener, args: Args) {
+    // is there a way to extract the structured data?
+    // so I can just yoink the main struct and do
+    // main.hidden main.volume etc?
+    match args.action {
+        Action::Main {
+            library: library_path,
+            hidden,
+            daemon,
+            no_media,
+            filters,
+            sort_tagstrings,
+            volume,
+            verbosity,
+        } => {
+            LOG_LEVEL.store(verbosity, LOG_ORD);
 
-    l2!("Starting main...");
-    let library = Library::new();
-    library.hidden_set(main_args.hidden);
-    library.volume_set(main_args.volume);
-    library.set_filters(main_args.filters);
-    library.set_sort_tagstrings(main_args.sort_tagstrings);
-    if main_args.now {
-        library.play()
-    }
-    library.append_library(main_args.library);
-
-    let server_library = library.clone();
-    let jh = thread::spawn(move || server(listener, server_library));
-    l2!(format!("Listening on port {}", main_args.port));
-
-    // ## souvlaki ## {{{
-    #[cfg(feature = "media-controls")]
-    if !main_args.no_media {
-        l2!("Initializing media controls...");
-        let mut libevt_r = library.get_receiver();
-
-        #[cfg(not(target_os = "windows"))]
-        let hwnd = None;
-
-        #[cfg(target_os = "windows")]
-        let hwnd = {
-            // You *could* use winapi::um::wincon::GetConsoleWindow()
-            // but if you're running ompl from the CLI, conhost.exe will own the window process
-            // so souvlaki can't hook into it. This just creates a hidden window instead.
-            use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
-            match winit::window::WindowBuilder::new()
-                .with_decorations(false)
-                .with_visible(false)
-                .with_title("OMPL Media Control Window")
-                .build(&winit::event_loop::EventLoop::new())
-                .unwrap()
-                .raw_window_handle()
-            {
-                RawWindowHandle::Win32(han) => Some(han.hwnd),
-                _ => panic!("Unknown window handle type!"),
+            l2!("Starting main...");
+            let library = Library::new();
+            library.hidden_set(hidden);
+            library.volume_set(volume);
+            library.set_filters(filters);
+            library.set_sort_tagstrings(sort_tagstrings);
+            if let Some(path) = library_path {
+                library.append_library(path);
             }
-        };
 
-        match MediaControls::new(PlatformConfig {
-            dbus_name: &format!("ompl.port{}", main_args.port),
-            display_name: "OMPL",
-            hwnd,
-        }) {
-            Ok(mut controls) => {
-                let ctrl_libr_wk = Arc::downgrade(&library);
-                controls
-                    .attach(move |event: MediaControlEvent| {
-                        if let Some(library) = ctrl_libr_wk.upgrade() {
-                            match event {
-                                MediaControlEvent::Play => library.play(),
-                                MediaControlEvent::Stop => library.stop(),
-                                MediaControlEvent::Pause => library.pause(),
-                                MediaControlEvent::Toggle => library.play_pause(),
-                                MediaControlEvent::Next => library.next(),
-                                MediaControlEvent::Previous => library.previous(),
-                                _ => (),
-                            }
-                        }
-                    })
-                    .unwrap();
-                let meta_libr_wk = Arc::downgrade(&library);
-                thread::spawn(move || loop {
-                    match libevt_r.recv() {
-                        Ok(_) => {
-                            if let Some(library) = meta_libr_wk.upgrade() {
-                                controls
-                                    .set_metadata(MediaMetadata {
-                                        title: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("title").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        artist: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("artist").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        album: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("album").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        ..Default::default()
-                                    })
-                                    .unwrap();
-                                controls
-                                    .set_playback(if library.playing() {
-                                        MediaPlayback::Playing { progress: None }
-                                    } else if library.paused() {
-                                        MediaPlayback::Paused { progress: None }
-                                    } else {
-                                        MediaPlayback::Stopped
-                                    })
-                                    .unwrap();
-                            } else {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
+            let server_library = library.clone();
+            let jh = thread::spawn(move || server(listener, server_library));
+            l2!(format!("Listening on port {}", args.port));
+
+            // ## souvlaki ## {{{
+            #[cfg(feature = "media-controls")]
+            if !no_media {
+                l2!("Initializing media controls...");
+                let mut libevt_r = library.get_receiver();
+
+                #[cfg(not(target_os = "windows"))]
+                let hwnd = None;
+
+                #[cfg(target_os = "windows")]
+                let hwnd = {
+                    // You *could* use winapi::um::wincon::GetConsoleWindow()
+                    // but if you're running ompl from the CLI, conhost.exe will own the window process
+                    // so souvlaki can't hook into it. This just creates a hidden window instead.
+                    use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+                    match winit::window::WindowBuilder::new()
+                        .with_decorations(false)
+                        .with_visible(false)
+                        .with_title("OMPL Media Control Window")
+                        .build(&winit::event_loop::EventLoop::new())
+                        .unwrap()
+                        .raw_window_handle()
+                    {
+                        RawWindowHandle::Win32(han) => Some(han.hwnd),
+                        _ => panic!("Unknown window handle type!"),
                     }
-                });
-            }
-            Err(e) => println!("Media control failure: {:?}", e),
-        }
-    }
-    // ## souvlaki ## }}}
+                };
 
-    l2!("Main server started");
-    #[cfg(feature = "tui")]
-    if main_args.daemon {
-        jh.join().unwrap();
-    } else {
-        if tui::tui(library) {
+                match MediaControls::new(PlatformConfig {
+                    dbus_name: &format!("ompl.port{}", args.port),
+                    display_name: "OMPL",
+                    hwnd,
+                }) {
+                    Ok(mut controls) => {
+                        let ctrl_libr_wk = Arc::downgrade(&library);
+                        controls
+                            .attach(move |event: MediaControlEvent| {
+                                if let Some(library) = ctrl_libr_wk.upgrade() {
+                                    match event {
+                                        MediaControlEvent::Play => library.play(),
+                                        MediaControlEvent::Stop => library.stop(),
+                                        MediaControlEvent::Pause => library.pause(),
+                                        MediaControlEvent::Toggle => library.play_pause(),
+                                        MediaControlEvent::Next => library.next(),
+                                        MediaControlEvent::Previous => library.previous(),
+                                        _ => (),
+                                    }
+                                }
+                            })
+                            .unwrap();
+                        let meta_libr_wk = Arc::downgrade(&library);
+                        thread::spawn(move || loop {
+                            match libevt_r.recv() {
+                                Ok(_) => {
+                                    if let Some(library) = meta_libr_wk.upgrade() {
+                                        controls
+                                            .set_metadata(MediaMetadata {
+                                                title: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("title").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                artist: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("artist").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                album: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("album").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                ..Default::default()
+                                            })
+                                            .unwrap();
+                                        controls
+                                            .set_playback(if library.playing() {
+                                                MediaPlayback::Playing { progress: None }
+                                            } else if library.paused() {
+                                                MediaPlayback::Paused { progress: None }
+                                            } else {
+                                                MediaPlayback::Stopped
+                                            })
+                                            .unwrap();
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                Err(_) => break,
+                            }
+                        });
+                    }
+                    Err(e) => println!("Media control failure: {:?}", e),
+                }
+            }
+            // ## souvlaki ## }}}
+
+            l2!("Main server started");
+            #[cfg(feature = "tui")]
+            if daemon {
+                jh.join().unwrap();
+            } else {
+                if tui::tui(library) {
+                    jh.join().unwrap();
+                }
+            }
+
+            #[cfg(not(feature = "tui"))]
             jh.join().unwrap();
         }
+        _ => unreachable!("Instance_Main called without Main Subcommand!\n{:?}", args),
     }
-
-    #[cfg(not(feature = "tui"))]
-    jh.join().unwrap();
 }
 
 // ### SERVER ### }}}
 
 // ### CLIENT ### {{{
 
-#[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-#[clap(
-    author,
-    about,
-    version,
-    long_about(
-        "Client-exclusive actions are all subcommands\n\
-        Client requires at least one subcommand passed\n\
-        Use `ompl help COMMAND` for more detailed subcommand information\n\
-        Use `ompl --help` to see both client and server helps together"
-    ),
-    before_help("OMPL Client Help")
-)]
-struct SubArgs {
-    #[clap(subcommand)]
-    action: Action,
-
-    /// Port with which to communicate with other OMPL instances
-    #[clap(long, default_value = PORT)]
-    port: u16,
-}
-
-fn instance_sub(mut stream: TcpStream, sub_args: SubArgs) {
+fn instance_sub(mut stream: TcpStream, args: Args) {
     // confirmation ID
     let mut confirmation = vec![0u8; ID.bytes().count()];
     stream.read_exact(&mut confirmation).unwrap();
     assert!(String::from_utf8(confirmation).unwrap() == ID);
 
-    let data = match bincode::serialize(&sub_args) {
+    let data = match bincode::serialize(&args) {
         Ok(d) => d,
         Err(e) => panic!("Could not serialize args\n{}", e),
     };
@@ -570,51 +556,26 @@ fn instance_sub(mut stream: TcpStream, sub_args: SubArgs) {
 
 // ### MAIN ### {{{
 fn main() {
-    let main_args = MainArgs::try_parse();
-    let sub_args = SubArgs::try_parse();
+    let args = Args::parse();
 
-    match main_args {
-        Ok(margs) => {
-            match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), margs.port)) {
-                Ok(listener) => instance_main(listener, margs),
+    match args.action {
+        Action::Main { .. } => {
+            match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), args.port)) {
+                Ok(listener) => instance_main(listener, args),
                 Err(_) => panic!(
                     "\n\nCouldn't bind server socket to port {}.\n\
                     Try another port, or perhaps an instance is already running?\n\n",
-                    margs.port
+                    args.port
                 ),
             }
         }
-        Err(m_e) => match sub_args {
-            Ok(sargs) => {
-                match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), sargs.port))
-                {
-                    Ok(stream) => instance_sub(stream, sargs),
-                    Err(_) => panic!(
-                        "\n\nCouldn't connect client socket to port {}.\n\
+        _ => match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), args.port)) {
+            Ok(stream) => instance_sub(stream, args),
+            Err(_) => panic!(
+                "\n\nCouldn't connect client socket to port {}.\n\
                         Are you sure there's an OMPL server running here?\n\n",
-                        sargs.port
-                    ),
-                }
-            }
-            Err(s_e) => {
-                if s_e.kind() == ErrorKind::DisplayHelp && m_e.kind() != ErrorKind::DisplayHelp {
-                    // if using help subcommand don't also print main error
-                    s_e.print().unwrap();
-                } else if s_e.kind() == ErrorKind::DisplayHelp
-                    && m_e.kind() == ErrorKind::DisplayHelp
-                {
-                    // --help or -h
-                    m_e.print().unwrap();
-                    println!();
-                    s_e.print().unwrap();
-                } else {
-                    // dual errors
-                    println!("OMPL Main Error\n");
-                    m_e.print().unwrap();
-                    println!("\nOMPL Client Error\n");
-                    s_e.print().unwrap();
-                }
-            }
+                args.port
+            ),
         },
     }
 }
