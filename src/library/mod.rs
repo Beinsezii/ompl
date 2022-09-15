@@ -262,6 +262,16 @@ impl Library {
         l1!(format!("Filters updated in {:?}", Instant::now() - now));
     }
 
+    pub fn set_filter(&self, index: usize, filter: Filter) {
+        let mut filters = self.get_filters();
+        if let Some(fm) = filters.get_mut(index) {
+            *fm = filter
+        } else {
+            filters.push(filter)
+        }
+        self.set_filters(filters)
+    }
+
     fn force_build_filters(&self) {
         let filters = self.get_filters();
         *self.filtered_tree.write().unwrap() = vec![];
@@ -428,8 +438,23 @@ impl Library {
         self.sort();
     }
 
+    pub fn set_sort(&self, index: usize, tagstring: String) {
+        let mut tagstrings = self.sort_tagstrings.write().unwrap();
+        if let Some(ts) = tagstrings.get_mut(index) {
+            *ts = tagstring
+        } else {
+            tagstrings.push(tagstring)
+        }
+        drop(tagstrings);
+        self.sort();
+    }
+
     pub fn get_sort_tagstrings(&self) -> Vec<String> {
         self.sort_tagstrings.read().unwrap().clone()
+    }
+
+    pub fn get_sort(&self, index: usize) -> Option<String> {
+        self.sort_tagstrings.read().unwrap().get(index).cloned()
     }
 
     pub fn insert_sort_tagstring(&self, tagstring: String, pos: usize) {

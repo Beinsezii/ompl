@@ -128,6 +128,40 @@ pub enum VolumeCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum FilterCmd {
+    Get {
+        index: Option<usize>,
+    },
+    Set {
+        index: usize,
+        #[clap(parse(try_from_str = parse_filter))]
+        filter: library::Filter,
+    },
+    SetAll {
+        #[clap(multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
+        filters: Vec<library::Filter>,
+    },
+    // Remove {index: usize},
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum SortCmd {
+    Get {
+        index: Option<usize>,
+    },
+    Set {
+        index: usize,
+        tagstring: String,
+    },
+
+    SetAll {
+        #[clap(multiple_occurrences(false), multiple_values(true))]
+        tagstrings: Vec<String>,
+    },
+    // Remove {index: usize},
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum ShuffleCmd {
     Get,
     True,
@@ -137,8 +171,6 @@ pub enum ShuffleCmd {
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
-    Volume,
-    Shuffle,
     Track,
     Tagstring { tagstring: String },
     File,
@@ -146,8 +178,6 @@ pub enum PrintCmd {
     Playing,
     Stopped,
     Paused,
-    Filters,
-    Sorts,
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -205,17 +235,10 @@ pub enum Action {
     PlayFile {
         file: PathBuf,
     },
-    Filter {
-        #[clap(long, short, multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
-        filters: Vec<library::Filter>,
-        /// Play next track immediately
-        #[clap(long)]
-        now: bool,
-    },
-    Sort {
-        #[clap(multiple_occurrences(false), multiple_values(true), required(true))]
-        sort_tagstrings: Vec<String>,
-    },
+    #[clap(subcommand)]
+    Filter(FilterCmd),
+    #[clap(subcommand)]
+    Sort(SortCmd),
     Append {
         path: PathBuf,
     },
@@ -309,6 +332,57 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     )
                                 }
                             }
+
+                            Action::Filter(cmd) => match cmd {
+                                FilterCmd::Get { index } => {
+                                    response = if let Some(i) = index {
+                                        library
+                                            .get_filter(i)
+                                            .map(|f| {
+                                                if f.items.is_empty() {
+                                                    f.tag
+                                                } else {
+                                                    format!("{}={}", f.tag, f.items.join(","))
+                                                }
+                                            })
+                                            .unwrap_or(String::new())
+                                    } else {
+                                        library
+                                            .get_filters()
+                                            .into_iter()
+                                            .map(|f| {
+                                                if f.items.is_empty() {
+                                                    f.tag
+                                                } else {
+                                                    format!("{}={}", f.tag, f.items.join(","))
+                                                }
+                                            })
+                                            .collect::<Vec<String>>()
+                                            .join("\n")
+                                    }
+                                }
+                                FilterCmd::Set { index, filter } => {
+                                    library.set_filter(index, filter)
+                                }
+                                FilterCmd::SetAll { filters } => library.set_filters(filters),
+                            },
+
+                            Action::Sort(cmd) => match cmd {
+                                SortCmd::Get { index } => {
+                                    response = if let Some(i) = index {
+                                        library.get_sort(i).unwrap_or(String::new())
+                                    } else {
+                                        library.get_sort_tagstrings().join("\n")
+                                    }
+                                }
+                                SortCmd::Set { index, tagstring } => {
+                                    library.set_sort(index, tagstring)
+                                }
+                                SortCmd::SetAll { tagstrings } => {
+                                    library.set_sort_tagstrings(tagstrings)
+                                }
+                            },
+
                             Action::Print(print_cmd) => match print_cmd {
                                 PrintCmd::Status => {
                                     response = if library.playing() {
@@ -340,42 +414,10 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         String::new()
                                     }
                                 }
-                                PrintCmd::Filters => {
-                                    response = library
-                                        .get_filters()
-                                        .into_iter()
-                                        .map(|f| {
-                                            if f.items.is_empty() {
-                                                f.tag
-                                            } else {
-                                                format!("{}={}", f.tag, f.items.join(","))
-                                            }
-                                        })
-                                        .collect::<Vec<String>>()
-                                        .join("\n")
-                                }
-
-                                PrintCmd::Sorts => {
-                                    response = library.get_sort_tagstrings().join("\n")
-                                }
-
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
-                                PrintCmd::Shuffle => response = library.shuffle_get().to_string(),
-                                PrintCmd::Volume => {
-                                    response = format!("{:.2}", library.volume_get())
-                                }
                             },
-                            Action::Filter { now, filters } => {
-                                library.set_filters(filters);
-                                if now {
-                                    library.next()
-                                }
-                            }
-                            Action::Sort { sort_tagstrings } => {
-                                library.set_sort_tagstrings(sort_tagstrings)
-                            }
                             Action::Append { path } => library.append_library(path),
                             Action::Purge => library.purge(),
                         };
