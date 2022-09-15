@@ -457,6 +457,15 @@ impl Library {
         self.sort_tagstrings.read().unwrap().get(index).cloned()
     }
 
+    pub fn remove_sort(&self, index: usize) {
+        let mut sorts = self.sort_tagstrings.write().unwrap();
+        if index < sorts.len() {
+            sorts.remove(index);
+        }
+        drop(sorts);
+        self.sort()
+    }
+
     pub fn insert_sort_tagstring(&self, tagstring: String, pos: usize) {
         {
             let mut sts = self.sort_tagstrings.write().unwrap();

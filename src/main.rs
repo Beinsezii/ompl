@@ -141,7 +141,9 @@ pub enum FilterCmd {
         #[clap(multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
         filters: Vec<library::Filter>,
     },
-    // Remove {index: usize},
+    Remove {
+        index: usize,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -158,7 +160,9 @@ pub enum SortCmd {
         #[clap(multiple_occurrences(false), multiple_values(true))]
         tagstrings: Vec<String>,
     },
-    // Remove {index: usize},
+    Remove {
+        index: usize,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -365,6 +369,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     library.set_filter(index, filter)
                                 }
                                 FilterCmd::SetAll { filters } => library.set_filters(filters),
+                                FilterCmd::Remove { index } => library.remove_filter(index),
                             },
 
                             Action::Sort(cmd) => match cmd {
@@ -381,6 +386,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 SortCmd::SetAll { tagstrings } => {
                                     library.set_sort_tagstrings(tagstrings)
                                 }
+                                SortCmd::Remove { index } => library.remove_sort(index),
                             },
 
                             Action::Print(print_cmd) => match print_cmd {
