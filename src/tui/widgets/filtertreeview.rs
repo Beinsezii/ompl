@@ -1,15 +1,13 @@
-use super::{Clickable, ContainedWidget, Scrollable, Searchable, Theme};
+use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, Theme};
 use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::MouseEvent;
 use tui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::Rect,
     terminal::Frame,
-    text::Span,
-    widgets::{Block, Borders, List, ListItem},
 };
 
 // ### struct FilterTreeView {{{
@@ -17,11 +15,7 @@ use tui::{
 #[derive(Clone)]
 pub struct FilterTreeView {
     lib_weak: Weak<Library>,
-    pub area: Rect,
-    pub active: bool,
-    pub index: usize,
-    pub positions: Vec<usize>,
-    pub views: Vec<usize>,
+    pane_array: PaneArray,
 }
 
 impl FilterTreeView {
@@ -29,27 +23,58 @@ impl FilterTreeView {
         let count = library.filter_count();
         Self {
             lib_weak: Arc::downgrade(&library),
-            area: Rect::default(),
-            active: false,
-            index: 0,
-            positions: vec![0; count],
-            views: vec![0; count],
+            pane_array: PaneArray::new(false, count),
         }
+    }
+
+    pub fn area(&self) -> Rect {
+        self.pane_array.area
+    }
+    pub fn area_mut(&mut self) -> &mut Rect {
+        &mut self.pane_array.area
+    }
+
+    pub fn active(&self) -> bool {
+        self.pane_array.active
+    }
+    pub fn active_mut(&mut self) -> &mut bool {
+        &mut self.pane_array.active
+    }
+
+    pub fn index(&self) -> usize {
+        self.pane_array.index
+    }
+    pub fn index_mut(&mut self) -> &mut usize {
+        &mut self.pane_array.index
+    }
+
+    pub fn positions(&self) -> &[usize] {
+        &self.pane_array.positions
+    }
+    pub fn positions_mut(&mut self) -> &mut Vec<usize> {
+        &mut self.pane_array.positions
+    }
+
+    pub fn views(&self) -> &[usize] {
+        &self.pane_array.views
+    }
+    pub fn views_mut(&mut self) -> &mut Vec<usize> {
+        &mut self.pane_array.views
     }
 
     pub fn toggle_current(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
-            if let Some(mut fi) = library.get_filter_items(self.index) {
-                let item = get_taglist_sort(&tags[self.index].tag, &data[self.index])
-                    .remove(self.positions[self.index] as usize);
+            if let Some(mut fi) = library.get_filter_items(self.index()) {
+                let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+                    .remove(self.positions()[self.index()] as usize);
 
                 match fi.contains(&item) {
                     true => fi = fi.into_iter().filter(|i| *i != item).collect(),
                     false => fi.push(item),
                 }
 
-                library.set_filter_items(self.index, fi);
+                library.set_filter_items(self.index(), fi);
             }
         }
     }
@@ -58,17 +83,17 @@ impl FilterTreeView {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
             library.set_filter_items(
-                self.index,
-                vec![get_taglist_sort(&tags[self.index].tag, &data[self.index])
-                    .remove(self.positions[self.index])],
+                self.index(),
+                vec![get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+                    .remove(self.positions()[self.index()])],
             );
         }
     }
 
     pub fn deselect_all(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
-            if library.get_filter_items(self.index).map(|f| f.is_empty()) == Some(false) {
-                library.set_filter_items(self.index, Vec::new());
+            if library.get_filter_items(self.index()).map(|f| f.is_empty()) == Some(false) {
+                library.set_filter_items(self.index(), Vec::new());
             }
         }
     }
@@ -76,10 +101,10 @@ impl FilterTreeView {
     pub fn invert_selection(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
-            if let Some(fi) = library.get_filter_items(self.index) {
+            if let Some(fi) = library.get_filter_items(self.index()) {
                 library.set_filter_items(
-                    self.index,
-                    get_taglist_sort(&tags[self.index].tag, &data[self.index])
+                    self.index(),
+                    get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
                         .into_iter()
                         .filter(|i| !fi.contains(i))
                         .collect(),
@@ -90,17 +115,19 @@ impl FilterTreeView {
 
     /// Used when a filter is removed to save positions
     pub fn remove(&mut self) {
-        if self.index < self.positions.len() {
-            self.positions.remove(self.index);
-            self.views.remove(self.index);
+        if self.index() < self.positions().len() {
+            let i = self.index();
+            self.positions_mut().remove(i);
+            self.views_mut().remove(i);
         }
     }
 
     /// Used when a filter is to create new positions
     pub fn insert(&mut self, before: bool) {
-        let pos = self.index + if before { 0 } else { 1 };
-        self.positions.insert(pos.min(self.positions.len()), 0);
-        self.views.insert(pos.min(self.views.len()), 0);
+        let pos = self.index() + if before { 0 } else { 1 };
+        let (poslen, viewlen) = (self.positions().len(), self.views().len());
+        self.positions_mut().insert(pos.min(poslen), 0);
+        self.views_mut().insert(pos.min(viewlen), 0);
     }
 }
 
@@ -112,11 +139,14 @@ impl Scrollable for FilterTreeView {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
         self.lib_weak.upgrade().map(|library| {
             let (tags, data) = library.get_filter_tree_display();
+            let i = self.index();
+            let area = self.area();
             (
-                &mut self.positions[self.index],
-                &mut self.views[self.index],
-                self.area.height.saturating_sub(2).into(),
-                get_taglist_sort(&tags[self.index].tag, &data[self.index]).len(),
+                // using fns makes it think it has mutable aliasing
+                &mut self.pane_array.positions[i],
+                &mut self.pane_array.views[i],
+                area.height.saturating_sub(2).into(),
+                get_taglist_sort(&tags[i].tag, &data[i]).len(),
             )
         })
     }
@@ -129,7 +159,7 @@ impl Searchable for FilterTreeView {
             None => return Vec::new(),
         };
         let (tags, data) = library.get_filter_tree_display();
-        let i = self.index.min(library.filter_count());
+        let i = self.index().min(library.filter_count());
         get_taglist_sort(&tags[i].tag, &data[i])
     }
 }
@@ -144,92 +174,18 @@ impl ContainedWidget for FilterTreeView {
             None => return,
         };
 
-        let count = library.filter_count();
+        let (filters, tracks) = library.get_filter_tree_display();
 
-        self.index = self.index.min(count.saturating_sub(1));
+        let mut items = Vec::<(String, Vec<String>)>::new();
+        let mut hightlights = Vec::<Vec<String>>::new();
 
-        if count == 0 {
-            return;
-        };
-
-        // clamp scroll
-        self.scroll_by_n(0);
-
-        let (filters, data) = library.get_filter_tree_display();
-
-        // make sure last one always fills
-        let mut constraints =
-            vec![Constraint::Length(self.area.width / count as u16); count.saturating_sub(1)];
-        constraints.push(Constraint::Min(1));
-
-        for (num, ((area, filter), tracks)) in Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
-            .split(self.area)
-            .into_iter()
-            .zip(filters.into_iter())
-            .zip(data.into_iter())
-            .enumerate()
-        {
-            frame.render_widget(
-                List::new(
-                    get_taglist_sort(&filter.tag, &tracks)
-                        .into_iter()
-                        .enumerate()
-                        .map(|(n, s)| {
-                            ListItem::new(s.clone()).style(if self.active && num == self.index {
-                                match filter.items.contains(&s) {
-                                    true => match n == self.positions[num] {
-                                        true => theme.active_hi_sel,
-                                        false => theme.active_hi,
-                                    },
-                                    false => match n == self.positions[num] {
-                                        true => theme.active_sel,
-                                        false => theme.active,
-                                    },
-                                }
-                            } else {
-                                match filter.items.contains(&s) {
-                                    true => match n == self.positions[num] {
-                                        true => theme.base_hi_sel,
-                                        false => theme.base_hi,
-                                    },
-                                    false => match n == self.positions[num] {
-                                        true => theme.base_sel,
-                                        false => theme.base,
-                                    },
-                                }
-                            })
-                        })
-                        .skip(self.views[num])
-                        .collect::<Vec<ListItem>>(),
-                )
-                .block(
-                    Block::default()
-                        .title(Span::styled(
-                            filter.tag,
-                            if self.active && num == self.index {
-                                match filter.items.is_empty() {
-                                    true => theme.active,
-                                    false => theme.active_hi,
-                                }
-                            } else {
-                                match filter.items.is_empty() {
-                                    true => theme.base,
-                                    false => theme.base_hi,
-                                }
-                            },
-                        ))
-                        .borders(Borders::ALL)
-                        .style(if self.active && num == self.index {
-                            theme.active
-                        } else {
-                            theme.base
-                        }),
-                ),
-                area,
-            )
+        for (ft, tl) in filters.into_iter().zip(tracks.into_iter()) {
+            hightlights.push(ft.items); // lightly confusing
+            let tl_tags = get_taglist_sort(&ft.tag, &tl);
+            items.push((ft.tag, tl_tags));
         }
+
+        self.pane_array.draw_from(frame, theme, items, hightlights)
     }
 }
 // ### impl ContainedWidget ### }}}
@@ -237,92 +193,40 @@ impl ContainedWidget for FilterTreeView {
 // ### impl Clickable ### {{{
 impl Clickable for FilterTreeView {
     fn process_event(&mut self, event: MouseEvent) -> bool {
-        match event.kind {
-            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return false
-            }
-            _ => (),
-        }
+
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return false,
         };
 
-        let point = Rect::new(event.column, event.row, 1, 1);
+        let (filters, tracks) = library.get_filter_tree_display();
+        let mut tagstrings = Vec::<Vec<String>>::new();
 
-        if self.area.intersects(point) {
-            self.active = true;
-            let (tags, data) = library.get_filter_tree_display();
-            for (num, zone) in Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(vec![Constraint::Ratio(1, data.len() as u32); data.len()])
-                .split(self.area)
-                .into_iter()
-                .enumerate()
-            {
-                if zone.intersects(point) {
-                    self.index = num;
+        let mut items = Vec::<(usize, usize)>::new();
 
-                    match event.kind {
-                        MouseEventKind::ScrollUp => {
-                            self.scroll_up();
-                            return true;
-                        }
-                        MouseEventKind::ScrollDown => {
-                            self.scroll_down();
-                            return true;
-                        }
-                        #[allow(non_snake_case)]
-                        MouseEventKind::Down(button) => {
-                            let (zX, zY) = (event.column - zone.x, event.row - zone.y);
-                            // click title
-                            if zX >= 1 && zX <= tags[num].tag.len() as u16 && zY == 0 {
-                                match button {
-                                    MouseButton::Left => {
-                                        self.invert_selection();
-                                        return false;
-                                    }
-                                    MouseButton::Right => self.deselect_all(),
-
-                                    MouseButton::Middle => (),
-                                }
-                            // click in list
-                            } else if zX > 0
-                                && zX < zone.width - 1
-                                && zY > 0
-                                && zY < zone.height - 1
-                                && usize::from(zY)
-                                    < get_taglist_sort(&tags[num].tag, &data[num])
-                                        .len()
-                                        .saturating_sub(self.views[num])
-                                        + 1
-                            {
-                                match button {
-                                    MouseButton::Left => {
-                                        self.positions[num] = zY as usize + self.views[num] - 1;
-                                        self.select_current();
-                                        return false;
-                                    }
-                                    MouseButton::Right => {
-                                        self.positions[num] = zY as usize + self.views[num] - 1;
-                                        self.toggle_current();
-                                        return false;
-                                    }
-                                    _ => (),
-                                }
-                            }
-                        } // match ::Down()
-                        _ => (),
-                    } // match event
-
-                    break;
-                } // zone intersects
-            }
-        } else {
-            // area intersects
-            self.active = false
+        for (ft, tl) in filters.iter().zip(tracks.iter()) {
+            let ts = get_taglist_sort(&ft.tag, &tl);
+            items.push((ft.tag.len(), ts.len()));
+            tagstrings.push(ts);
         }
-        true
+
+        match self.pane_array.prep_event(event, &items) {
+            Some(PaneArrayEvt::Click) => self.select_current(),
+            Some(PaneArrayEvt::RClick) => self.toggle_current(),
+            Some(PaneArrayEvt::ClickTit) => self.invert_selection(),
+            Some(PaneArrayEvt::RClickTit) => self.deselect_all(),
+            Some(PaneArrayEvt::ScrollUp) => {self.scroll_up(); return true},
+            Some(PaneArrayEvt::ScrollDown) => {self.scroll_down(); return true},
+            Some(PaneArrayEvt::Delete) => (),
+            Some(PaneArrayEvt::Edit) => (),
+            Some(PaneArrayEvt::MoveLeft) => (),
+            Some(PaneArrayEvt::MoveRight) => (),
+            None => (),
+        }
+
+
+        false
+
     }
 }
 // ### impl Clickable ### }}}

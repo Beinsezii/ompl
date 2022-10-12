@@ -2,20 +2,40 @@ pub use super::theme::Theme;
 mod statusbar;
 pub use statusbar::StatusBar;
 mod menubar;
-pub use menubar::{MenuBar, MTree};
+pub use menubar::{MTree, MenuBar};
 mod filtertreeview;
 pub use filtertreeview::FilterTreeView;
 mod queuetable;
 pub use queuetable::QueueTable;
 
+use tui::{
+    layout::{Constraint, Direction, Layout, Rect},
+    terminal::Frame,
+    text::Span,
+    widgets::{Block, Borders, List, ListItem},
+};
+
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
+    let mut constraints = vec![
+        Constraint::Length(width / n);
+        n.saturating_sub(1).into()
+    ];
+    constraints.push(Constraint::Min(1));
+    constraints
+}
+
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<T>, theme: Theme);
+    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut Frame<T>, theme: Theme);
 }
 
 pub trait Clickable {
     fn process_event(&mut self, event: crossterm::event::MouseEvent) -> bool;
 }
+
+// ### Scrollable ### {{{
 
 pub trait Scrollable {
     /// cursor position, view offset, height of view, max length
@@ -93,3 +113,237 @@ pub fn scroll_by_n_lock(
         .saturating_sub(height / 2)
         .min(length.saturating_sub(height));
 }
+
+// ### Scrollable ### }}}
+
+// ### PaneArray ### {{{
+
+#[derive(Clone, Debug)]
+pub struct PaneArray {
+    joined: bool,
+    pub area: Rect,
+    pub active: bool,
+    pub index: usize,
+    pub positions: Vec<usize>,
+    pub views: Vec<usize>,
+}
+
+/// Updates positions before sending
+pub enum PaneArrayEvt {
+    Click,
+    ClickTit,
+    RClick,
+    RClickTit,
+    ScrollUp,
+    ScrollDown,
+    Edit,
+    Delete,
+    MoveLeft,
+    MoveRight,
+}
+
+impl PaneArray {
+    pub fn new(joined: bool, count: usize) -> Self {
+        Self {
+            joined,
+            area: Rect::default(),
+            active: false,
+            index: 0,
+            positions: vec![0; if joined { 1 } else { count }],
+            views: vec![0; if joined { 1 } else { count }],
+        }
+    }
+
+    // # prep_event # {{{
+    pub fn prep_event(
+        &mut self,
+        event: crossterm::event::MouseEvent,
+        items: &[(usize, usize)],
+    ) -> Option<PaneArrayEvt> {
+        match event.kind {
+            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
+                return None
+            }
+            _ => (),
+        }
+
+        let point = Rect::new(event.column, event.row, 1, 1);
+
+        if self.area.intersects(point) {
+            self.active = true;
+            for (num, zone) in Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(equal_constraints(self.area.width, items.len() as u16))
+                .split(self.area)
+                .into_iter()
+                .enumerate()
+            {
+                if zone.intersects(point) {
+                    self.index = num;
+
+                    match event.kind {
+                        MouseEventKind::ScrollUp => {
+                            return Some(PaneArrayEvt::ScrollUp);
+                        }
+                        MouseEventKind::ScrollDown => {
+                            return Some(PaneArrayEvt::ScrollDown);
+                        }
+                        #[allow(non_snake_case)]
+                        MouseEventKind::Down(button) => {
+                            let (zX, zY) = (event.column - zone.x, event.row - zone.y);
+                            // click title
+                            if zX >= 1 && zX <= items[num].0 as u16 && zY == 0 {
+                                match button {
+                                    MouseButton::Left => return Some(PaneArrayEvt::ClickTit),
+
+                                    MouseButton::Right => return Some(PaneArrayEvt::RClickTit),
+
+                                    MouseButton::Middle => (),
+                                }
+                            // click in list
+                            } else if zX > 0
+                                && zX < zone.width - 1
+                                && zY > 0
+                                && zY < zone.height - 1
+                                && usize::from(zY)
+                                    < items[num].1.saturating_sub(self.views[num]) + 1
+                            {
+                                match button {
+                                    MouseButton::Left => {
+                                        self.positions[num] = zY as usize + self.views[num] - 1;
+                                        return Some(PaneArrayEvt::Click);
+                                    }
+                                    MouseButton::Right => {
+                                        self.positions[num] = zY as usize + self.views[num] - 1;
+                                        return Some(PaneArrayEvt::RClick);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        } // match ::Down()
+                        _ => (),
+                    } // match event
+
+                    break;
+                } // zone intersects
+            }
+        } else {
+            // area intersects
+            self.active = false
+        }
+        None
+    }
+    // # prep_event # }}}
+
+    // # draw_from # {{{
+    pub fn draw_from<T: tui::backend::Backend>(
+        &mut self,
+        frame: &mut Frame<T>,
+        theme: Theme,
+        items: Vec<(String, Vec<String>)>,
+        highlights: Vec<Vec<String>>,
+    ) {
+        if items.len() == 0 {
+            return;
+        };
+
+        self.index = self.index.min(items.len().saturating_sub(1));
+
+        for (num, (area, item)) in Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(equal_constraints(self.area.width, items.len() as u16))
+            .split(self.area)
+            .into_iter()
+            .zip(items.into_iter())
+            .enumerate()
+        {
+            frame.render_widget(
+                List::new(
+                    item.1
+                        .into_iter()
+                        .enumerate()
+                        .map(|(n, s)| {
+                            ListItem::new(s.clone()).style(if self.active && num == self.index {
+                                match highlights.get(num).unwrap_or(&vec![]).contains(&s)
+                                {
+                                    true => match n
+                                        == if self.joined {
+                                            self.positions[0]
+                                        } else {
+                                            self.positions[num]
+                                        } {
+                                        true => theme.active_hi_sel,
+                                        false => theme.active_hi,
+                                    },
+                                    false => match n
+                                        == if self.joined {
+                                            self.positions[0]
+                                        } else {
+                                            self.positions[num]
+                                        } {
+                                        true => theme.active_sel,
+                                        false => theme.active,
+                                    },
+                                }
+                            } else {
+                                match highlights.get(num).unwrap_or(&vec![]).contains(&s)
+                                {
+                                    true => match n
+                                        == if self.joined {
+                                            self.positions[0]
+                                        } else {
+                                            self.positions[num]
+                                        } {
+                                        true => theme.base_hi_sel,
+                                        false => theme.base_hi,
+                                    },
+                                    false => match n
+                                        == if self.joined {
+                                            self.positions[0]
+                                        } else {
+                                            self.positions[num]
+                                        } {
+                                        true => theme.base_sel,
+                                        false => theme.base,
+                                    },
+                                }
+                            })
+                        })
+                        .skip(if self.joined {
+                            self.views[0]
+                        } else {
+                            self.views[num]
+                        })
+                        .collect::<Vec<ListItem>>(),
+                )
+                .block(
+                    Block::default()
+                        .title(Span::styled(
+                            item.0,
+                            if self.active && num == self.index {
+                                match highlights.get(num).unwrap_or(&vec![]).is_empty() {
+                                    true => theme.active,
+                                    false => theme.active_hi,
+                                }
+                            } else {
+                                match highlights.get(num).unwrap_or(&vec![]).is_empty() {
+                                    true => theme.base,
+                                    false => theme.base_hi,
+                                }
+                            },
+                        ))
+                        .borders(Borders::ALL)
+                        .style(if self.active && num == self.index {
+                            theme.active
+                        } else {
+                            theme.base
+                        }),
+                ),
+                area,
+            )
+        }
+    }
+    // # draw_from # }}}
+}
+
+// ### PaneArray ### }}}

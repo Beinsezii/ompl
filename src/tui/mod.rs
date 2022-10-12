@@ -224,7 +224,7 @@ impl<T: Backend> UI<T> {
             let tag = self.input("Filter", false).trim().to_string();
             if !tag.is_empty() {
                 self.panes.insert(before);
-                let pos = self.panes.index + if before { 0 } else { 1 };
+                let pos = self.panes.index() + if before { 0 } else { 1 };
                 library.insert_filter(
                     Filter {
                         tag,
@@ -232,10 +232,10 @@ impl<T: Backend> UI<T> {
                     },
                     pos,
                 );
-                self.panes.index = min(pos, library.filter_count().saturating_sub(1));
+                *self.panes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
             }
             self.queuetable.active = false;
-            self.panes.active = true;
+            *self.panes.active_mut() = true;
         }
     }
 
@@ -248,10 +248,10 @@ impl<T: Backend> UI<T> {
             library.remove_sort_tagstring(self.queuetable.index);
         } else {
             self.panes.remove();
-            library.remove_filter(self.panes.index);
+            library.remove_filter(self.panes.index());
             if library.filter_count() == 0 {
                 self.queuetable.active = true;
-                self.panes.active = false;
+                *self.panes.active_mut() = false;
             }
         }
     }
@@ -302,7 +302,7 @@ impl<T: Backend> UI<T> {
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                self.panes.area = zones[3];
+                *self.panes.area_mut() = zones[3];
                 self.panes.draw(f, self.theme);
                 let time_panes2 = Instant::now();
 
@@ -518,7 +518,7 @@ impl<T: Backend> UI<T> {
                 modifiers: KeyModifiers::NONE,
             }) => {
                 if library.filter_count() != 0 {
-                    self.panes.active = !self.panes.active;
+                    *self.panes.active_mut() = !self.panes.active();
                     self.queuetable.active = !self.queuetable.active;
                 }
                 self.draw();
@@ -533,7 +533,7 @@ impl<T: Backend> UI<T> {
                     self.draw()
                 }
                 {
-                    self.panes.index = self.panes.index.saturating_sub(1);
+                    *self.panes.index_mut() = self.panes.index().saturating_sub(1);
                     self.draw();
                 }
             }
@@ -547,8 +547,8 @@ impl<T: Backend> UI<T> {
                         .min(library.get_sort_tagstrings().len().saturating_sub(1));
                     self.draw();
                 } else {
-                    self.panes.index =
-                        (self.panes.index + 1).min(library.filter_count().saturating_sub(1));
+                    *self.panes.index_mut() =
+                        (self.panes.index() + 1).min(library.filter_count().saturating_sub(1));
                     self.draw();
                 }
             }
@@ -716,7 +716,12 @@ impl<T: Backend> UI<T> {
 
             // # Mouse Events # {{{
             Event::Mouse(event) => {
-                let queue = self.queuetable.active;
+                let (q, qi, p, pi) = (
+                    self.queuetable.active,
+                    self.queuetable.index,
+                    self.panes.active(),
+                    self.panes.index(),
+                );
 
                 if [
                     self.status_bar.process_event(event),
@@ -728,12 +733,22 @@ impl<T: Backend> UI<T> {
                 .any(|r| *r)
                 // if you use || it can early return???
                 {
-                    if !self.queuetable.active && !self.panes.active {
-                        match queue {
+                    if !self.queuetable.active && !self.panes.active() {
+                        match q {
                             true => self.queuetable.active = true,
-                            false => self.panes.active = true,
+                            false => *self.panes.active_mut() = true,
                         }
                     }
+                    self.draw()
+                // also draw if focus changes
+                } else if (q, qi, p, pi)
+                    != (
+                        self.queuetable.active,
+                        self.queuetable.index,
+                        self.panes.active(),
+                        self.panes.index(),
+                    )
+                {
                     self.draw()
                 }
             }
@@ -837,12 +852,12 @@ pub fn tui(library: Arc<Library>) -> bool {
                         | LibEvt::Shuffle => ui.lock().unwrap().draw(),
                         LibEvt::Update => {
                             let mut uiw = ui.lock().unwrap();
-                            let i = uiw.panes.index;
+                            let i = uiw.panes.index();
                             for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
-                                uiw.panes.index = x;
+                                *uiw.panes.index_mut() = x;
                                 uiw.panes.scroll_by_n(0);
                             }
-                            uiw.panes.index = i;
+                            *uiw.panes.index_mut() = i;
                             uiw.draw();
                         }
                         LibEvt::Error(message) => {
