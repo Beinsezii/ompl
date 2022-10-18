@@ -212,12 +212,12 @@ impl<T: Backend> UI<T> {
             Some(l) => l,
             None => return,
         };
-        if self.queuetable.active && library.filter_count() != 0 {
+        if self.queuetable.active() && library.filter_count() != 0 {
             let tag = self.input("Tagstring", false).trim().to_string();
             if !tag.is_empty() {
-                let pos = self.queuetable.index + if before { 0 } else { 1 };
+                let pos = self.queuetable.index() + if before { 0 } else { 1 };
                 library.insert_sort_tagstring(tag, pos);
-                self.queuetable.index =
+                *self.queuetable.index_mut() =
                     min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
             }
         } else {
@@ -234,7 +234,7 @@ impl<T: Backend> UI<T> {
                 );
                 *self.panes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
             }
-            self.queuetable.active = false;
+            *self.queuetable.active_mut() = false;
             *self.panes.active_mut() = true;
         }
     }
@@ -244,13 +244,13 @@ impl<T: Backend> UI<T> {
             Some(l) => l,
             None => return,
         };
-        if self.queuetable.active {
-            library.remove_sort_tagstring(self.queuetable.index);
+        if self.queuetable.active() {
+            library.remove_sort_tagstring(self.queuetable.index());
         } else {
             self.panes.remove();
             library.remove_filter(self.panes.index());
             if library.filter_count() == 0 {
-                self.queuetable.active = true;
+                *self.queuetable.active_mut() = true;
                 *self.panes.active_mut() = false;
             }
         }
@@ -307,7 +307,7 @@ impl<T: Backend> UI<T> {
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                self.queuetable.area = zones[4];
+                *self.queuetable.area_mut() = zones[4];
                 self.queuetable.draw(f, self.theme);
                 let time_queue2 = Instant::now();
 
@@ -387,7 +387,7 @@ impl<T: Backend> UI<T> {
 
         let submit = 'outer: loop {
             let style = self.theme.active;
-            let active = self.queuetable.active;
+            let active = self.queuetable.active();
             self.draw_inject(|f| {
                 let size = f.size();
                 let area = Rect {
@@ -493,7 +493,7 @@ impl<T: Backend> UI<T> {
         {
             "" => (),
             input => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.find(input);
                 } else {
                     self.panes.find(input);
@@ -519,7 +519,7 @@ impl<T: Backend> UI<T> {
             }) => {
                 if library.filter_count() != 0 {
                     *self.panes.active_mut() = !self.panes.active();
-                    self.queuetable.active = !self.queuetable.active;
+                    *self.queuetable.active_mut() = !self.queuetable.active();
                 }
                 self.draw();
             }
@@ -528,8 +528,8 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active {
-                    self.queuetable.index = self.queuetable.index.saturating_sub(1);
+                if self.queuetable.active() {
+                    *self.queuetable.index_mut()= self.queuetable.index().saturating_sub(1);
                     self.draw()
                 }
                 {
@@ -542,8 +542,8 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active {
-                    self.queuetable.index = (self.queuetable.index + 1)
+                if self.queuetable.active() {
+                    *self.queuetable.index_mut() = (self.queuetable.index() + 1)
                         .min(library.get_sort_tagstrings().len().saturating_sub(1));
                     self.draw();
                 } else {
@@ -557,7 +557,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.scroll_by_n_lock(1)
                 } else {
                     self.panes.scroll_by_n_lock(1)
@@ -569,7 +569,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.scroll_down();
                     self.queuetable.scroll_by_n_lock(0);
                 } else {
@@ -583,7 +583,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.scroll_by_n_lock(-1)
                 } else {
                     self.panes.scroll_by_n_lock(-1)
@@ -595,7 +595,7 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.scroll_up();
                     self.queuetable.scroll_by_n_lock(0)
                 } else {
@@ -606,7 +606,7 @@ impl<T: Backend> UI<T> {
             }
 
             km!('g') => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     self.queuetable.scroll_by_n_lock(i32::MIN)
                 } else {
                     self.panes.scroll_by_n(i32::MIN)
@@ -614,7 +614,7 @@ impl<T: Backend> UI<T> {
                 self.draw();
             }
             km_s!('G') => {
-                if self.queuetable.active {
+                if self.queuetable.active() {
                     // i32::max will overflow since it gets added to pos. easy avoidance lol.
                     self.queuetable.scroll_by_n_lock(i16::MAX.into())
                 } else {
@@ -628,8 +628,8 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active {
-                    library.play_track(library.get_queue().get(self.queuetable.position).cloned())
+                if self.queuetable.active() {
+                    library.play_track(library.get_queue().get(self.queuetable.position()).cloned())
                 } else {
                     self.panes.toggle_current()
                 }
@@ -641,18 +641,18 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if !self.queuetable.active {
+                if !self.queuetable.active() {
                     self.panes.select_current()
                 }
             }
 
             km!('v') => {
-                if !self.queuetable.active {
+                if !self.queuetable.active() {
                     self.panes.invert_selection()
                 }
             }
             km_s!('V') => {
-                if !self.queuetable.active {
+                if !self.queuetable.active() {
                     self.panes.deselect_all()
                 }
             }
@@ -717,8 +717,8 @@ impl<T: Backend> UI<T> {
             // # Mouse Events # {{{
             Event::Mouse(event) => {
                 let (q, qi, p, pi) = (
-                    self.queuetable.active,
-                    self.queuetable.index,
+                    self.queuetable.active(),
+                    self.queuetable.index(),
                     self.panes.active(),
                     self.panes.index(),
                 );
@@ -733,9 +733,9 @@ impl<T: Backend> UI<T> {
                 .any(|r| *r)
                 // if you use || it can early return???
                 {
-                    if !self.queuetable.active && !self.panes.active() {
+                    if !self.queuetable.active() && !self.panes.active() {
                         match q {
-                            true => self.queuetable.active = true,
+                            true => *self.queuetable.active_mut() = true,
                             false => *self.panes.active_mut() = true,
                         }
                     }
@@ -743,8 +743,8 @@ impl<T: Backend> UI<T> {
                 // also draw if focus changes
                 } else if (q, qi, p, pi)
                     != (
-                        self.queuetable.active,
-                        self.queuetable.index,
+                        self.queuetable.active(),
+                        self.queuetable.index(),
                         self.panes.active(),
                         self.panes.index(),
                     )

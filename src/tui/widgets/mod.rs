@@ -15,13 +15,10 @@ use tui::{
     widgets::{Block, Borders, List, ListItem},
 };
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{MouseButton, MouseEventKind};
 
 pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
-    let mut constraints = vec![
-        Constraint::Length(width / n);
-        n.saturating_sub(1).into()
-    ];
+    let mut constraints = vec![Constraint::Length(width / n); n.saturating_sub(1).into()];
     constraints.push(Constraint::Min(1));
     constraints
 }
@@ -180,6 +177,7 @@ impl PaneArray {
             {
                 if zone.intersects(point) {
                     self.index = num;
+                    let num_join = if self.joined { 0 } else { num };
 
                     match event.kind {
                         MouseEventKind::ScrollUp => {
@@ -206,15 +204,17 @@ impl PaneArray {
                                 && zY > 0
                                 && zY < zone.height - 1
                                 && usize::from(zY)
-                                    < items[num].1.saturating_sub(self.views[num]) + 1
+                                    < items[num].1.saturating_sub(self.views[num_join]) + 1
                             {
                                 match button {
                                     MouseButton::Left => {
-                                        self.positions[num] = zY as usize + self.views[num] - 1;
+                                        self.positions[num_join] =
+                                            zY as usize + self.views[num_join] - 1;
                                         return Some(PaneArrayEvt::Click);
                                     }
                                     MouseButton::Right => {
-                                        self.positions[num] = zY as usize + self.views[num] - 1;
+                                        self.positions[num_join] =
+                                            zY as usize + self.views[num_join] - 1;
                                         return Some(PaneArrayEvt::RClick);
                                     }
                                     _ => (),
@@ -247,6 +247,7 @@ impl PaneArray {
             return;
         };
 
+        // clamp index
         self.index = self.index.min(items.len().saturating_sub(1));
 
         for (num, (area, item)) in Layout::default()
@@ -257,6 +258,17 @@ impl PaneArray {
             .zip(items.into_iter())
             .enumerate()
         {
+            let num_join = if self.joined { 0 } else { num };
+
+            // clamp scroll
+            scroll_by_n(
+                0,
+                &mut self.positions[num_join],
+                &mut self.views[num_join],
+                self.area.height.saturating_sub(2).into(),
+                item.1.len(),
+            );
+
             frame.render_widget(
                 List::new(
                     item.1
@@ -264,56 +276,30 @@ impl PaneArray {
                         .enumerate()
                         .map(|(n, s)| {
                             ListItem::new(s.clone()).style(if self.active && num == self.index {
-                                match highlights.get(num).unwrap_or(&vec![]).contains(&s)
-                                {
-                                    true => match n
-                                        == if self.joined {
-                                            self.positions[0]
-                                        } else {
-                                            self.positions[num]
-                                        } {
+                                match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
+                                    true => match n == self.positions[num_join] {
                                         true => theme.active_hi_sel,
                                         false => theme.active_hi,
                                     },
-                                    false => match n
-                                        == if self.joined {
-                                            self.positions[0]
-                                        } else {
-                                            self.positions[num]
-                                        } {
+                                    false => match n == self.positions[num_join] {
                                         true => theme.active_sel,
                                         false => theme.active,
                                     },
                                 }
                             } else {
-                                match highlights.get(num).unwrap_or(&vec![]).contains(&s)
-                                {
-                                    true => match n
-                                        == if self.joined {
-                                            self.positions[0]
-                                        } else {
-                                            self.positions[num]
-                                        } {
+                                match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
+                                    true => match n == self.positions[num_join] {
                                         true => theme.base_hi_sel,
                                         false => theme.base_hi,
                                     },
-                                    false => match n
-                                        == if self.joined {
-                                            self.positions[0]
-                                        } else {
-                                            self.positions[num]
-                                        } {
+                                    false => match n == self.positions[num_join] {
                                         true => theme.base_sel,
                                         false => theme.base,
                                     },
                                 }
                             })
                         })
-                        .skip(if self.joined {
-                            self.views[0]
-                        } else {
-                            self.views[num]
-                        })
+                        .skip(self.views[num_join])
                         .collect::<Vec<ListItem>>(),
                 )
                 .block(

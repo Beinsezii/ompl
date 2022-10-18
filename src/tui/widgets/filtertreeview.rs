@@ -3,12 +3,8 @@ use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
 
-use crossterm::event::MouseEvent;
-use tui::{
-    backend::Backend,
-    layout::Rect,
-    terminal::Frame,
-};
+use crossterm::event::{MouseEvent, MouseEventKind};
+use tui::{backend::Backend, layout::Rect, terminal::Frame};
 
 // ### struct FilterTreeView {{{
 
@@ -67,14 +63,17 @@ impl FilterTreeView {
             let (tags, data) = library.get_filter_tree_display();
             if let Some(mut fi) = library.get_filter_items(self.index()) {
                 let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                    .remove(self.positions()[self.index()] as usize);
+                    .get(self.positions()[self.index()] as usize)
+                    .cloned();
 
-                match fi.contains(&item) {
-                    true => fi = fi.into_iter().filter(|i| *i != item).collect(),
-                    false => fi.push(item),
+                if let Some(item) = item {
+                    match fi.contains(&item) {
+                        true => fi = fi.into_iter().filter(|i| *i != item).collect(),
+                        false => fi.push(item),
+                    }
+
+                    library.set_filter_items(self.index(), fi);
                 }
-
-                library.set_filter_items(self.index(), fi);
             }
         }
     }
@@ -82,11 +81,12 @@ impl FilterTreeView {
     pub fn select_current(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
-            library.set_filter_items(
-                self.index(),
-                vec![get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                    .remove(self.positions()[self.index()])],
-            );
+            let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+                .get(self.positions()[self.index()])
+                .cloned();
+            if let Some(item) = item {
+                library.set_filter_items(self.index(), vec![item]);
+            }
         }
     }
 
@@ -177,15 +177,15 @@ impl ContainedWidget for FilterTreeView {
         let (filters, tracks) = library.get_filter_tree_display();
 
         let mut items = Vec::<(String, Vec<String>)>::new();
-        let mut hightlights = Vec::<Vec<String>>::new();
+        let mut highlights = Vec::<Vec<String>>::new();
 
         for (ft, tl) in filters.into_iter().zip(tracks.into_iter()) {
-            hightlights.push(ft.items); // lightly confusing
+            highlights.push(ft.items); // lightly confusing
             let tl_tags = get_taglist_sort(&ft.tag, &tl);
             items.push((ft.tag, tl_tags));
         }
 
-        self.pane_array.draw_from(frame, theme, items, hightlights)
+        self.pane_array.draw_from(frame, theme, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}
@@ -193,6 +193,12 @@ impl ContainedWidget for FilterTreeView {
 // ### impl Clickable ### {{{
 impl Clickable for FilterTreeView {
     fn process_event(&mut self, event: MouseEvent) -> bool {
+        match event.kind {
+            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
+                return false
+            }
+            _ => (),
+        }
 
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
@@ -200,14 +206,11 @@ impl Clickable for FilterTreeView {
         };
 
         let (filters, tracks) = library.get_filter_tree_display();
-        let mut tagstrings = Vec::<Vec<String>>::new();
 
         let mut items = Vec::<(usize, usize)>::new();
 
         for (ft, tl) in filters.iter().zip(tracks.iter()) {
-            let ts = get_taglist_sort(&ft.tag, &tl);
-            items.push((ft.tag.len(), ts.len()));
-            tagstrings.push(ts);
+            items.push((ft.tag.len(), get_taglist_sort(&ft.tag, &tl).len()));
         }
 
         match self.pane_array.prep_event(event, &items) {
@@ -215,8 +218,14 @@ impl Clickable for FilterTreeView {
             Some(PaneArrayEvt::RClick) => self.toggle_current(),
             Some(PaneArrayEvt::ClickTit) => self.invert_selection(),
             Some(PaneArrayEvt::RClickTit) => self.deselect_all(),
-            Some(PaneArrayEvt::ScrollUp) => {self.scroll_up(); return true},
-            Some(PaneArrayEvt::ScrollDown) => {self.scroll_down(); return true},
+            Some(PaneArrayEvt::ScrollUp) => {
+                self.scroll_up();
+                return true;
+            }
+            Some(PaneArrayEvt::ScrollDown) => {
+                self.scroll_down();
+                return true;
+            }
             Some(PaneArrayEvt::Delete) => (),
             Some(PaneArrayEvt::Edit) => (),
             Some(PaneArrayEvt::MoveLeft) => (),
@@ -224,9 +233,7 @@ impl Clickable for FilterTreeView {
             None => (),
         }
 
-
         false
-
     }
 }
 // ### impl Clickable ### }}}
