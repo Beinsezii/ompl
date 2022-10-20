@@ -226,10 +226,10 @@ impl Clickable for FilterTreeView {
                 self.scroll_down();
                 return true;
             }
-            Some(PaneArrayEvt::Delete) => (),
-            Some(PaneArrayEvt::Edit) => (),
-            Some(PaneArrayEvt::MoveLeft) => (),
-            Some(PaneArrayEvt::MoveRight) => (),
+            Some(PaneArrayEvt::Delete) => self.invert_selection(),
+            Some(PaneArrayEvt::Edit) => self.toggle_current(),
+            Some(PaneArrayEvt::MoveLeft) => *self.index_mut() = self.index().saturating_sub(1),
+            Some(PaneArrayEvt::MoveRight) => *self.index_mut() = (self.index() + 1).min(items.len()),
             None => (),
         }
 

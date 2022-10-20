@@ -9,10 +9,10 @@ mod queuetable;
 pub use queuetable::QueueTable;
 
 use tui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     terminal::Frame,
     text::Span,
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
 };
 
 use crossterm::event::{MouseButton, MouseEventKind};
@@ -125,6 +125,9 @@ pub struct PaneArray {
     pub views: Vec<usize>,
 }
 
+const PA_LONG: &'static str = "<<eexx>>";
+const PA_SHORT: &'static str = "<ex>";
+
 /// Updates positions before sending
 pub enum PaneArrayEvt {
     Click,
@@ -188,7 +191,13 @@ impl PaneArray {
                         }
                         #[allow(non_snake_case)]
                         MouseEventKind::Down(button) => {
+                            // event coords parented to pane
                             let (zX, zY) = (event.column - zone.x, event.row - zone.y);
+                            let footer = if zone.width < PA_LONG.len() as u16 {
+                                PA_SHORT.len()
+                            } else {
+                                PA_LONG.len()
+                            } as u16;
                             // click title
                             if zX >= 1 && zX <= items[num].0 as u16 && zY == 0 {
                                 match button {
@@ -198,6 +207,23 @@ impl PaneArray {
 
                                     MouseButton::Middle => (),
                                 }
+                            // click footer
+                            } else if zY == zone.height.saturating_sub(1)
+                                && zX > zone.width.saturating_sub(footer + 2)
+                                && zX < zone.width.saturating_sub(1)
+                            {
+                                let i = footer.saturating_sub(zone.width.saturating_sub(zX + 1));
+                                let step = footer / 4;
+                                if i < step {
+                                    return Some(PaneArrayEvt::MoveLeft);
+                                } else if i < step * 2 {
+                                    return Some(PaneArrayEvt::Edit);
+                                } else if i < step * 3 {
+                                    return Some(PaneArrayEvt::Delete);
+                                } else {
+                                    return Some(PaneArrayEvt::MoveRight);
+                                }
+
                             // click in list
                             } else if zX > 0
                                 && zX < zone.width - 1
@@ -326,7 +352,22 @@ impl PaneArray {
                         }),
                 ),
                 area,
-            )
+            );
+            frame.render_widget(
+                Paragraph::new(if area.width < PA_LONG.len() as u16 {
+                    PA_SHORT
+                } else {
+                    PA_LONG
+                })
+                .alignment(Alignment::Right),
+                Rect {
+                    x: area.x,
+                    y: area.y + area.height.saturating_sub(1),
+                    width: area.width.saturating_sub(1),
+                    // needs to handle 0 else crash bang
+                    height: area.height.min(1),
+                },
+            );
         }
     }
     // # draw_from # }}}
