@@ -17,8 +17,27 @@ use tui::{
 
 use crossterm::event::{MouseButton, MouseEventKind};
 
+/// Creates constraints for a distance that meet 3 criteria:
+/// 1) Fills the whole width with no gaps
+/// 2) Creates sections of equal or close as possible size
+/// 3) Creates sections that align.
+///    The "center" of a 2 count will align with the "center" of a 4 count
+///
+/// The current method of adding remainders seems to achieve this in my limited testing
+/// It's the little things that make a good program
 pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
-    let mut constraints = vec![Constraint::Length(width / n); n.saturating_sub(1).into()];
+    let mut constraints = vec![];
+    let mut remainder = 0.0;
+    for _i in 1..n {
+        let l = width as f32 / n as f32;
+        remainder += l % 1.0;
+        constraints.push(Constraint::Length(if remainder >= 1.0 {
+            remainder -= 1.0;
+            l.ceil()
+        } else {
+            l.floor()
+        } as u16))
+    }
     constraints.push(Constraint::Min(1));
     constraints
 }

@@ -1,10 +1,6 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
-* Layout splitting doesn't round properly. Ex: center of 4 panes will be off by 1 compared to 2 queue.
-* Revisit draw logic. Currently draws every click cause of pane/queue buggery.
-    * since we already capture active states, we could just check for those changing && events.
-    * Would need a special handler for scroll.
 * Theme needs an overhaul for clear FG/BG/Accent setting instead of just rebuilding the whole struct.
     * perhaps Library should hold Theme instead of TUI for ipc reasons
 * Ability to 'move' panels with shift-h/l
