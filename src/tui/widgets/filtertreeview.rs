@@ -226,10 +226,26 @@ impl Clickable for FilterTreeView {
                 self.scroll_down();
                 return true;
             }
-            Some(PaneArrayEvt::Delete) => self.invert_selection(),
-            Some(PaneArrayEvt::Edit) => self.toggle_current(),
-            Some(PaneArrayEvt::MoveLeft) => *self.index_mut() = self.index().saturating_sub(1),
-            Some(PaneArrayEvt::MoveRight) => *self.index_mut() = (self.index() + 1).min(items.len()),
+            Some(PaneArrayEvt::Delete) => {
+                library.remove_filter(self.index());
+                self.remove()
+            }
+            Some(PaneArrayEvt::MoveLeft) => {
+                if self.index() > 0 {
+                    let mut filters = library.get_filters();
+                    filters.swap(self.index(), self.index() - 1);
+                    library.set_filters(filters);
+                    *self.index_mut() = self.index().saturating_sub(1);
+                }
+            }
+            Some(PaneArrayEvt::MoveRight) => {
+                if self.index() < library.filter_count().saturating_sub(1) {
+                    let mut filters = library.get_filters();
+                    filters.swap(self.index(), self.index() + 1);
+                    library.set_filters(filters);
+                    *self.index_mut() = (self.index() + 1).min(items.len())
+                }
+            }
             None => (),
         }
 

@@ -457,6 +457,10 @@ impl Library {
         self.sort_tagstrings.read().unwrap().get(index).cloned()
     }
 
+    pub fn sort_count(&self) -> usize {
+        self.sort_tagstrings.read().unwrap().len()
+    }
+
     pub fn remove_sort(&self, index: usize) {
         let mut sorts = self.sort_tagstrings.write().unwrap();
         if index < sorts.len() {
@@ -471,16 +475,6 @@ impl Library {
             let mut sts = self.sort_tagstrings.write().unwrap();
             let len = sts.len();
             sts.insert(pos.min(len), tagstring);
-        }
-        self.sort();
-    }
-
-    pub fn remove_sort_tagstring(&self, pos: usize) {
-        {
-            let mut sts = self.sort_tagstrings.write().unwrap();
-            if pos < sts.len() {
-                sts.remove(pos);
-            }
         }
         self.sort();
     }

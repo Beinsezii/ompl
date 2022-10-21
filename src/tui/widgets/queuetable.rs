@@ -4,11 +4,7 @@ use crate::library::Library;
 use std::sync::{Arc, Weak};
 
 use crossterm::event::{MouseEvent, MouseEventKind};
-use tui::{
-    backend::Backend,
-    layout::Rect,
-    terminal::Frame,
-};
+use tui::{backend::Backend, layout::Rect, terminal::Frame};
 
 // ### struct QueueTable {{{
 
@@ -117,7 +113,6 @@ impl ContainedWidget for QueueTable {
         }
 
         self.pane_array.draw_from(frame, theme, items, highlights);
-
     }
 }
 // ### impl ContainedWidget }}}
@@ -195,10 +190,23 @@ impl Clickable for QueueTable {
                 self.scroll_down();
                 return true;
             }
-            Some(PaneArrayEvt::Delete) => (),
-            Some(PaneArrayEvt::Edit) => (),
-            Some(PaneArrayEvt::MoveLeft) => (),
-            Some(PaneArrayEvt::MoveRight) => (),
+            Some(PaneArrayEvt::Delete) => library.remove_sort(self.index()),
+            Some(PaneArrayEvt::MoveLeft) => {
+                if self.index() > 0 {
+                    let mut sorts = library.get_sort_tagstrings();
+                    sorts.swap(self.index(), self.index() - 1);
+                    library.set_sort_tagstrings(sorts);
+                    *self.index_mut() = self.index().saturating_sub(1);
+                }
+            }
+            Some(PaneArrayEvt::MoveRight) => {
+                if self.index() < library.sort_count().saturating_sub(1) {
+                    let mut sorts = library.get_sort_tagstrings();
+                    sorts.swap(self.index(), self.index() + 1);
+                    library.set_sort_tagstrings(sorts);
+                    *self.index_mut() = (self.index() + 1).min(items.len())
+                }
+            }
             None => (),
         }
 

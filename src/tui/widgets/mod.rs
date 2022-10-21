@@ -113,7 +113,7 @@ pub fn scroll_by_n_lock(
 
 // ### Scrollable ### }}}
 
-// ### PaneArray ### {{{
+// ### PaneArray ### {{
 
 #[derive(Clone, Debug)]
 pub struct PaneArray {
@@ -125,8 +125,8 @@ pub struct PaneArray {
     pub views: Vec<usize>,
 }
 
-const PA_LONG: &'static str = "<<eexx>>";
-const PA_SHORT: &'static str = "<ex>";
+const PA_LONG: &'static str = "<<xx>>";
+const PA_SHORT: &'static str = "<x>";
 
 /// Updates positions before sending
 pub enum PaneArrayEvt {
@@ -136,10 +136,16 @@ pub enum PaneArrayEvt {
     RClickTit,
     ScrollUp,
     ScrollDown,
-    Edit,
     Delete,
     MoveLeft,
     MoveRight,
+    // // TODO
+    // // These need a way for widgets to request text input
+    // // Either that or widgets need to be able to signal actions back to TUI main
+    // // More restructuring yay
+    // Edit,
+    // InsertBefore,
+    // InsertAfter,
 }
 
 impl PaneArray {
@@ -213,13 +219,17 @@ impl PaneArray {
                                 && zX < zone.width.saturating_sub(1)
                             {
                                 let i = footer.saturating_sub(zone.width.saturating_sub(zX + 1));
-                                let step = footer / 4;
+                                let step = footer / PA_SHORT.len() as u16;
                                 if i < step {
                                     return Some(PaneArrayEvt::MoveLeft);
+                                // } else if i < step * 2 {
+                                //     return Some(PaneArrayEvt::InsertBefore);
+                                // } else if i < step * 3 {
+                                //     return Some(PaneArrayEvt::Edit);
                                 } else if i < step * 2 {
-                                    return Some(PaneArrayEvt::Edit);
-                                } else if i < step * 3 {
                                     return Some(PaneArrayEvt::Delete);
+                                // } else if i < step * 5 {
+                                //     return Some(PaneArrayEvt::InsertAfter);
                                 } else {
                                     return Some(PaneArrayEvt::MoveRight);
                                 }

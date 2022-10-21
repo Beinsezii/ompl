@@ -245,7 +245,7 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         if self.queuetable.active() {
-            library.remove_sort_tagstring(self.queuetable.index());
+            library.remove_sort(self.queuetable.index());
         } else {
             self.panes.remove();
             library.remove_filter(self.panes.index());
