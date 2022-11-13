@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v 0.5.0
+# OMPL - Opinionated Music Player/Library v 0.5.1
 A music player organized exactly how *I* like it.
 
 ## Features
