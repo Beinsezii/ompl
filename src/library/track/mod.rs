@@ -350,8 +350,10 @@ impl Track {
                         if t_id == &id {
                             if let id3::Content::Text(t) = content {
                                 // convert ID3v1 genre numbers
-                                let t = if t.trim().starts_with('(') && t.trim().ends_with(')') {
-                                    t.trim()[1..t.len() - 1]
+                                let t = if t_id == &"TCON" {
+                                    t.trim()
+                                        .trim_start_matches('(')
+                                        .trim_end_matches(')')
                                         .parse::<usize>()
                                         .ok()
                                         .map(|i| ID3_GENRES.get(i).map(|s| s.to_string()))
