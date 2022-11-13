@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v 0.4.2
+# OMPL - Opinionated Music Player/Library v 0.5.0
 A music player organized exactly how *I* like it.
 
 ## Features
@@ -29,11 +29,11 @@ A music player organized exactly how *I* like it.
 Either download a binary from the tags/releases tab or if you already have Rust installed, run `cargo install --git https://github.com/Beinsezii/ompl.git`.
 It is recommended you add the downloaded binary or cargo install dir to your `PATH` for ease of use.
 
-To start a simple example sorting by album run `ompl -l Path/To/Music -f album`
+To start a simple example sorting by album run `ompl main Path/To/Music -f album`
 
 To update the running program filters to genres "Epic" and "Game" while sorting results by album then title, run `ompl -f genre=Epic,Game -s album title`
 
-To start a *new* TUI if you want two songs playing at once like a crackhead, run `ompl -l Path/To/Music --port 12345` or whatever valid port # you want.
+To start a *new* TUI if you want two songs playing at once like a crackhead, run `ompl main Path/To/Music --port 12345` or whatever valid port # you want.
 Be careful to avoid commonly used ports such as 80, as other programs may be occupying these sockets.
 
 To view a full list of commands for both the server (main instancce) and client, run ompl --help
