@@ -128,7 +128,7 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
 }
 
 impl<T: Clone> Clickable for MenuBar<T> {
-    fn process_event(&mut self, event: event::MouseEvent) -> bool {
+    fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
             if self
                 .area
@@ -158,6 +158,6 @@ impl<T: Clone> Clickable for MenuBar<T> {
                 }
             }
         }
-        false
+        super::Action::None
     }
 }

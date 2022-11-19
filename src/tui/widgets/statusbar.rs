@@ -73,10 +73,10 @@ impl ContainedWidget for StatusBar {
 }
 
 impl Clickable for StatusBar {
-    fn process_event(&mut self, event: event::MouseEvent) -> bool {
+    fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
-            None => return false,
+            None => return super::Action::None,
         };
 
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
@@ -98,6 +98,6 @@ impl Clickable for StatusBar {
                 }
             }
         }
-        false
+        super::Action::None
     }
 }

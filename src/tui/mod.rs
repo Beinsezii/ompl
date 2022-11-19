@@ -86,6 +86,7 @@ pub const HELP: &str = &"\
 * -/+ | volume decrease/increase
 * r | toggle shuffle
 * h/j/k/l | left/down/up/right
+* H/L | move panes
 * g/G scroll to top/bottom
 * f | select item
 * F | select only item
@@ -94,6 +95,7 @@ pub const HELP: &str = &"\
 * i/I | insert after/before
 * D | delete
 * / | search
+* ' | edit
 
 * input
   * Ctrl-y/p | copy/paste
@@ -102,24 +104,35 @@ pub const HELP: &str = &"\
 
 // ### UI ### {{{
 
-#[derive(Clone)]
-enum MAction {
-    Delete,
+#[derive(Clone, Copy, PartialEq)]
+pub enum Action {
+    // general
+    Debug,
+    Draw,
     Help,
-    Insert(bool),
-    Search,
+    None,
+
+    // Library
+    Accent(Color),
     Append,
     Purge,
-    Debug,
-    Accent(Color),
+
+    // Active pane
+    Delete,
+    Edit,
+    InsertAfter,
+    InsertBefore,
+    MoveLeft,
+    MoveRight,
+    Search,
 }
 
 struct UI<T: Backend> {
     lib_weak: Weak<Library>,
-    menubar: MenuBar<MAction>,
+    menubar: MenuBar<Action>,
     status_bar: StatusBar,
-    panes: FilterTreeView,
-    queuetable: QueueTable,
+    filterpanes: FilterTreeView,
+    sortpanes: QueueTable,
     theme: Theme,
     terminal: Option<Terminal<T>>,
     debug: bool,
@@ -130,72 +143,58 @@ struct UI<T: Backend> {
 
 impl<T: Backend> UI<T> {
     fn from_library(library: Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
+        #[rustfmt::skip]
         let tree = MTree::Tree(vec![
-            (String::from("Help"), MTree::Action(MAction::Help)),
-            (String::from("Search"), MTree::Action(MAction::Search)),
+            (String::from("Help"), MTree::Action(Action::Help)),
+            (String::from("Search"), MTree::Action(Action::Search)),
+
             (
-                String::from("Field"),
-                MTree::Tree(vec![
-                    (
-                        String::from("Insesrt After"),
-                        MTree::Action(MAction::Insert(false)),
-                    ),
-                    (
-                        String::from("Insert Before"),
-                        MTree::Action(MAction::Insert(true)),
-                    ),
-                    (String::from("Delete"), MTree::Action(MAction::Delete)),
-                ]),
+            String::from("Pane"),
+            MTree::Tree(vec![
+                // arrows to save precious space. not sure if I like
+                (String::from("Insert <-"), MTree::Action(Action::InsertAfter)),
+                (String::from("Insert ->"), MTree::Action(Action::InsertBefore)),
+                (String::from("Move <-"), MTree::Action(Action::MoveLeft)),
+                (String::from("Move ->"), MTree::Action(Action::MoveRight)),
+                (String::from("Edit"), MTree::Action(Action::Edit)),
+                (String::from("Delete"), MTree::Action(Action::Delete)),
+            ]),
             ),
+
             (
-                String::from("Library"),
-                MTree::Tree(vec![
-                    (String::from("Append"), MTree::Action(MAction::Append)),
-                    (String::from("Purge"), MTree::Action(MAction::Purge)),
-                ]),
+            String::from("Library"),
+            MTree::Tree(vec![
+                (String::from("Append"), MTree::Action(Action::Append)),
+                (String::from("Purge"), MTree::Action(Action::Purge)),
+            ]),
             ),
+
             (
-                String::from("UI"),
-                MTree::Tree(vec![
-                    (
-                        String::from("Accent"),
-                        MTree::Tree(vec![
-                            (
-                                String::from("Red"),
-                                MTree::Action(MAction::Accent(Color::Red)),
-                            ),
-                            (
-                                String::from("Green"),
-                                MTree::Action(MAction::Accent(Color::Green)),
-                            ),
-                            (
-                                String::from("Yellow"),
-                                MTree::Action(MAction::Accent(Color::Yellow)),
-                            ),
-                            (
-                                String::from("Blue"),
-                                MTree::Action(MAction::Accent(Color::Blue)),
-                            ),
-                            (
-                                String::from("Magenta"),
-                                MTree::Action(MAction::Accent(Color::Magenta)),
-                            ),
-                            (
-                                String::from("Cyan"),
-                                MTree::Action(MAction::Accent(Color::Cyan)),
-                            ),
-                        ]),
-                    ),
-                    (String::from("Debug"), MTree::Action(MAction::Debug)),
-                ]),
+            String::from("UI"),
+            MTree::Tree(vec![
+                (
+                    String::from("Accent"),
+                    MTree::Tree(vec![
+                        (String::from("Red"), MTree::Action(Action::Accent(Color::Red))),
+                        (String::from("Green"), MTree::Action(Action::Accent(Color::Green))),
+                        (String::from("Yellow"), MTree::Action(Action::Accent(Color::Yellow))),
+                        (String::from("Blue"), MTree::Action(Action::Accent(Color::Blue))),
+                        (String::from("Magenta"), MTree::Action(Action::Accent(Color::Magenta))),
+                        (String::from("Cyan"), MTree::Action(Action::Accent(Color::Cyan))),
+                    ]),
+                ),
+                (String::from("Debug"), MTree::Action(Action::Debug)),
+            ]),
             ),
+
         ]);
+
         Self {
             lib_weak: Arc::downgrade(&library),
             menubar: MenuBar::new(tree),
             status_bar: StatusBar::new(&library, "title"),
-            panes: FilterTreeView::new(library.clone()),
-            queuetable: QueueTable::new(library.clone()),
+            filterpanes: FilterTreeView::new(library.clone()),
+            sortpanes: QueueTable::new(library.clone()),
             theme,
             terminal: Some(terminal),
             debug: false,
@@ -205,26 +204,27 @@ impl<T: Backend> UI<T> {
         }
     }
 
-    // ## UI Data FNs ## {{{
+    // ## Action FNs ## {{{
 
+    // # insert # {{{
     fn insert(&mut self, before: bool) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
         };
-        if self.queuetable.active() && library.filter_count() != 0 {
-            let tag = self.input("Tagstring", false).trim().to_string();
+        if self.sortpanes.active() && library.filter_count() != 0 {
+            let tag = self.input("Tagstring", "", false).trim().to_string();
             if !tag.is_empty() {
-                let pos = self.queuetable.index() + if before { 0 } else { 1 };
+                let pos = self.sortpanes.index() + if before { 0 } else { 1 };
                 library.insert_sort_tagstring(tag, pos);
-                *self.queuetable.index_mut() =
+                *self.sortpanes.index_mut() =
                     min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
             }
         } else {
-            let tag = self.input("Filter", false).trim().to_string();
+            let tag = self.input("Filter", "", false).trim().to_string();
             if !tag.is_empty() {
-                self.panes.insert(before);
-                let pos = self.panes.index() + if before { 0 } else { 1 };
+                self.filterpanes.insert(before);
+                let pos = self.filterpanes.index() + if before { 0 } else { 1 };
                 library.insert_filter(
                     Filter {
                         tag,
@@ -232,31 +232,132 @@ impl<T: Backend> UI<T> {
                     },
                     pos,
                 );
-                *self.panes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
+                *self.filterpanes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
             }
-            *self.queuetable.active_mut() = false;
-            *self.panes.active_mut() = true;
+            *self.sortpanes.active_mut() = false;
+            *self.filterpanes.active_mut() = true;
         }
     }
+    // # insert # }}}
 
+    // # delete # {{{
     fn delete(&mut self) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
         };
-        if self.queuetable.active() {
-            library.remove_sort(self.queuetable.index());
+        if self.sortpanes.active() {
+            library.remove_sort(self.sortpanes.index());
         } else {
-            self.panes.remove();
-            library.remove_filter(self.panes.index());
+            self.filterpanes.remove();
+            library.remove_filter(self.filterpanes.index());
             if library.filter_count() == 0 {
-                *self.queuetable.active_mut() = true;
-                *self.panes.active_mut() = false;
+                *self.sortpanes.active_mut() = true;
+                *self.filterpanes.active_mut() = false;
             }
         }
     }
+    // # delete # }}}
 
-    // ## UI Data FNs ## }}}
+    // # move_pane # {{{
+    fn move_pane(&mut self, left: bool) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
+
+        let s = self.sortpanes.active();
+
+        let (count, index_mut) = if s {
+            (library.sort_count(), self.sortpanes.index_mut())
+        } else {
+            (library.filter_count(), self.filterpanes.index_mut())
+        };
+
+        if (left && *index_mut > 0) || (!left && *index_mut < count.saturating_sub(1)) {
+            let from = *index_mut;
+            if left {
+                *index_mut -= 1
+            } else {
+                *index_mut += 1
+            }
+            if s {
+                let mut items = library.get_sort_tagstrings();
+                items.swap(from, *index_mut);
+                library.set_sort_tagstrings(items);
+            } else {
+                let mut items = library.get_filters();
+                items.swap(from, *index_mut);
+                library.set_filters(items);
+            }
+        }
+    }
+    // # move_pane # }}}
+
+    // # edit {{{
+    fn edit(&mut self) {
+        let library = match self.lib_weak.upgrade() {
+            Some(l) => l,
+            None => return,
+        };
+        let s = self.sortpanes.active();
+
+        let tagstring = if s {
+            library.get_sort(self.sortpanes.index())
+        } else {
+            library.get_filter(self.filterpanes.index()).map(|f| f.tag)
+        };
+
+        if let Some(tagstring) = tagstring {
+            match self
+                .input("Edit", &tagstring, false)
+                .trim()
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "" => (),
+                input => {
+                    if input != &tagstring {
+                        if s {
+                            library.set_sort(self.sortpanes.index(), input.to_string())
+                        } else {
+                            library.set_filter(
+                                self.filterpanes.index(),
+                                Filter {
+                                    tag: input.to_string(),
+                                    items: vec![],
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // # edit # }}}
+
+    // # search {{{
+    fn search(&mut self) {
+        match self
+            .input("Search", "", false)
+            .trim()
+            .to_ascii_lowercase()
+            .as_str()
+        {
+            "" => (),
+            input => {
+                if self.sortpanes.active() {
+                    self.sortpanes.find(input);
+                } else {
+                    self.filterpanes.find(input);
+                };
+                self.draw();
+            }
+        }
+    }
+    // # search # }}}
+
+    // ## Action FNs ## }}}
 
     // ## draw ## {{{
     fn draw(&mut self) {
@@ -302,13 +403,13 @@ impl<T: Backend> UI<T> {
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                *self.panes.area_mut() = zones[3];
-                self.panes.draw(f, self.theme);
+                *self.filterpanes.area_mut() = zones[3];
+                self.filterpanes.draw(f, self.theme);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                *self.queuetable.area_mut() = zones[4];
-                self.queuetable.draw(f, self.theme);
+                *self.sortpanes.area_mut() = zones[4];
+                self.sortpanes.draw(f, self.theme);
                 let time_queue2 = Instant::now();
 
                 if self.debug {
@@ -382,12 +483,12 @@ impl<T: Backend> UI<T> {
         self.draw();
     }
 
-    fn input(&mut self, query: &str, header: bool) -> String {
-        let mut result = String::new();
+    fn input(&mut self, query: &str, prefill: &str, header: bool) -> String {
+        let mut result = String::from(prefill);
 
         let submit = 'outer: loop {
             let style = self.theme.active;
-            let active = self.queuetable.active();
+            let active = self.sortpanes.active();
             self.draw_inject(|f| {
                 let size = f.size();
                 let area = Rect {
@@ -484,26 +585,47 @@ impl<T: Backend> UI<T> {
         }
     }
 
-    fn search(&mut self) {
-        match self
-            .input("Search", false)
-            .trim()
-            .to_ascii_lowercase()
-            .as_str()
-        {
-            "" => (),
-            input => {
-                if self.queuetable.active() {
-                    self.queuetable.find(input);
-                } else {
-                    self.panes.find(input);
-                };
+    // ## Popops ## }}}
+
+    // ## action ## {{{
+    fn action(&mut self, action: Action) {
+        match action {
+            // General
+            Action::Debug => {
+                self.debug = !self.debug;
+                self.draw()
+            }
+            Action::Draw => self.draw(),
+            Action::Help => self.message("Help", HELP),
+            Action::None => (),
+
+            // Library
+            Action::Accent(color) => {
+                self.theme = Theme::new(color);
                 self.draw();
             }
+            Action::Append => {
+                if let Some(library) = self.lib_weak.upgrade() {
+                    library.append_library(PathBuf::from(self.input("Path", "", true)));
+                }
+            }
+            Action::Purge => {
+                if let Some(library) = self.lib_weak.upgrade() {
+                    library.purge();
+                }
+            }
+
+            // Active Pane
+            Action::Delete => self.delete(),
+            Action::Edit => self.edit(),
+            Action::InsertAfter => self.insert(false),
+            Action::InsertBefore => self.insert(true),
+            Action::MoveLeft => self.move_pane(true),
+            Action::MoveRight => self.move_pane(false),
+            Action::Search => self.search(),
         }
     }
-
-    // ## Popops ## }}}
+    // ## action ## }}}
 
     // ## process_event ## {{{
     fn process_event(&mut self, event: Event) {
@@ -518,8 +640,8 @@ impl<T: Backend> UI<T> {
                 modifiers: KeyModifiers::NONE,
             }) => {
                 if library.filter_count() != 0 {
-                    *self.panes.active_mut() = !self.panes.active();
-                    *self.queuetable.active_mut() = !self.queuetable.active();
+                    *self.filterpanes.active_mut() = !self.filterpanes.active();
+                    *self.sortpanes.active_mut() = !self.sortpanes.active();
                 }
                 self.draw();
             }
@@ -528,39 +650,49 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active() {
-                    *self.queuetable.index_mut()= self.queuetable.index().saturating_sub(1);
+                if self.sortpanes.active() {
+                    *self.sortpanes.index_mut() = self.sortpanes.index().saturating_sub(1);
                     self.draw()
                 }
                 {
-                    *self.panes.index_mut() = self.panes.index().saturating_sub(1);
+                    *self.filterpanes.index_mut() = self.filterpanes.index().saturating_sub(1);
                     self.draw();
                 }
             }
+            km_s!('H')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::SHIFT,
+            }) => self.move_pane(true),
             km!('l')
             | Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active() {
-                    *self.queuetable.index_mut() = (self.queuetable.index() + 1)
+                if self.sortpanes.active() {
+                    *self.sortpanes.index_mut() = (self.sortpanes.index() + 1)
                         .min(library.get_sort_tagstrings().len().saturating_sub(1));
                     self.draw();
                 } else {
-                    *self.panes.index_mut() =
-                        (self.panes.index() + 1).min(library.filter_count().saturating_sub(1));
+                    *self.filterpanes.index_mut() = (self.filterpanes.index() + 1)
+                        .min(library.filter_count().saturating_sub(1));
                     self.draw();
                 }
             }
+            km_s!('L')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::SHIFT,
+            }) => self.move_pane(false),
             km!('j')
             | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active() {
-                    self.queuetable.scroll_by_n_lock(1)
+                if self.sortpanes.active() {
+                    self.sortpanes.scroll_by_n_lock(1)
                 } else {
-                    self.panes.scroll_by_n_lock(1)
+                    self.filterpanes.scroll_by_n_lock(1)
                 }
                 self.draw();
             }
@@ -569,12 +701,12 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if self.queuetable.active() {
-                    self.queuetable.scroll_down();
-                    self.queuetable.scroll_by_n_lock(0);
+                if self.sortpanes.active() {
+                    self.sortpanes.scroll_down();
+                    self.sortpanes.scroll_by_n_lock(0);
                 } else {
-                    self.panes.scroll_down();
-                    self.panes.scroll_by_n_lock(0);
+                    self.filterpanes.scroll_down();
+                    self.filterpanes.scroll_by_n_lock(0);
                 }
                 self.draw();
             }
@@ -583,10 +715,10 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active() {
-                    self.queuetable.scroll_by_n_lock(-1)
+                if self.sortpanes.active() {
+                    self.sortpanes.scroll_by_n_lock(-1)
                 } else {
-                    self.panes.scroll_by_n_lock(-1)
+                    self.filterpanes.scroll_by_n_lock(-1)
                 }
                 self.draw();
             }
@@ -595,30 +727,30 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if self.queuetable.active() {
-                    self.queuetable.scroll_up();
-                    self.queuetable.scroll_by_n_lock(0)
+                if self.sortpanes.active() {
+                    self.sortpanes.scroll_up();
+                    self.sortpanes.scroll_by_n_lock(0)
                 } else {
-                    self.panes.scroll_up();
-                    self.panes.scroll_by_n_lock(0);
+                    self.filterpanes.scroll_up();
+                    self.filterpanes.scroll_by_n_lock(0);
                 }
                 self.draw();
             }
 
             km!('g') => {
-                if self.queuetable.active() {
-                    self.queuetable.scroll_by_n_lock(i32::MIN)
+                if self.sortpanes.active() {
+                    self.sortpanes.scroll_by_n_lock(i32::MIN)
                 } else {
-                    self.panes.scroll_by_n(i32::MIN)
+                    self.filterpanes.scroll_by_n(i32::MIN)
                 };
                 self.draw();
             }
             km_s!('G') => {
-                if self.queuetable.active() {
+                if self.sortpanes.active() {
                     // i32::max will overflow since it gets added to pos. easy avoidance lol.
-                    self.queuetable.scroll_by_n_lock(i16::MAX.into())
+                    self.sortpanes.scroll_by_n_lock(i16::MAX.into())
                 } else {
-                    self.panes.scroll_by_n(i16::MAX.into())
+                    self.filterpanes.scroll_by_n(i16::MAX.into())
                 };
                 self.draw();
             }
@@ -628,10 +760,10 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
             }) => {
-                if self.queuetable.active() {
-                    library.play_track(library.get_queue().get(self.queuetable.position()).cloned())
+                if self.sortpanes.active() {
+                    library.play_track(library.get_queue().get(self.sortpanes.position()).cloned())
                 } else {
-                    self.panes.toggle_current()
+                    self.filterpanes.toggle_current()
                 }
             }
 
@@ -641,19 +773,19 @@ impl<T: Backend> UI<T> {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
             }) => {
-                if !self.queuetable.active() {
-                    self.panes.select_current()
+                if !self.sortpanes.active() {
+                    self.filterpanes.select_current()
                 }
             }
 
             km!('v') => {
-                if !self.queuetable.active() {
-                    self.panes.invert_selection()
+                if !self.sortpanes.active() {
+                    self.filterpanes.invert_selection()
                 }
             }
             km_s!('V') => {
-                if !self.queuetable.active() {
-                    self.panes.deselect_all()
+                if !self.sortpanes.active() {
+                    self.filterpanes.deselect_all()
                 }
             }
 
@@ -661,6 +793,7 @@ impl<T: Backend> UI<T> {
             km!('i') => self.insert(false),
             km_s!('I') => self.insert(true),
             km!('/') => self.search(),
+            km!('\'') => self.edit(),
 
             km!('a') => library.play_pause(),
             km!('x') => library.stop(),
@@ -717,37 +850,47 @@ impl<T: Backend> UI<T> {
             // # Mouse Events # {{{
             Event::Mouse(event) => {
                 let (q, qi, p, pi) = (
-                    self.queuetable.active(),
-                    self.queuetable.index(),
-                    self.panes.active(),
-                    self.panes.index(),
+                    self.sortpanes.active(),
+                    self.sortpanes.index(),
+                    self.filterpanes.active(),
+                    self.filterpanes.index(),
                 );
 
-                if [
+                let actions = &[
                     self.status_bar.process_event(event),
                     self.menubar.process_event(event),
-                    self.panes.process_event(event),
-                    self.queuetable.process_event(event),
-                ]
-                .iter()
-                .any(|r| *r)
-                // if you use || it can early return???
-                {
-                    if !self.queuetable.active() && !self.panes.active() {
-                        match q {
-                            true => *self.queuetable.active_mut() = true,
-                            false => *self.panes.active_mut() = true,
-                        }
+                    self.filterpanes.process_event(event),
+                    self.sortpanes.process_event(event),
+                ];
+
+                let draws = self.draw_count;
+
+                // Ensure something is always active
+                if !self.sortpanes.active() && !self.filterpanes.active() {
+                    match q {
+                        true => *self.sortpanes.active_mut() = true,
+                        false => *self.filterpanes.active_mut() = true,
                     }
                     self.draw()
-                // also draw if focus changes
-                } else if (q, qi, p, pi)
-                    != (
-                        self.queuetable.active(),
-                        self.queuetable.index(),
-                        self.panes.active(),
-                        self.panes.index(),
-                    )
+                }
+
+                // handle draws later
+                for action in actions {
+                    if action != &Action::Draw {
+                        self.action(*action)
+                    }
+                }
+
+                // Hopefully avoid unecessary draws.
+                if (actions.iter().any(|r| *r == Action::Draw)
+                    || (q, qi, p, pi)
+                        != (
+                            self.sortpanes.active(),
+                            self.sortpanes.index(),
+                            self.filterpanes.active(),
+                            self.filterpanes.index(),
+                        ))
+                    && self.draw_count == draws
                 {
                     self.draw()
                 }
@@ -756,31 +899,10 @@ impl<T: Backend> UI<T> {
             Event::Resize(..) => self.draw(),
             _ => (),
         }
+
+        // Menubar received separately since its type-agnostic
         if let Some(action) = self.menubar.receive() {
-            match action {
-                MAction::Delete => self.delete(),
-                MAction::Help => self.message("Help", HELP),
-                MAction::Insert(b) => self.insert(b),
-                MAction::Search => self.search(),
-                MAction::Debug => {
-                    self.debug = !self.debug;
-                    self.draw()
-                }
-                MAction::Append => {
-                    if let Some(library) = self.lib_weak.upgrade() {
-                        library.append_library(PathBuf::from(self.input("Path", true)));
-                    }
-                }
-                MAction::Purge => {
-                    if let Some(library) = self.lib_weak.upgrade() {
-                        library.purge();
-                    }
-                }
-                MAction::Accent(color) => {
-                    self.theme = Theme::new(color);
-                    self.draw();
-                }
-            }
+            self.action(action)
         }
     }
     // ## process_event ## }}}
@@ -852,12 +974,12 @@ pub fn tui(library: Arc<Library>) -> bool {
                         | LibEvt::Shuffle => ui.lock().unwrap().draw(),
                         LibEvt::Update => {
                             let mut uiw = ui.lock().unwrap();
-                            let i = uiw.panes.index();
+                            let i = uiw.filterpanes.index();
                             for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
-                                *uiw.panes.index_mut() = x;
-                                uiw.panes.scroll_by_n(0);
+                                *uiw.filterpanes.index_mut() = x;
+                                uiw.filterpanes.scroll_by_n(0);
                             }
-                            *uiw.panes.index_mut() = i;
+                            *uiw.filterpanes.index_mut() = i;
                             uiw.draw();
                         }
                         LibEvt::Error(message) => {

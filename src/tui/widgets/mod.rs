@@ -1,4 +1,5 @@
 pub use super::theme::Theme;
+pub use super::Action;
 mod statusbar;
 pub use statusbar::StatusBar;
 mod menubar;
@@ -48,7 +49,7 @@ pub trait ContainedWidget {
 }
 
 pub trait Clickable {
-    fn process_event(&mut self, event: crossterm::event::MouseEvent) -> bool;
+    fn process_event(&mut self, event: crossterm::event::MouseEvent) -> Action;
 }
 
 // ### Scrollable ### {{{
@@ -144,8 +145,8 @@ pub struct PaneArray {
     pub views: Vec<usize>,
 }
 
-const PA_LONG: &'static str = "<<xx>>";
-const PA_SHORT: &'static str = "<x>";
+const PA_LONG: &'static str = "<<++::--++>>";
+const PA_SHORT: &'static str = "<+:-+>";
 
 /// Updates positions before sending
 pub enum PaneArrayEvt {
@@ -155,16 +156,7 @@ pub enum PaneArrayEvt {
     RClickTit,
     ScrollUp,
     ScrollDown,
-    Delete,
-    MoveLeft,
-    MoveRight,
-    // // TODO
-    // // These need a way for widgets to request text input
-    // // Either that or widgets need to be able to signal actions back to TUI main
-    // // More restructuring yay
-    // Edit,
-    // InsertBefore,
-    // InsertAfter,
+    Action(Action),
 }
 
 impl PaneArray {
@@ -184,10 +176,11 @@ impl PaneArray {
         &mut self,
         event: crossterm::event::MouseEvent,
         items: &[(usize, usize)],
-    ) -> Option<PaneArrayEvt> {
+    ) -> PaneArrayEvt {
+        let none = PaneArrayEvt::Action(Action::None);
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return None
+                return none
             }
             _ => (),
         }
@@ -209,10 +202,10 @@ impl PaneArray {
 
                     match event.kind {
                         MouseEventKind::ScrollUp => {
-                            return Some(PaneArrayEvt::ScrollUp);
+                            return PaneArrayEvt::ScrollUp;
                         }
                         MouseEventKind::ScrollDown => {
-                            return Some(PaneArrayEvt::ScrollDown);
+                            return PaneArrayEvt::ScrollDown;
                         }
                         #[allow(non_snake_case)]
                         MouseEventKind::Down(button) => {
@@ -226,9 +219,9 @@ impl PaneArray {
                             // click title
                             if zX >= 1 && zX <= items[num].0 as u16 && zY == 0 {
                                 match button {
-                                    MouseButton::Left => return Some(PaneArrayEvt::ClickTit),
+                                    MouseButton::Left => return PaneArrayEvt::ClickTit,
 
-                                    MouseButton::Right => return Some(PaneArrayEvt::RClickTit),
+                                    MouseButton::Right => return PaneArrayEvt::RClickTit,
 
                                     MouseButton::Middle => (),
                                 }
@@ -240,17 +233,17 @@ impl PaneArray {
                                 let i = footer.saturating_sub(zone.width.saturating_sub(zX + 1));
                                 let step = footer / PA_SHORT.len() as u16;
                                 if i < step {
-                                    return Some(PaneArrayEvt::MoveLeft);
-                                // } else if i < step * 2 {
-                                //     return Some(PaneArrayEvt::InsertBefore);
-                                // } else if i < step * 3 {
-                                //     return Some(PaneArrayEvt::Edit);
+                                    return PaneArrayEvt::Action(Action::MoveLeft);
                                 } else if i < step * 2 {
-                                    return Some(PaneArrayEvt::Delete);
-                                // } else if i < step * 5 {
-                                //     return Some(PaneArrayEvt::InsertAfter);
+                                    return PaneArrayEvt::Action(Action::InsertBefore);
+                                } else if i < step * 3 {
+                                    return PaneArrayEvt::Action(Action::Edit);
+                                } else if i < step * 4 {
+                                    return PaneArrayEvt::Action(Action::Delete);
+                                } else if i < step * 5 {
+                                    return PaneArrayEvt::Action(Action::InsertAfter);
                                 } else {
-                                    return Some(PaneArrayEvt::MoveRight);
+                                    return PaneArrayEvt::Action(Action::MoveRight);
                                 }
 
                             // click in list
@@ -265,12 +258,12 @@ impl PaneArray {
                                     MouseButton::Left => {
                                         self.positions[num_join] =
                                             zY as usize + self.views[num_join] - 1;
-                                        return Some(PaneArrayEvt::Click);
+                                        return PaneArrayEvt::Click;
                                     }
                                     MouseButton::Right => {
                                         self.positions[num_join] =
                                             zY as usize + self.views[num_join] - 1;
-                                        return Some(PaneArrayEvt::RClick);
+                                        return PaneArrayEvt::RClick;
                                     }
                                     _ => (),
                                 }
@@ -286,7 +279,7 @@ impl PaneArray {
             // area intersects
             self.active = false
         }
-        None
+        none
     }
     // # prep_event # }}}
 

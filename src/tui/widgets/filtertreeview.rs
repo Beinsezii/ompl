@@ -192,17 +192,19 @@ impl ContainedWidget for FilterTreeView {
 
 // ### impl Clickable ### {{{
 impl Clickable for FilterTreeView {
-    fn process_event(&mut self, event: MouseEvent) -> bool {
+    fn process_event(&mut self, event: MouseEvent) -> super::Action {
+        let none = super::Action::None;
+        let draw = super::Action::Draw;
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return false
+                return none
             }
             _ => (),
         }
 
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
-            None => return false,
+            None => return none,
         };
 
         let (filters, tracks) = library.get_filter_tree_display();
@@ -214,42 +216,22 @@ impl Clickable for FilterTreeView {
         }
 
         match self.pane_array.prep_event(event, &items) {
-            Some(PaneArrayEvt::Click) => self.select_current(),
-            Some(PaneArrayEvt::RClick) => self.toggle_current(),
-            Some(PaneArrayEvt::ClickTit) => self.invert_selection(),
-            Some(PaneArrayEvt::RClickTit) => self.deselect_all(),
-            Some(PaneArrayEvt::ScrollUp) => {
+            PaneArrayEvt::Click => self.select_current(),
+            PaneArrayEvt::RClick => self.toggle_current(),
+            PaneArrayEvt::ClickTit => self.invert_selection(),
+            PaneArrayEvt::RClickTit => self.deselect_all(),
+            PaneArrayEvt::ScrollUp => {
                 self.scroll_up();
-                return true;
+                return draw;
             }
-            Some(PaneArrayEvt::ScrollDown) => {
+            PaneArrayEvt::ScrollDown => {
                 self.scroll_down();
-                return true;
+                return draw;
             }
-            Some(PaneArrayEvt::Delete) => {
-                library.remove_filter(self.index());
-                self.remove()
-            }
-            Some(PaneArrayEvt::MoveLeft) => {
-                if self.index() > 0 {
-                    let mut filters = library.get_filters();
-                    filters.swap(self.index(), self.index() - 1);
-                    library.set_filters(filters);
-                    *self.index_mut() = self.index().saturating_sub(1);
-                }
-            }
-            Some(PaneArrayEvt::MoveRight) => {
-                if self.index() < library.filter_count().saturating_sub(1) {
-                    let mut filters = library.get_filters();
-                    filters.swap(self.index(), self.index() + 1);
-                    library.set_filters(filters);
-                    *self.index_mut() = (self.index() + 1).min(items.len())
-                }
-            }
-            None => (),
+            PaneArrayEvt::Action(a) => return a,
         }
 
-        false
+        none
     }
 }
 // ### impl Clickable ### }}}

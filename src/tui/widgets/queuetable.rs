@@ -145,17 +145,19 @@ impl Searchable for QueueTable {
 
 // ### impl Clickable {{{
 impl Clickable for QueueTable {
-    fn process_event(&mut self, event: MouseEvent) -> bool {
+    fn process_event(&mut self, event: MouseEvent) -> super::Action {
+        let none = super::Action::None;
+        let draw = super::Action::Draw;
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return false
+                return none
             }
             _ => (),
         }
 
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
-            None => return false,
+            None => return none,
         };
 
         let mut items = Vec::<(usize, usize)>::new();
@@ -173,44 +175,27 @@ impl Clickable for QueueTable {
         let oldpos = self.position();
 
         match self.pane_array.prep_event(event, &items) {
-            Some(PaneArrayEvt::Click) => library.play_track(queue.get(self.position()).cloned()),
-            Some(PaneArrayEvt::RClick) => {
+            PaneArrayEvt::Click => library.play_track(queue.get(self.position()).cloned()),
+            PaneArrayEvt::RClick => {
                 if self.position() == oldpos {
                     self.scroll_by_n_lock(0)
                 };
-                return true;
+                return draw;
             }
-            Some(PaneArrayEvt::ClickTit) => (),
-            Some(PaneArrayEvt::RClickTit) => (),
-            Some(PaneArrayEvt::ScrollUp) => {
+            PaneArrayEvt::ClickTit => (),
+            PaneArrayEvt::RClickTit => (),
+            PaneArrayEvt::ScrollUp => {
                 self.scroll_up();
-                return true;
+                return draw;
             }
-            Some(PaneArrayEvt::ScrollDown) => {
+            PaneArrayEvt::ScrollDown => {
                 self.scroll_down();
-                return true;
+                return draw;
             }
-            Some(PaneArrayEvt::Delete) => library.remove_sort(self.index()),
-            Some(PaneArrayEvt::MoveLeft) => {
-                if self.index() > 0 {
-                    let mut sorts = library.get_sort_tagstrings();
-                    sorts.swap(self.index(), self.index() - 1);
-                    library.set_sort_tagstrings(sorts);
-                    *self.index_mut() = self.index().saturating_sub(1);
-                }
-            }
-            Some(PaneArrayEvt::MoveRight) => {
-                if self.index() < library.sort_count().saturating_sub(1) {
-                    let mut sorts = library.get_sort_tagstrings();
-                    sorts.swap(self.index(), self.index() + 1);
-                    library.set_sort_tagstrings(sorts);
-                    *self.index_mut() = (self.index() + 1).min(items.len())
-                }
-            }
-            None => (),
+            PaneArrayEvt::Action(a) => return a,
         }
 
-        false
+        none
     }
 }
 // ### impl Clickable }}}
