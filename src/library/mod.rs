@@ -7,11 +7,10 @@ use std::thread;
 use std::time::Instant;
 
 use rand::random;
-use rayon::prelude::*;
 
 use bus::{Bus, BusReader};
-use crossbeam::channel;
-use crossbeam::channel::Receiver;
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::Receiver;
 
 mod player;
 mod track;
@@ -87,7 +86,7 @@ impl Library {
 
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
-        let (next_s, next_r) = channel::bounded(1);
+        let (next_s, next_r) = sync_channel(1);
         let result = Arc::new(Self {
             player: Player::new(None, Some(next_s)),
             tracks: RwLock::new(Vec::new()),
@@ -319,9 +318,14 @@ impl Library {
     pub fn append_library<T: AsRef<Path>>(&self, path: T) {
         let mut new_tracks: Vec<Track> = get_tracks(path, self.hidden_get());
 
-        new_tracks
-            .par_iter_mut()
-            .for_each(|track| track.load_meta());
+        thread::scope(|scope| {
+            // 50 is a completely arbitrary value that seems to perform well enough
+            // Basically tradeoff between thread spawn overhead and IO calls.
+            // I dont want an entire async runtime for loading metadata so here it is
+            for chunk in new_tracks.chunks_mut(50) {
+                scope.spawn(|| chunk.iter_mut().for_each(|track| track.load_meta()));
+            }
+        });
 
         let mut tracks = self.tracks.write().unwrap();
         new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| {

@@ -8,6 +8,7 @@ use std::sync::{
     Arc,
 };
 use std::thread;
+use std::time::Instant;
 
 #[cfg(feature = "media-controls")]
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
@@ -471,7 +472,9 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.set_filters(filters);
             library.set_sort_tagstrings(sort_tagstrings);
             if let Some(path) = library_path {
+                let now = Instant::now();
                 library.append_library(path);
+                l1!(format!("Tracks loaded in {:?}", Instant::now() - now))
             }
 
             let server_library = library.clone();

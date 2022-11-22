@@ -4,8 +4,8 @@ use std::time::{Duration, Instant};
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
-use crossbeam::channel;
-use crossbeam::channel::{Receiver, Sender};
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{Receiver, SyncSender};
 
 use super::track::Track;
 
@@ -15,7 +15,7 @@ pub const TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
 
 // ### BG TASKS ### {{{
 
-fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: Sender<()>) {
+fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: SyncSender<()>) {
     l2!("Track Ender start");
     loop {
         if let Some(sink) = &*sink.read().unwrap() {
@@ -33,7 +33,7 @@ fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: Sender<()>) {
     l2!("Track Ender end");
 }
 
-fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
+fn stream(han_ch_s: SyncSender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
     l2!("Stream start");
     let (_stream, handle) = OutputStream::try_default().unwrap();
     han_ch_s.send(handle).unwrap();
@@ -45,7 +45,7 @@ fn stream(han_ch_s: Sender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
 
 pub struct Player {
     stream_handle: RwLock<Option<OutputStreamHandle>>,
-    stm_ex_s: RwLock<Option<Sender<()>>>,
+    stm_ex_s: RwLock<Option<SyncSender<()>>>,
     volume_retained: RwLock<f32>,
     sink: Arc<RwLock<Option<Sink>>>,
     track: RwLock<Option<Arc<Track>>>,
@@ -59,7 +59,7 @@ impl Drop for Player {
 
 impl Player {
     // # new # {{{
-    pub fn new(track: Option<Arc<Track>>, signal_next: Option<Sender<()>>) -> Self {
+    pub fn new(track: Option<Arc<Track>>, signal_next: Option<SyncSender<()>>) -> Self {
         l2!("Constructing Player...");
         let now = Instant::now();
 
@@ -88,8 +88,8 @@ impl Player {
 
     fn start(&self) {
         if self.stream_handle.read().unwrap().is_none() || self.stm_ex_s.read().unwrap().is_none() {
-            let (han_ch_s, han_ch_r) = channel::bounded(1);
-            let (stm_ex_s, stm_ex_r) = channel::bounded(1);
+            let (han_ch_s, han_ch_r) = sync_channel(1);
+            let (stm_ex_s, stm_ex_r) = sync_channel(1);
             thread::spawn(|| stream(han_ch_s, stm_ex_r));
             *self.stm_ex_s.write().unwrap() = Some(stm_ex_s);
             *self.stream_handle.write().unwrap() = Some(han_ch_r.recv().unwrap());
