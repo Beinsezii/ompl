@@ -8,6 +8,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
+use symphonia::core::io::MediaSourceStream;
+use symphonia::core::probe::Hint;
+
 use super::player::TYPES;
 use walkdir::WalkDir;
 
@@ -17,44 +20,44 @@ pub mod tagstring;
 // ## ID3 TAGS ## {{{
 /// https://id3.org/id3v2.3.0#Declared_ID3v2_frames
 const ID3_TAGS: &[(&'static str, &'static str)] = &[
-    ("TALB", "Album"),
-    ("TBPM", "BPM"),
-    ("TCOM", "Composer"),
-    ("TCON", "Genre"),
-    ("TCOP", "Copyright"),
-    ("TDAT", "Date"),
-    ("TDLY", "Delay"),
-    ("TENC", "Encoder"),
-    ("TEXT", "Lyricist"),
-    ("TFLT", "FileType"),
-    ("TIME", "Time"),
-    ("TIT1", "Grouping"),
-    ("TIT2", "Title"),
-    ("TIT3", "Subtitle"),
-    ("TKEY", "Key"),
-    ("TLAN", "Language"),
-    ("TLEN", "Length"),
-    ("TMED", "Mediatype"),
-    ("TOAL", "OriginalAlbum"),
-    ("TOFN", "OriginalFilename"),
-    ("TOLY", "OriginalLyricist"),
-    ("TOPE", "OriginalArtist"),
-    ("TORY", "OriginalYear"),
-    ("TOWN", "Owner"),
-    ("TPE1", "Artist"),
-    ("TPE2", "Accompaniment"),
-    ("TPE3", "Performer"),
-    ("TPE4", "Mixer"),
-    ("TPOS", "Set"),
-    ("TPUB", "Publisher"),
-    ("TRCK", "Track"),
-    ("TRDA", "RecordingDate"),
-    ("TRSN", "Station"),
-    ("TRSO", "StationOwner"),
-    ("TSIZ", "Size"),
-    ("TSRC", "ISRC"),
-    ("TSEE", "Equipment"),
-    ("TYER", "Year"),
+    ("talb", "album"),
+    ("tbpm", "bpm"),
+    ("tcom", "composer"),
+    ("tcon", "genre"),
+    ("tcop", "copyright"),
+    ("tdat", "date"),
+    ("tdly", "delay"),
+    ("tenc", "encoder"),
+    ("text", "lyricist"),
+    ("tflt", "filetype"),
+    ("time", "time"),
+    ("tit1", "grouping"),
+    ("tit2", "title"),
+    ("tit3", "subtitle"),
+    ("tkey", "key"),
+    ("tlan", "language"),
+    ("tlen", "length"),
+    ("tmed", "mediatype"),
+    ("toal", "originalalbum"),
+    ("tofn", "originalfilename"),
+    ("toly", "originallyricist"),
+    ("tope", "originalartist"),
+    ("tory", "originalyear"),
+    ("town", "owner"),
+    ("tpe1", "artist"),
+    ("tpe2", "accompaniment"),
+    ("tpe3", "performer"),
+    ("tpe4", "mixer"),
+    ("tpos", "set"),
+    ("tpub", "publisher"),
+    ("trck", "track"),
+    ("trda", "recordingdate"),
+    ("trsn", "station"),
+    ("trso", "stationowner"),
+    ("tsiz", "size"),
+    ("tsrc", "isrc"),
+    ("tsee", "equipment"),
+    ("tyer", "year"),
 ];
 // ## ID3 TAGS ## }}}
 
@@ -294,13 +297,11 @@ impl Track {
         }
     }
 
-    // ## META ## {{{
-    /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
-
     // # load_meta # {{{
+    /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
     pub fn load_meta(&mut self) {
         match self.path.extension().map(|e| e.to_str()).flatten() {
-            Some("mp3") | Some("wav") => self.load_meta_id3(),
+            Some("mp3") | Some("wav") => self.probe_meta(true),
             Some("flac") => self.load_meta_vorbis::<symphonia::default::formats::FlacReader>(),
             Some("ogg") => self.load_meta_vorbis::<symphonia::default::formats::OggReader>(),
             _ => (),
@@ -331,53 +332,77 @@ impl Track {
     }
     // # load_meta # }}}
 
-    // # id3 # {{{
-    fn load_meta_id3(&mut self) {
-        if let Ok(frames) = id3::Tag::read_from_path(&self.path) {
-            for frame in frames.frames() {
-                let id = frame.id();
-                let content = frame.content();
-                // 'custom text' handling
-                if id == "TXXX" {
-                    if let id3::Content::ExtendedText(text) = content {
-                        self.tags
-                            .insert(text.description.to_ascii_lowercase(), text.value.clone());
+    // # probe_meta # {{{
+    /// id3 mode handles standard frames, like 'TCON' & 'TXXX'
+    /// non-id3 mode just dumps everything straight into the list as-is
+    ///
+    /// Or at least that's the plan, but it doesn't seem to work for vorbis comments...
+    /// No idea why not. Nothing in here on symphonia's side is id3/mp3 specific.
+    fn probe_meta(&mut self, id3: bool) {
+        let Ok(Ok(mut probed)) = File::open(&self.path).map(|file| {
+            symphonia::default::get_probe().format(
+                Hint::new().with_extension(
+                    self.path()
+                        .extension()
+                        .map(|s| s.to_str())
+                        .flatten()
+                        .expect("HINT EXTENSION FAIL - should be unreachable"),
+                ),
+                MediaSourceStream::new(Box::new(file), Default::default()),
+                &Default::default(),
+                &Default::default(),
+            )
+        }) else {return};
+        let Some(mut metadata) = probed.metadata.get() else {return};
+        if let Some(meta) = metadata.skip_to_latest() {
+            for tag in meta.tags() {
+                let mut val = match &tag.value {
+                    symphonia::core::meta::Value::String(s) => s.clone(),
+                    _ => continue,
+                };
+                let mut key = tag.key.to_ascii_lowercase();
+
+                if id3 {
+                    // convert id3v1 genres
+                    if key == "tcon" {
+                        val = val
+                            .trim()
+                            .trim_start_matches('(')
+                            .trim_end_matches(')')
+                            .parse::<usize>()
+                            .ok()
+                            .map(|i| ID3_GENRES.get(i).map(|s| s.to_string()))
+                            .flatten()
+                            .unwrap_or(val)
                     }
-                }
-                // id3 standard tag strings
-                else {
-                    for (t_id, t_str) in ID3_TAGS {
-                        if t_id == &id {
-                            if let id3::Content::Text(t) = content {
-                                // convert ID3v1 genre numbers
-                                let t = if t_id == &"TCON" {
-                                    t.trim()
-                                        .trim_start_matches('(')
-                                        .trim_end_matches(')')
-                                        .parse::<usize>()
-                                        .ok()
-                                        .map(|i| ID3_GENRES.get(i).map(|s| s.to_string()))
-                                        .flatten()
-                                        .unwrap_or(t.to_string())
-                                } else {
-                                    t.to_string()
-                                };
-                                // lets you search for either the id3 ID or the 'pretty' name
-                                self.tags.insert(t_str.to_ascii_lowercase(), t.clone());
-                                self.tags.insert(t_id.to_ascii_lowercase(), t);
-                            }
+                    // convert id3v2 keys to human readables
+                    for (fromkey, tokey) in ID3_TAGS {
+                        if fromkey == &key {
+                            self.tags.insert(tokey.to_string(), val.clone());
                             break;
                         }
                     }
                 }
+
+                // also just push everything for good measure,
+                // removing id3's "txxx" cause its dumb
+                if id3 && key.starts_with("txxx:") {
+                    key.replace_range(0..5, "");
+                    self.tags.insert(key, val);
+                } else {
+                    self.tags.insert(key, val);
+                }
             }
         }
     }
-    // # id3 # }}}
+    // # probe_meta # }}}
 
     // # vorbis comment # {{{
+    /// Coincidentally, this also doesnt work for id3 when you plug Mp3Reader into it.
+    /// The source code literally just Default::default()'s the metadata,
+    /// What the fuck, Symphonia?
     fn load_meta_vorbis<R: symphonia::core::formats::FormatReader>(&mut self) {
-        let formatreader: Result<Result<R, _>, _> = File::open(&self.path).map(|file| {
+        let Ok(Ok(mut reader)): Result<Result<R, _>, _> = File::open(&self.path).map(|file| {
             symphonia::core::formats::FormatReader::try_new(
                 symphonia::core::io::MediaSourceStream::new(
                     Box::new(file),
@@ -385,19 +410,15 @@ impl Track {
                 ),
                 &symphonia::core::formats::FormatOptions::default(),
             )
-        }); // flatten is still experimental
-        if let Ok(Ok(mut reader)) = formatreader {
-            if let Some(meta) = reader.metadata().skip_to_latest() {
-                for tag in meta.tags() {
-                    self.tags
-                        .insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
-                }
+        }) else {return};
+        if let Some(meta) = reader.metadata().skip_to_latest() {
+            for tag in meta.tags() {
+                self.tags
+                    .insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
             }
         }
     }
     // # vorbis comment # }}}
-
-    // # load_meta # }}}
 
     // ## GET / SET ## {{{
 
@@ -426,31 +447,19 @@ impl Track {
 
 impl std::fmt::Display for Track {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buff1 = format!("{}", self.path.to_str().unwrap_or("Invalid Path!"));
-        let mut buff2 = String::new();
+        let mut buff = format!(
+            "{}\nGAIN: {}\n",
+            self.path.to_str().unwrap_or("Invalid Path!"),
+            self.gain()
+        );
 
-        let ids: Vec<&str> = ID3_TAGS.iter().map(|tid| tid.0).collect();
-        let tags: Vec<&str> = ID3_TAGS.iter().map(|tid| tid.1).collect();
+        let mut its = self.tags().iter().collect::<Vec<(&String, &String)>>();
+        its.sort_by(|a, b| (a.0).cmp(b.0));
 
-        for key in self.tags().keys() {
-            if let Some(p) = ids
-                .iter()
-                .position(|&x| x.to_ascii_lowercase() == key.to_ascii_lowercase())
-            {
-                buff1.push_str(&format!(
-                    "\n{}/{}: {}",
-                    ids[p],
-                    tags[p],
-                    self.tags().get(key).unwrap()
-                ));
-            } else if tags
-                .iter()
-                .position(|&x| x.to_ascii_lowercase() == key.to_ascii_lowercase())
-                .is_none()
-            {
-                buff2.push_str(&format!("\n{}: {}", key, self.tags().get(key).unwrap()))
-            }
+        for (k, v) in its.into_iter() {
+            buff.push_str(&format!("\n{k}: {v}"))
         }
-        write!(f, "{}{}", buff1, buff2)
+
+        f.write_str(&buff)
     }
 }

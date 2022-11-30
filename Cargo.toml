@@ -9,11 +9,10 @@ edition = "2021"
 bincode = "1"
 bus = "2"
 clap = { version = "3", features = ["derive", "unicode"] } # v4 breaking changes
-id3 = "1"
 rand = "0.8"
 rodio = "0.16"
 serde = { version = "1", features = ["derive"] }
-symphonia = { version = "0.5", default-features = false, features = ['ogg', 'flac']}
+symphonia = { version = "0.5", default-features = false, features = ['ogg', 'flac', 'mp3', 'wav']}
 walkdir = "2"
 
 souvlaki = {version = "0.5", optional = true}
@@ -47,7 +46,4 @@ opt-level = 1
 opt-level = 3
 lto = "fat"
 strip = true
-# From Claxon docs:
-# Note that for decent performance, Claxon should be compiled with -C codegen-units=1
-# on Rust ≥ 1.24.0. Not passing this RUSTFLAG can cause as much as a 45% increase in running time.
 codegen-units = 1
