@@ -135,11 +135,11 @@ pub enum FilterCmd {
     },
     Set {
         index: usize,
-        #[clap(value_parser=parse_filter)]
+        #[arg(value_parser=parse_filter)]
         filter: library::Filter,
     },
     SetAll {
-        #[clap(num_args(1..), value_parser=parse_filter)]
+        #[arg(num_args(1..), value_parser=parse_filter)]
         filters: Vec<library::Filter>,
     },
     Remove {
@@ -158,7 +158,7 @@ pub enum SortCmd {
     },
 
     SetAll {
-        #[clap(num_args(1..))]
+        #[arg(num_args(1..))]
         tagstrings: Vec<String>,
     },
     Remove {
@@ -191,32 +191,32 @@ pub enum Action {
         /// Path to music libary folder
         library: Option<PathBuf>,
 
-        #[clap(short = 'H', long)]
+        #[arg(short = 'H', long)]
         /// Include hidden items ( '.' prefix )
         hidden: bool,
 
-        #[clap(long, short)]
+        #[arg(long, short)]
         /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
         daemon: bool,
 
-        #[clap(long, short)]
+        #[arg(long, short)]
         /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
         no_media: bool,
 
-        #[clap(long, short, num_args(1..), value_parser=parse_filter)]
+        #[arg(long, short, num_args(1..), value_parser=parse_filter)]
         /// Starting filters
         filters: Vec<library::Filter>,
 
-        #[clap(long = "sort", short, num_args(1..))]
+        #[arg(long = "sort", short, num_args(1..))]
         /// Starting sort tagstrings
         sort_tagstrings: Vec<String>,
 
-        #[clap(long, short, default_value = "0.5")]
+        #[arg(long, short, default_value = "0.5")]
         /// Starting volume
         volume: f32,
 
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
-        #[clap(long, short = 'V', action(ArgAction::Count))]
+        #[arg(long, short = 'V', action(ArgAction::Count))]
         verbosity: u8,
     },
     Play,
@@ -226,18 +226,18 @@ pub enum Action {
     Next,
     Previous,
     Exit,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Volume(VolumeCmd),
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Shuffle(ShuffleCmd),
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Print(PrintCmd),
     PlayFile {
         file: PathBuf,
     },
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Filter(FilterCmd),
-    #[clap(subcommand)]
+    #[command(subcommand)]
     Sort(SortCmd),
     Append {
         path: PathBuf,
@@ -246,13 +246,13 @@ pub enum Action {
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
-#[clap(author, about, version)]
+#[command(author, about, version)]
 struct Args {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     action: Action,
 
     /// Port with which to communicate with other OMPL instances
-    #[clap(long, default_value = PORT)]
+    #[arg(long, default_value = PORT)]
     port: u16,
 }
 

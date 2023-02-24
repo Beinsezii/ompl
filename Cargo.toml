@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 bincode = "1"
 bus = "2"
-clap = { version = "4", features = ["derive", "unicode"] } # v4 breaking changes
+clap = { version = "4", features = ["derive", "unicode"] }
 rand = "0.8"
 rodio = "0.16"
 serde = { version = "1", features = ["derive"] }
