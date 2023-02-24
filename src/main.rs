@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
@@ -135,11 +135,11 @@ pub enum FilterCmd {
     },
     Set {
         index: usize,
-        #[clap(parse(try_from_str = parse_filter))]
+        #[clap(value_parser=parse_filter)]
         filter: library::Filter,
     },
     SetAll {
-        #[clap(multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
+        #[clap(num_args(1..), value_parser=parse_filter)]
         filters: Vec<library::Filter>,
     },
     Remove {
@@ -158,7 +158,7 @@ pub enum SortCmd {
     },
 
     SetAll {
-        #[clap(multiple_occurrences(false), multiple_values(true))]
+        #[clap(num_args(1..))]
         tagstrings: Vec<String>,
     },
     Remove {
@@ -203,16 +203,11 @@ pub enum Action {
         /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
         no_media: bool,
 
-        #[clap(long, short, multiple_occurrences(false), multiple_values(true), parse(try_from_str = parse_filter))]
+        #[clap(long, short, num_args(1..), value_parser=parse_filter)]
         /// Starting filters
         filters: Vec<library::Filter>,
 
-        #[clap(
-            long = "sort",
-            short,
-            multiple_occurrences(false),
-            multiple_values(true)
-        )]
+        #[clap(long = "sort", short, num_args(1..))]
         /// Starting sort tagstrings
         sort_tagstrings: Vec<String>,
 
@@ -221,7 +216,7 @@ pub enum Action {
         volume: f32,
 
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
-        #[clap(long, short = 'V', multiple_occurrences(true), parse(from_occurrences))]
+        #[clap(long, short = 'V', action(ArgAction::Count))]
         verbosity: u8,
     },
     Play,
