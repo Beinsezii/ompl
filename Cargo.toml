@@ -11,12 +11,12 @@ bincode = "1"
 bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }
 rand = "0.8"
-rodio = "0.16"
+rodio = "0.17"
 serde = { version = "1", features = ["derive"] }
 symphonia = { version = "0.5", default-features = false, features = ['ogg', 'flac', 'mp3', 'wav']}
 walkdir = "2"
 
-souvlaki = {version = "0.5", optional = true}
+souvlaki = {version = "0.6", optional = true}
 
 crossterm = {version = "0.24", optional = true} # v0.25 breaking changes
 tui = { version = "0.19", default-features = false, features = ['crossterm'] , optional = true}
