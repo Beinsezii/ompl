@@ -18,7 +18,7 @@ walkdir = "2"
 
 souvlaki = {version = "0.6", optional = true}
 
-crossterm = {version = "0.24", optional = true} # v0.25 breaking changes
+crossterm = {version = "0.26", optional = true} # v0.25 breaking changes
 tui = { version = "0.19", default-features = false, features = ['crossterm'] , optional = true}
 
 copypasta = {version = "0.8", optional=true}

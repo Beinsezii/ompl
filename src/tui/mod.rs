@@ -39,6 +39,7 @@ macro_rules! km {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::NONE,
+            ..
         })
     };
 }
@@ -49,14 +50,17 @@ macro_rules! km_c {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::CONTROL,
+            ..
         })
     };
 }
+
 macro_rules! km_s {
     ($ch:expr) => {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::SHIFT,
+            ..
         })
     };
 }
@@ -639,6 +643,7 @@ impl<T: Backend> UI<T> {
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if library.filter_count() != 0 {
                     *self.filterpanes.active_mut() = !self.filterpanes.active();
@@ -650,6 +655,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     *self.sortpanes.index_mut() = self.sortpanes.index().saturating_sub(1);
@@ -664,11 +670,13 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::SHIFT,
+                ..
             }) => self.move_pane(true),
             km!('l')
             | Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     *self.sortpanes.index_mut() = (self.sortpanes.index() + 1)
@@ -684,11 +692,13 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::SHIFT,
+                ..
             }) => self.move_pane(false),
             km!('j')
             | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     self.sortpanes.scroll_by_n_lock(1)
@@ -701,6 +711,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::SHIFT,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     self.sortpanes.scroll_down();
@@ -715,6 +726,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     self.sortpanes.scroll_by_n_lock(-1)
@@ -727,6 +739,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::SHIFT,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     self.sortpanes.scroll_up();
@@ -760,6 +773,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
+                ..
             }) => {
                 if self.sortpanes.active() {
                     library.play_track(library.get_queue().get(self.sortpanes.position()).cloned())
@@ -773,6 +787,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
+                ..
             }) => {
                 if !self.sortpanes.active() {
                     self.filterpanes.select_current()
@@ -951,11 +966,13 @@ pub fn tui(library: Arc<Library>) -> bool {
         let _egg_tui = egg_tui;
         loop {
             if let Some(ev) = get_event(None) {
-                if ev == km_c!('c') || ev == km_c!('q') {
-                    break;
-                } else if ev == km_c!('z') {
-                    join_tui.store(true, Ordering::Relaxed);
-                    break;
+                match ev {
+                    km_c!('c') | km_c!('q') => break,
+                    km_c!('z') => {
+                        join_tui.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    _ => (),
                 }
                 // process_event will draw for us
                 ui.lock().unwrap().process_event(ev);
