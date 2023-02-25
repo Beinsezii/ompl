@@ -268,6 +268,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "colcon"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e1daa192c341da09c124e9c6e5c1120a3ec212c3d3db93382908e4a42562e33"
+
+[[package]]
 name = "combine"
 version = "4.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1211,6 +1217,7 @@ dependencies = [
  "bincode",
  "bus",
  "clap",
+ "colcon",
  "copypasta",
  "crossterm 0.24.0",
  "rand",

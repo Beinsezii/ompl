@@ -31,7 +31,7 @@ impl ContainedWidget for StatusBar {
     fn draw<T: tui::backend::Backend>(
         &mut self,
         frame: &mut tui::terminal::Frame<T>,
-        theme: super::Theme,
+        stylesheet: super::StyleSheet,
     ) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
@@ -44,18 +44,18 @@ impl ContainedWidget for StatusBar {
                 Span::styled(
                     "><",
                     if library.shuffle_get() {
-                        theme.base_hi
+                        stylesheet.base_hi
                     } else {
-                        theme.base
+                        stylesheet.base
                     },
                 ),
                 Span::from(" :< "),
                 Span::styled(
                     "#",
                     if library.stopped() {
-                        theme.base_hi
+                        stylesheet.base_hi
                     } else {
-                        theme.base
+                        stylesheet.base
                     },
                 ),
                 Span::from(format!(
@@ -66,7 +66,8 @@ impl ContainedWidget for StatusBar {
                         .map(|t| t.tagstring(&self.tagstring))
                         .unwrap_or("???".to_string())
                 )),
-            ])),
+            ]))
+            .style(stylesheet.base),
             self.area,
         );
     }

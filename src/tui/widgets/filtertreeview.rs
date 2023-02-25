@@ -1,4 +1,4 @@
-use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, Theme};
+use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
@@ -168,7 +168,7 @@ impl Searchable for FilterTreeView {
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {
-    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, theme: Theme) {
+    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, stylesheet: StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
@@ -185,7 +185,7 @@ impl ContainedWidget for FilterTreeView {
             items.push((ft.tag, tl_tags));
         }
 
-        self.pane_array.draw_from(frame, theme, items, highlights)
+        self.pane_array.draw_from(frame, stylesheet, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}

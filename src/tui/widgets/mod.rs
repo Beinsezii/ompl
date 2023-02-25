@@ -1,4 +1,4 @@
-pub use super::theme::Theme;
+pub use super::stylesheet::StyleSheet;
 pub use super::Action;
 mod statusbar;
 pub use statusbar::StatusBar;
@@ -45,7 +45,7 @@ pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
 
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut Frame<T>, theme: Theme);
+    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut Frame<T>, stylesheet: StyleSheet);
 }
 
 pub trait Clickable {
@@ -287,7 +287,7 @@ impl PaneArray {
     pub fn draw_from<T: tui::backend::Backend>(
         &mut self,
         frame: &mut Frame<T>,
-        theme: Theme,
+        stylesheet: StyleSheet,
         items: Vec<(String, Vec<String>)>,
         highlights: Vec<Vec<String>>,
     ) {
@@ -326,23 +326,23 @@ impl PaneArray {
                             ListItem::new(s.clone()).style(if self.active && num == self.index {
                                 match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
                                     true => match n == self.positions[num_join] {
-                                        true => theme.active_hi_sel,
-                                        false => theme.active_hi,
+                                        true => stylesheet.active_hi_sel,
+                                        false => stylesheet.active_hi,
                                     },
                                     false => match n == self.positions[num_join] {
-                                        true => theme.active_sel,
-                                        false => theme.active,
+                                        true => stylesheet.active_sel,
+                                        false => stylesheet.active,
                                     },
                                 }
                             } else {
                                 match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
                                     true => match n == self.positions[num_join] {
-                                        true => theme.base_hi_sel,
-                                        false => theme.base_hi,
+                                        true => stylesheet.base_hi_sel,
+                                        false => stylesheet.base_hi,
                                     },
                                     false => match n == self.positions[num_join] {
-                                        true => theme.base_sel,
-                                        false => theme.base,
+                                        true => stylesheet.base_sel,
+                                        false => stylesheet.base,
                                     },
                                 }
                             })
@@ -356,21 +356,21 @@ impl PaneArray {
                             item.0,
                             if self.active && num == self.index {
                                 match highlights.get(num).unwrap_or(&vec![]).is_empty() {
-                                    true => theme.active,
-                                    false => theme.active_hi,
+                                    true => stylesheet.active,
+                                    false => stylesheet.active_hi,
                                 }
                             } else {
                                 match highlights.get(num).unwrap_or(&vec![]).is_empty() {
-                                    true => theme.base,
-                                    false => theme.base_hi,
+                                    true => stylesheet.base,
+                                    false => stylesheet.base_hi,
                                 }
                             },
                         ))
                         .borders(Borders::ALL)
                         .style(if self.active && num == self.index {
-                            theme.active
+                            stylesheet.active
                         } else {
-                            theme.base
+                            stylesheet.base
                         }),
                 ),
                 area,

@@ -36,6 +36,58 @@ pub struct FilteredTracks {
 
 // ## FILTER ## }}}
 
+// ## THEME ## {{{
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub enum Color {
+    RGB([u8; 3]),
+    Term(u8),
+    None,
+}
+
+impl TryFrom<&str> for Color {
+    type Error = String;
+    fn try_from(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        if value.is_empty() || value.to_lowercase() == "none" {
+            Ok(Color::None)
+        } else if let Ok(tcol) = value.parse::<u8>() {
+            if tcol < 16 {
+                Ok(Color::Term(tcol))
+            } else {
+                Err(format!("Value {} non-terminal color (> 15)", tcol))
+            }
+        } else {
+            colcon::hex_to_irgb(value).map(|rgb| Color::RGB(rgb))
+        }
+    }
+}
+
+impl ToString for Color {
+    fn to_string(&self) -> String {
+        match self {
+            Color::None => String::from("None"),
+            Color::Term(v) => v.to_string(),
+            Color::RGB(rgb) => colcon::irgb_to_hex(*rgb)
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Theme {
+    pub fg: Color,
+    pub bg: Color,
+    pub acc: Color,
+}
+
+impl ToString for Theme {
+    fn to_string(&self) -> String {
+        format!("fg: {}\nbg: {}\nacc: {}", self.fg.to_string(), self.bg.to_string(), self.acc.to_string())
+    }
+}
+
+// ## THEME ## }}}
+
 // ### FNs ### {{{
 
 fn track_nexter(library: Arc<Library>, next_r: Receiver<()>) {
@@ -65,6 +117,7 @@ pub enum LibEvt {
     Shuffle,
     Volume,
     Update,
+    Theme,
     Error(String),
 }
 
@@ -77,6 +130,7 @@ pub struct Library {
     bus: Mutex<Bus<LibEvt>>,
     shuffle: AtomicBool,
     hidden: AtomicBool,
+    theme: RwLock<Theme>,
 }
 
 impl Library {
@@ -96,6 +150,11 @@ impl Library {
             bus,
             shuffle: AtomicBool::new(true),
             hidden: AtomicBool::new(false),
+            theme: RwLock::new(Theme {
+                fg: Color::None,
+                bg: Color::None,
+                acc: Color::Term(3),
+            }),
         });
 
         result.volume_set(0.5);
@@ -513,6 +572,15 @@ impl Library {
 
     pub fn get_receiver(&self) -> BusReader<LibEvt> {
         self.bus.lock().unwrap().add_rx()
+    }
+
+    pub fn get_theme(&self) -> Theme {
+        *self.theme.read().unwrap()
+    }
+
+    pub fn set_theme(&self, theme: Theme) {
+        *self.theme.write().unwrap() = theme;
+        self.bus.lock().unwrap().broadcast(LibEvt::Theme);
     }
 
     // ## GET/SET ## }}}

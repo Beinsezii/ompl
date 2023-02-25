@@ -25,8 +25,8 @@ use tui::style::Color;
 use tui::widgets::{Block, Borders, Clear, Paragraph};
 use tui::Terminal;
 
-mod theme;
-use theme::Theme;
+mod stylesheet;
+use stylesheet::StyleSheet;
 mod widgets;
 use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
 use widgets::{FilterTreeView, MTree, MenuBar, QueueTable, StatusBar};
@@ -133,7 +133,7 @@ struct UI<T: Backend> {
     status_bar: StatusBar,
     filterpanes: FilterTreeView,
     sortpanes: QueueTable,
-    theme: Theme,
+    stylesheet: StyleSheet,
     terminal: Option<Terminal<T>>,
     debug: bool,
     draw_count: u128,
@@ -142,7 +142,7 @@ struct UI<T: Backend> {
 }
 
 impl<T: Backend> UI<T> {
-    fn from_library(library: Arc<Library>, terminal: Terminal<T>, theme: Theme) -> Self {
+    fn from_library(library: Arc<Library>, terminal: Terminal<T>, stylesheet: StyleSheet) -> Self {
         #[rustfmt::skip]
         let tree = MTree::Tree(vec![
             (String::from("Help"), MTree::Action(Action::Help)),
@@ -172,17 +172,17 @@ impl<T: Backend> UI<T> {
             (
             String::from("UI"),
             MTree::Tree(vec![
-                (
-                    String::from("Accent"),
-                    MTree::Tree(vec![
-                        (String::from("Red"), MTree::Action(Action::Accent(Color::Red))),
-                        (String::from("Green"), MTree::Action(Action::Accent(Color::Green))),
-                        (String::from("Yellow"), MTree::Action(Action::Accent(Color::Yellow))),
-                        (String::from("Blue"), MTree::Action(Action::Accent(Color::Blue))),
-                        (String::from("Magenta"), MTree::Action(Action::Accent(Color::Magenta))),
-                        (String::from("Cyan"), MTree::Action(Action::Accent(Color::Cyan))),
-                    ]),
-                ),
+                // (
+                //     String::from("Accent"),
+                //     MTree::Tree(vec![
+                //         (String::from("Red"), MTree::Action(Action::Accent(Color::Red))),
+                //         (String::from("Green"), MTree::Action(Action::Accent(Color::Green))),
+                //         (String::from("Yellow"), MTree::Action(Action::Accent(Color::Yellow))),
+                //         (String::from("Blue"), MTree::Action(Action::Accent(Color::Blue))),
+                //         (String::from("Magenta"), MTree::Action(Action::Accent(Color::Magenta))),
+                //         (String::from("Cyan"), MTree::Action(Action::Accent(Color::Cyan))),
+                //     ]),
+                // ),
                 (String::from("Debug"), MTree::Action(Action::Debug)),
             ]),
             ),
@@ -195,7 +195,7 @@ impl<T: Backend> UI<T> {
             status_bar: StatusBar::new(&library, "title"),
             filterpanes: FilterTreeView::new(library.clone()),
             sortpanes: QueueTable::new(library.clone()),
-            theme,
+            stylesheet,
             terminal: Some(terminal),
             debug: false,
             draw_count: 0,
@@ -395,21 +395,21 @@ impl<T: Backend> UI<T> {
                     .split(size);
 
                 self.status_bar.area = zones[0];
-                self.status_bar.draw(f, self.theme);
+                self.status_bar.draw(f, self.stylesheet);
 
                 self.menubar.area = zones[1];
-                self.menubar.draw(f, self.theme);
+                self.menubar.draw(f, self.stylesheet);
 
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
                 *self.filterpanes.area_mut() = zones[3];
-                self.filterpanes.draw(f, self.theme);
+                self.filterpanes.draw(f, self.stylesheet);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
                 *self.sortpanes.area_mut() = zones[4];
-                self.sortpanes.draw(f, self.theme);
+                self.sortpanes.draw(f, self.stylesheet);
                 let time_queue2 = Instant::now();
 
                 if self.debug {
@@ -421,7 +421,7 @@ impl<T: Backend> UI<T> {
                             (time_panes2 - time_panes).as_secs_f64() * 1000.0,
                             (time_queue2 - time_queue).as_secs_f64() * 1000.0,
                         ))
-                        .style(self.theme.base),
+                        .style(self.stylesheet.base),
                         zones[2],
                     );
                 }
@@ -438,7 +438,7 @@ impl<T: Backend> UI<T> {
     pub fn message(&mut self, title: &str, message: &str) {
         let message = message.trim();
         loop {
-            let style = self.theme.active;
+            let style = self.stylesheet.active;
             self.draw_inject(|f| {
                 let size = f.size();
                 let mut height: u16 = 0;
@@ -487,7 +487,7 @@ impl<T: Backend> UI<T> {
         let mut result = String::from(prefill);
 
         let submit = 'outer: loop {
-            let style = self.theme.active;
+            let style = self.stylesheet.active;
             let active = self.sortpanes.active();
             self.draw_inject(|f| {
                 let size = f.size();
@@ -600,9 +600,10 @@ impl<T: Backend> UI<T> {
             Action::None => (),
 
             // Library
-            Action::Accent(color) => {
-                self.theme = Theme::new(color);
-                self.draw();
+            Action::Accent(_color) => {
+                if let Some(_library) = self.lib_weak.upgrade() {
+                    self.draw();
+                }
             }
             Action::Append => {
                 if let Some(library) = self.lib_weak.upgrade() {
@@ -931,10 +932,11 @@ pub fn tui(library: Arc<Library>) -> bool {
     let join = Arc::new(AtomicBool::new(false));
     let libweak_evt = Arc::downgrade(&library);
 
+    let theme = library.get_theme();
     let ui = Arc::new(Mutex::new(UI::from_library(
         library,
         Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
-        Theme::new(Color::Yellow),
+        StyleSheet::from(theme),
     )));
     ui.lock().unwrap().draw();
 
@@ -972,6 +974,14 @@ pub fn tui(library: Arc<Library>) -> bool {
                         | LibEvt::Pause
                         | LibEvt::Stop
                         | LibEvt::Shuffle => ui.lock().unwrap().draw(),
+                        LibEvt::Theme => {
+                            if let Ok(mut uiw) = ui.lock() {
+                                if let Some(libw) = libweak_evt.upgrade() {
+                                    uiw.stylesheet = StyleSheet::from(libw.get_theme());
+                                    uiw.draw()
+                                }
+                            }
+                        }
                         LibEvt::Update => {
                             let mut uiw = ui.lock().unwrap();
                             let i = uiw.filterpanes.index();

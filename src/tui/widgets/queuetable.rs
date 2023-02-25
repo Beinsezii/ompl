@@ -1,4 +1,4 @@
-use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, Theme};
+use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::Library;
 
 use std::sync::{Arc, Weak};
@@ -94,7 +94,7 @@ impl QueueTable {
 
 // ### impl ContainedWidget {{{
 impl ContainedWidget for QueueTable {
-    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, theme: Theme) {
+    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, stylesheet: StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
@@ -112,7 +112,7 @@ impl ContainedWidget for QueueTable {
             items.push(("[unsorted]".to_string(), library.get_taglist("title")))
         }
 
-        self.pane_array.draw_from(frame, theme, items, highlights);
+        self.pane_array.draw_from(frame, stylesheet, items, highlights);
     }
 }
 // ### impl ContainedWidget }}}

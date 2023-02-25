@@ -96,7 +96,7 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
     fn draw<B: tui::backend::Backend>(
         &mut self,
         frame: &mut tui::terminal::Frame<B>,
-        theme: super::Theme,
+        stylesheet: super::StyleSheet,
     ) {
         if let Some(tree) = self.nav_to_tree() {
             let mut spans = vec![Span::from(if !self.nav.is_empty() {
@@ -108,8 +108,8 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                 spans.push(Span::styled(
                     (n + 1).to_string() + ".",
                     match t.1 {
-                        MTree::Tree(..) => theme.base,
-                        MTree::Action(..) => theme.active,
+                        MTree::Tree(..) => stylesheet.base,
+                        MTree::Action(..) => stylesheet.active,
                     },
                 ));
                 spans.push(Span::from(t.0.clone()));
@@ -117,10 +117,13 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                     spans.push(Span::from(" | "));
                 }
             }
-            frame.render_widget(Paragraph::new(Spans::from(spans)), self.area);
+            frame.render_widget(
+                Paragraph::new(Spans::from(spans)).style(stylesheet.base),
+                self.area,
+            );
         } else {
             frame.render_widget(
-                Paragraph::new("MenuBar Placeholder").style(theme.base),
+                Paragraph::new("MenuBar Placeholder").style(stylesheet.base),
                 self.area,
             );
         }

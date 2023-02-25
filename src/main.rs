@@ -14,7 +14,7 @@ use std::time::Instant;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
 mod library;
-use library::Library;
+use library::{Color, Theme, Library};
 
 #[cfg(feature = "tui")]
 mod tui;
@@ -116,6 +116,11 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
     Ok(library::Filter { tag, items })
 }
 
+// Weird macro lifetime bullshit. Could either spend a few hours researching or just do this
+fn parse_color(s: &str) -> Result<Color, String> {
+    Color::try_from(s)
+}
+
 // ### PARSERS ### }}}
 
 // ### ARGS {{{
@@ -175,6 +180,22 @@ pub enum ShuffleCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum ThemeCmd {
+    FG {
+        #[arg(value_parser=parse_color)]
+        foreground: Color,
+    },
+    BG {
+        #[arg(value_parser=parse_color)]
+        background: Color,
+    },
+    ACC {
+        #[arg(value_parser=parse_color)]
+        accent: Color,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
     Track,
     Tagstring { tagstring: String },
@@ -183,6 +204,7 @@ pub enum PrintCmd {
     Playing,
     Stopped,
     Paused,
+    Theme,
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -215,6 +237,18 @@ pub enum Action {
         /// Starting volume
         volume: f32,
 
+        /// UI Foreground color
+        #[arg(long, default_value = "", value_parser=parse_color)]
+        fg: Color,
+
+        /// UI Background color
+        #[arg(long, default_value = "", value_parser=parse_color)]
+        bg: Color,
+
+        /// UI Accent color
+        #[arg(long, default_value = "3", value_parser=parse_color)]
+        acc: Color,
+
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
         #[arg(long, short = 'V', action(ArgAction::Count))]
         verbosity: u8,
@@ -230,6 +264,8 @@ pub enum Action {
     Volume(VolumeCmd),
     #[command(subcommand)]
     Shuffle(ShuffleCmd),
+    #[command(subcommand)]
+    Theme(ThemeCmd),
     #[command(subcommand)]
     Print(PrintCmd),
     PlayFile {
@@ -320,6 +356,15 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 ShuffleCmd::False => library.shuffle_set(false),
                                 ShuffleCmd::Toggle => library.shuffle_toggle(),
                             },
+                            Action::Theme(theme_cmd) => {
+                                let mut theme = library.get_theme();
+                                match theme_cmd {
+                                    ThemeCmd::FG { foreground } => theme.fg = foreground,
+                                    ThemeCmd::BG { background } => theme.bg = background,
+                                    ThemeCmd::ACC { accent } => theme.acc = accent,
+                                };
+                                library.set_theme(theme)
+                            }
                             Action::PlayFile { file } => {
                                 if file.is_file() {
                                     library.play_track(
@@ -419,6 +464,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
+                                PrintCmd::Theme => response = library.get_theme().to_string(),
                             },
                             Action::Append { path } => library.append_library(path),
                             Action::Purge => library.purge(),
@@ -457,6 +503,9 @@ fn instance_main(listener: TcpListener, args: Args) {
             sort_tagstrings,
             volume,
             verbosity,
+            fg,
+            bg,
+            acc
         } => {
             LOG_LEVEL.store(verbosity, LOG_ORD);
 
@@ -464,6 +513,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             let library = Library::new();
             library.hidden_set(hidden);
             library.volume_set(volume);
+            library.set_theme(Theme{fg, bg, acc});
             library.set_filters(filters);
             library.set_sort_tagstrings(sort_tagstrings);
             if let Some(path) = library_path {
