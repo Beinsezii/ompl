@@ -599,7 +599,7 @@ impl<T: Backend> UI<T> {
             // Library
             Action::ACC | Action::FG | Action::BG => {
                 if let Some(library) = self.lib_weak.upgrade() {
-                    let text = self.input("Hex #, terminal number/name, or none", "", false);
+                    let text = self.input("Hex #, terminal number/name, or none", "", true);
                     if !text.is_empty() {
                         match Color::try_from(text) {
                             Ok(color) => {
