@@ -48,8 +48,8 @@ pub enum Color {
 impl TryFrom<&str> for Color {
     type Error = String;
     fn try_from(value: &str) -> Result<Self, String> {
-        let value = value.trim();
-        if value.is_empty() || value.to_lowercase() == "none" {
+        let value = value.trim().to_lowercase();
+        if value.is_empty() {
             Ok(Color::None)
         } else if let Ok(tcol) = value.parse::<u8>() {
             if tcol < 16 {
@@ -58,7 +58,26 @@ impl TryFrom<&str> for Color {
                 Err(format!("Value {} non-terminal color (> 15)", tcol))
             }
         } else {
-            colcon::hex_to_irgb(value).map(|rgb| Color::RGB(rgb))
+            match value.as_str() {
+                "none" => Ok(Color::None),
+                "black" => Ok(Color::Term(0)),
+                "red" => Ok(Color::Term(1)),
+                "green" => Ok(Color::Term(2)),
+                "yellow" => Ok(Color::Term(3)),
+                "blue" => Ok(Color::Term(4)),
+                "magenta" => Ok(Color::Term(5)),
+                "cyan" => Ok(Color::Term(6)),
+                "gray" => Ok(Color::Term(7)),
+                "darkgray" => Ok(Color::Term(8)),
+                "lightred" => Ok(Color::Term(9)),
+                "lightgreen" => Ok(Color::Term(10)),
+                "lightyellow" => Ok(Color::Term(11)),
+                "lightblue" => Ok(Color::Term(12)),
+                "lightmagenta" => Ok(Color::Term(13)),
+                "lightcyan" => Ok(Color::Term(14)),
+                "white" => Ok(Color::Term(15)),
+                _ => colcon::hex_to_irgb(&value).map(|rgb| Color::RGB(rgb)),
+            }
         }
     }
 }
@@ -68,7 +87,7 @@ impl ToString for Color {
         match self {
             Color::None => String::from("None"),
             Color::Term(v) => v.to_string(),
-            Color::RGB(rgb) => colcon::irgb_to_hex(*rgb)
+            Color::RGB(rgb) => colcon::irgb_to_hex(*rgb),
         }
     }
 }
@@ -82,7 +101,12 @@ pub struct Theme {
 
 impl ToString for Theme {
     fn to_string(&self) -> String {
-        format!("fg: {}\nbg: {}\nacc: {}", self.fg.to_string(), self.bg.to_string(), self.acc.to_string())
+        format!(
+            "fg: {}\nbg: {}\nacc: {}",
+            self.fg.to_string(),
+            self.bg.to_string(),
+            self.acc.to_string()
+        )
     }
 }
 

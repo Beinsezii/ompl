@@ -14,7 +14,7 @@ use std::time::Instant;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
 mod library;
-use library::{Color, Theme, Library};
+use library::{Color, Library, Theme};
 
 #[cfg(feature = "tui")]
 mod tui;
@@ -180,6 +180,7 @@ pub enum ShuffleCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+/// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), or none
 pub enum ThemeCmd {
     FG {
         #[arg(value_parser=parse_color)]
@@ -238,15 +239,15 @@ pub enum Action {
         volume: f32,
 
         /// UI Foreground color
-        #[arg(long, default_value = "", value_parser=parse_color)]
+        #[arg(long, default_value = "none", value_parser=parse_color)]
         fg: Color,
 
         /// UI Background color
-        #[arg(long, default_value = "", value_parser=parse_color)]
+        #[arg(long, default_value = "none", value_parser=parse_color)]
         bg: Color,
 
         /// UI Accent color
-        #[arg(long, default_value = "3", value_parser=parse_color)]
+        #[arg(long, default_value = "yellow", value_parser=parse_color)]
         acc: Color,
 
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
@@ -505,7 +506,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             verbosity,
             fg,
             bg,
-            acc
+            acc,
         } => {
             LOG_LEVEL.store(verbosity, LOG_ORD);
 
@@ -513,7 +514,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             let library = Library::new();
             library.hidden_set(hidden);
             library.volume_set(volume);
-            library.set_theme(Theme{fg, bg, acc});
+            library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sort_tagstrings(sort_tagstrings);
             if let Some(path) = library_path {
