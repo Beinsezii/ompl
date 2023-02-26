@@ -354,7 +354,7 @@ impl Track {
             )
         }) else {return};
         let Some(mut metadata) = probed.metadata.get() else {return};
-        if let Some(meta) = metadata.skip_to_latest() {
+        if let Some(meta) = metadata.current() {
             for tag in meta.tags() {
                 let mut val = match &tag.value {
                     symphonia::core::meta::Value::String(s) => s.clone(),
@@ -411,7 +411,7 @@ impl Track {
                 &symphonia::core::formats::FormatOptions::default(),
             )
         }) else {return};
-        if let Some(meta) = reader.metadata().skip_to_latest() {
+        if let Some(meta) = reader.metadata().current() {
             for tag in meta.tags() {
                 self.tags
                     .insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
