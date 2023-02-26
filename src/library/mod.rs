@@ -49,36 +49,48 @@ impl TryFrom<&str> for Color {
     type Error = String;
     fn try_from(value: &str) -> Result<Self, String> {
         let value = value.trim().to_lowercase();
-        if value.is_empty() {
-            Ok(Color::None)
-        } else if let Ok(tcol) = value.parse::<u8>() {
-            if tcol < 16 {
-                Ok(Color::Term(tcol))
-            } else {
-                Err(format!("Value {} non-terminal color (> 15)", tcol))
-            }
-        } else {
-            match value.as_str() {
-                "none" => Ok(Color::None),
-                "black" => Ok(Color::Term(0)),
-                "red" => Ok(Color::Term(1)),
-                "green" => Ok(Color::Term(2)),
-                "yellow" => Ok(Color::Term(3)),
-                "blue" => Ok(Color::Term(4)),
-                "magenta" => Ok(Color::Term(5)),
-                "cyan" => Ok(Color::Term(6)),
-                "gray" => Ok(Color::Term(7)),
-                "darkgray" => Ok(Color::Term(8)),
-                "lightred" => Ok(Color::Term(9)),
-                "lightgreen" => Ok(Color::Term(10)),
-                "lightyellow" => Ok(Color::Term(11)),
-                "lightblue" => Ok(Color::Term(12)),
-                "lightmagenta" => Ok(Color::Term(13)),
-                "lightcyan" => Ok(Color::Term(14)),
-                "white" => Ok(Color::Term(15)),
-                _ => colcon::hex_to_irgb(&value).map(|rgb| Color::RGB(rgb)),
-            }
+        match value.as_str() {
+            "none" => Ok(Color::None),
+            "black" => Ok(Color::Term(0)),
+            "red" => Ok(Color::Term(1)),
+            "green" => Ok(Color::Term(2)),
+            "yellow" => Ok(Color::Term(3)),
+            "blue" => Ok(Color::Term(4)),
+            "magenta" => Ok(Color::Term(5)),
+            "cyan" => Ok(Color::Term(6)),
+            "gray" => Ok(Color::Term(7)),
+            "darkgray" => Ok(Color::Term(8)),
+            "lightred" => Ok(Color::Term(9)),
+            "lightgreen" => Ok(Color::Term(10)),
+            "lightyellow" => Ok(Color::Term(11)),
+            "lightblue" => Ok(Color::Term(12)),
+            "lightmagenta" => Ok(Color::Term(13)),
+            "lightcyan" => Ok(Color::Term(14)),
+            "white" => Ok(Color::Term(15)),
+            val => match colcon::hex_to_irgb(&value).map(|rgb| Color::RGB(rgb)) {
+                Ok(col) => Ok(col),
+                Err(hexerr) => {
+                    if val.is_empty() {
+                        Ok(Color::None)
+                    } else if let Ok(n) = val.parse::<u8>() {
+                        if n < 16 {
+                            Ok(Color::Term(n))
+                        } else {
+                            Err(String::from("Terminal color must be < 16"))
+                        }
+                    } else {
+                        Err(hexerr)
+                    }
+                }
+            },
         }
+    }
+}
+
+impl TryFrom<String> for Color {
+    type Error = String;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
     }
 }
 

@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::library::{Filter, LibEvt, Library};
+use crate::library::{Color, Filter, LibEvt, Library, Theme};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 #[cfg(feature = "clipboard")]
@@ -21,7 +21,6 @@ use crossterm::{
 
 use tui::backend::{Backend, CrosstermBackend};
 use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::style::Color;
 use tui::widgets::{Block, Borders, Clear, Paragraph};
 use tui::Terminal;
 
@@ -117,7 +116,9 @@ pub enum Action {
     None,
 
     // Library
-    Accent(Color),
+    ACC,
+    FG,
+    BG,
     Append,
     Purge,
 
@@ -176,17 +177,9 @@ impl<T: Backend> UI<T> {
             (
             String::from("UI"),
             MTree::Tree(vec![
-                // (
-                //     String::from("Accent"),
-                //     MTree::Tree(vec![
-                //         (String::from("Red"), MTree::Action(Action::Accent(Color::Red))),
-                //         (String::from("Green"), MTree::Action(Action::Accent(Color::Green))),
-                //         (String::from("Yellow"), MTree::Action(Action::Accent(Color::Yellow))),
-                //         (String::from("Blue"), MTree::Action(Action::Accent(Color::Blue))),
-                //         (String::from("Magenta"), MTree::Action(Action::Accent(Color::Magenta))),
-                //         (String::from("Cyan"), MTree::Action(Action::Accent(Color::Cyan))),
-                //     ]),
-                // ),
+                (String::from("Foreground"), MTree::Action(Action::FG)),
+                (String::from("Background"), MTree::Action(Action::BG)),
+                (String::from("Accent"), MTree::Action(Action::ACC)),
                 (String::from("Debug"), MTree::Action(Action::Debug)),
             ]),
             ),
@@ -604,9 +597,24 @@ impl<T: Backend> UI<T> {
             Action::None => (),
 
             // Library
-            Action::Accent(_color) => {
-                if let Some(_library) = self.lib_weak.upgrade() {
-                    self.draw();
+            Action::ACC | Action::FG | Action::BG => {
+                if let Some(library) = self.lib_weak.upgrade() {
+                    let text = self.input("Hex #, terminal number/name, or none", "", false);
+                    if !text.is_empty() {
+                        match Color::try_from(text) {
+                            Ok(color) => {
+                                let mut theme = library.get_theme();
+                                match action {
+                                    Action::ACC => theme.acc = color,
+                                    Action::FG => theme.fg = color,
+                                    Action::BG => theme.bg = color,
+                                    _ => unreachable!(),
+                                }
+                                library.set_theme(theme)
+                            }
+                            Err(e) => self.message("Error reading text as color: ", &e),
+                        }
+                    }
                 }
             }
             Action::Append => {
