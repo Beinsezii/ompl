@@ -184,6 +184,7 @@ impl Clickable for QueueTable {
             }
             PaneArrayEvt::ClickTit => (),
             PaneArrayEvt::RClickTit => (),
+            PaneArrayEvt::RDrag => (),
             PaneArrayEvt::ScrollUp => {
                 self.scroll_up();
                 return draw;

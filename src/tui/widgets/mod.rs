@@ -143,6 +143,7 @@ pub struct PaneArray {
     pub index: usize,
     pub positions: Vec<usize>,
     pub views: Vec<usize>,
+    pub drag_vals: Vec<usize>,
 }
 
 const PA_LONG: &'static str = "<<++::--++>>";
@@ -154,6 +155,7 @@ pub enum PaneArrayEvt {
     ClickTit,
     RClick,
     RClickTit,
+    RDrag,
     ScrollUp,
     ScrollDown,
     Action(Action),
@@ -168,6 +170,7 @@ impl PaneArray {
             index: 0,
             positions: vec![0; if joined { 1 } else { count }],
             views: vec![0; if joined { 1 } else { count }],
+            drag_vals: Vec::new(),
         }
     }
 
@@ -179,13 +182,16 @@ impl PaneArray {
     ) -> PaneArrayEvt {
         let none = PaneArrayEvt::Action(Action::None);
         match event.kind {
-            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return none
-            }
+            MouseEventKind::Moved | MouseEventKind::Up(..) => return none,
             _ => (),
         }
 
         let point = Rect::new(event.column, event.row, 1, 1);
+
+        // localize drag state to this current iter,
+        // so if it exits early for any reason the drag is cancelled
+        let mut drag_vals_tmp = Vec::new();
+        std::mem::swap(&mut drag_vals_tmp, &mut self.drag_vals);
 
         if self.area.intersects(point) {
             self.active = true;
@@ -261,14 +267,39 @@ impl PaneArray {
                                         return PaneArrayEvt::Click;
                                     }
                                     MouseButton::Right => {
-                                        self.positions[num_join] =
-                                            zY as usize + self.views[num_join] - 1;
+                                        let pos = zY as usize + self.views[num_join] - 1;
+                                        self.positions[num_join] = pos;
+                                        self.drag_vals = vec![pos];
                                         return PaneArrayEvt::RClick;
                                     }
                                     _ => (),
                                 }
                             }
                         } // match ::Down()
+                        // barebones copy for testing/ease
+                        #[allow(non_snake_case)]
+                        MouseEventKind::Drag(MouseButton::Right) => {
+                            let (zX, zY) = (event.column - zone.x, event.row - zone.y);
+                            // click in list
+                            if zX > 0
+                                && zX < zone.width - 1
+                                && zY > 0
+                                && zY < zone.height - 1
+                                && usize::from(zY)
+                                    < items[num].1.saturating_sub(self.views[num_join]) + 1
+                            {
+                                std::mem::swap(&mut drag_vals_tmp, &mut self.drag_vals);
+                                let pos = zY as usize + self.views[num_join] - 1;
+                                let do_draw = self.positions[num_join] != pos;
+                                self.positions[num_join] = pos;
+                                if !self.drag_vals.contains(&pos) && !self.drag_vals.is_empty() {
+                                    self.drag_vals.push(pos);
+                                    return PaneArrayEvt::RDrag;
+                                } else if do_draw {
+                                    return PaneArrayEvt::Action(Action::Draw);
+                                }
+                            }
+                        }
                         _ => (),
                     } // match event
 

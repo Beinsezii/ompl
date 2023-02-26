@@ -1,4 +1,6 @@
-use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
+use super::{
+    Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet,
+};
 use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
@@ -185,7 +187,8 @@ impl ContainedWidget for FilterTreeView {
             items.push((ft.tag, tl_tags));
         }
 
-        self.pane_array.draw_from(frame, stylesheet, items, highlights)
+        self.pane_array
+            .draw_from(frame, stylesheet, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}
@@ -196,9 +199,7 @@ impl Clickable for FilterTreeView {
         let none = super::Action::None;
         let draw = super::Action::Draw;
         match event.kind {
-            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return none
-            }
+            MouseEventKind::Moved | MouseEventKind::Up(..) => return none,
             _ => (),
         }
 
@@ -209,17 +210,37 @@ impl Clickable for FilterTreeView {
 
         let (filters, tracks) = library.get_filter_tree_display();
 
-        let mut items = Vec::<(usize, usize)>::new();
+        let mut lengths = Vec::<(usize, usize)>::new();
+        let mut highlights = Vec::<Vec<String>>::new();
+        let mut taglists = Vec::<Vec<String>>::new();
 
-        for (ft, tl) in filters.iter().zip(tracks.iter()) {
-            items.push((ft.tag.len(), get_taglist_sort(&ft.tag, &tl).len()));
+        for (ft, tl) in filters.into_iter().zip(tracks.into_iter()) {
+            let taglist = get_taglist_sort(&ft.tag, &tl);
+            lengths.push((ft.tag.len(), taglist.len()));
+            highlights.push(ft.items);
+            taglists.push(taglist);
         }
 
-        match self.pane_array.prep_event(event, &items) {
+        match self.pane_array.prep_event(event, &lengths) {
             PaneArrayEvt::Click => self.select_current(),
             PaneArrayEvt::RClick => self.toggle_current(),
             PaneArrayEvt::ClickTit => self.invert_selection(),
             PaneArrayEvt::RClickTit => self.deselect_all(),
+            PaneArrayEvt::RDrag => {
+                // if first drag value state != latest drag value state toggle.
+                // RDrag is only sent when a new val is pushed to drag_vals so
+                // hacky as it is this works fine while pane_array remains
+                // oblivious to the actual contents. Bit heavy though...
+                if highlights[self.pane_array.index]
+                    .contains(&taglists[self.pane_array.index][self.pane_array.drag_vals[0]])
+                    != highlights[self.pane_array.index].contains(
+                        &taglists[self.pane_array.index]
+                            [*self.pane_array.drag_vals.last().unwrap()],
+                    )
+                {
+                    self.toggle_current()
+                }
+            }
             PaneArrayEvt::ScrollUp => {
                 self.scroll_up();
                 return draw;
