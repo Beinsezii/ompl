@@ -19,7 +19,7 @@ use library::{Color, Library, Theme};
 #[cfg(feature = "tui")]
 mod tui;
 
-const ID: &str = "OMPL SERVER 0.5.0";
+const ID: &str = "OMPL SERVER 0.6.0";
 const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
