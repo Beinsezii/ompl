@@ -11,7 +11,7 @@ bincode = "1"
 bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }
 rand = "0.8"
-rodio = "0.17"
+rodio = "0.16"
 serde = { version = "1", features = ["derive"] }
 symphonia = { version = "0.5", default-features = false, features = ['ogg', 'flac', 'mp3', 'wav']}
 walkdir = "2"
