@@ -103,55 +103,74 @@ pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
     }
 }
 
+fn newparse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
+    let mut result = String::new();
+    let tagstring: &str = tagstring.as_ref();
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse;
+    //use super::parse;
+    use super::newparse as parse;
     use super::Tags;
-    lazy_static::lazy_static! {
-    static ref TAGS: Tags = Tags::from([
-        (String::from("tit1"), String::from("TheTitle")),
-        (String::from("title"), String::from("TheTitle")),
-        (String::from("talb"), String::from("TheAlbum")),
-        (String::from("album"), String::from("TheAlbum")),
-        (String::from("tcon"), String::from("TheGenre")),
-        (String::from("genre"), String::from("TheGenre")),
-    ]);
+    fn tags() -> Tags {
+        Tags::from([
+            (String::from("tit1"), String::from("TheTitle")),
+            (String::from("title"), String::from("TheTitle")),
+            (String::from("talb"), String::from("TheAlbum")),
+            (String::from("album"), String::from("TheAlbum")),
+            (String::from("tcon"), String::from("TheGenre")),
+            (String::from("genre"), String::from("TheGenre")),
+            (String::from("goofy"), String::from("Title <GoofySpec>")),
+        ])
     }
 
     #[test]
     fn control() {
-        assert_eq!(parse("Hello, World!", &TAGS), "???".to_string());
+        assert_eq!(parse("Hello, World!", &tags()), "???".to_string());
     }
 
     #[test]
     fn control_unequal() {
-        assert_eq!(parse("Hello>, Worl<d!", &TAGS), "???".to_string());
+        assert_eq!(parse("Hello>, Worl<d!", &tags()), "???".to_string());
     }
 
     #[test]
     fn control_unequal2() {
-        assert_eq!(parse(">Hello, World!<", &TAGS), "???".to_string());
+        assert_eq!(parse(">Hello, World!<", &tags()), "???".to_string());
     }
 
     #[test]
     fn sub() {
-        assert_eq!(parse("<title>", &TAGS), "TheTitle".to_string());
+        assert_eq!(parse("<title>", &tags()), "TheTitle".to_string());
     }
 
     #[test]
     fn sub_case() {
-        assert_eq!(parse("<TiTlE>", &TAGS), "TheTitle".to_string());
+        assert_eq!(parse("<TiTlE>", &tags()), "TheTitle".to_string());
     }
 
     #[test]
     fn sub_literal() {
-        assert_eq!(parse("TiT1", &TAGS), "TheTitle".to_string());
+        assert_eq!(parse("TiT1", &tags()), "TheTitle".to_string());
+    }
+
+    #[test]
+    fn sub_goofy() {
+        assert_eq!(parse("<goofy>", &tags()), "Title <GoofySpec>".to_string());
+    }
+
+    #[test]
+    fn sub_goofy_literal() {
+        assert_eq!(parse("goofy", &tags()), "Title <GoofySpec>".to_string());
     }
 
     #[test]
     fn sub_before() {
         assert_eq!(
-            parse("<title> is the title!", &TAGS),
+            parse("<title> is the title!", &tags()),
             "TheTitle is the title!".to_string()
         );
     }
@@ -159,7 +178,7 @@ mod tests {
     #[test]
     fn sub_after() {
         assert_eq!(
-            parse("The title is <title>", &TAGS),
+            parse("The title is <title>", &tags()),
             "The title is TheTitle".to_string()
         );
     }
@@ -167,7 +186,7 @@ mod tests {
     #[test]
     fn sub_inline() {
         assert_eq!(
-            parse("This title: <title> is rad!", &TAGS),
+            parse("This title: <title> is rad!", &tags()),
             "This title: TheTitle is rad!".to_string()
         );
     }
@@ -175,14 +194,14 @@ mod tests {
     #[test]
     fn sub_multi() {
         assert_eq!(
-            parse("Title: <title>, Album: <album>!", &TAGS),
+            parse("Title: <title>, Album: <album>!", &tags()),
             "Title: TheTitle, Album: TheAlbum!".to_string()
         );
     }
 
     #[test]
     fn escape() {
-        assert_eq!(parse(r#"\<title>"#, &TAGS), "???".to_string());
+        assert_eq!(parse(r#"\<title>"#, &tags()), "???".to_string());
     }
 
     #[test]
@@ -190,7 +209,7 @@ mod tests {
         assert_eq!(
             parse(
                 r#"Title: \<title\>, Album: <<album>>>, Genre: <genre>, done!"#,
-                &TAGS
+                &tags()
             ),
             r#"Title: <title>, Album: ???>, Genre: TheGenre, done!"#.to_string()
         );
@@ -199,7 +218,7 @@ mod tests {
     #[test]
     fn condition_true() {
         assert_eq!(
-            parse("Tag?<title| Title: <title>!>", &TAGS),
+            parse("Tag?<title| Title: <title>!>", &tags()),
             "Tag? Title: TheTitle!".to_string()
         );
     }
@@ -207,7 +226,7 @@ mod tests {
     #[test]
     fn condition_false() {
         assert_eq!(
-            parse("Tag?<badtag| Badtag: <badtag>!>", &TAGS),
+            parse("Tag?<badtag| Badtag: <badtag>!>", &tags()),
             "Tag?".to_string()
         );
     }
@@ -215,7 +234,7 @@ mod tests {
     #[test]
     fn condition_invert_true() {
         assert_eq!(
-            parse("Tag?<!title| Title: <title>!>", &TAGS),
+            parse("Tag?<!title| Title: <title>!>", &tags()),
             "Tag?".to_string()
         );
     }
@@ -223,7 +242,7 @@ mod tests {
     #[test]
     fn condition_invert_false() {
         assert_eq!(
-            parse("Tag?<!badtag| Badtag: <badtag>!>", &TAGS),
+            parse("Tag?<!badtag| Badtag: <badtag>!>", &tags()),
             "Tag? Badtag: ???!".to_string()
         );
     }
@@ -233,9 +252,20 @@ mod tests {
         assert_eq!(
             parse(
                 r#"<mood|This is a very <mood> song~><!mood|\<title\>: <title><TALB| is part of <TALB>>>"#,
-                &TAGS
+                &tags()
             ),
             "<title>: TheTitle is part of TheAlbum".to_string()
+        );
+    }
+
+    #[test]
+    fn goofy_mixed() {
+        assert_eq!(
+            parse(
+                r#"<mood|This is a very <mood> song~><!mood|\<goofy\>: <goofy><TALB| is part of <TALB>>>"#,
+                &tags()
+            ),
+            "<goofy>: Title <GoofySpec> is part of TheAlbum".to_string()
         );
     }
 }
