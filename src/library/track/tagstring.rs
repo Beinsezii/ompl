@@ -1,119 +1,109 @@
 use super::Tags;
 
-fn parse_internal(internal: &str, tags: &Tags) -> String {
-    let mut result = internal.to_string();
-    if internal.starts_with('<')
-        && internal.ends_with('>')
-        && internal.chars().nth(internal.len() - 2) != Some('\\')
-    {
-        result.remove(0);
-        result.pop();
-        let mut cond = None;
-        let mut iter = result.char_indices();
-        loop {
-            let (n, c) = match iter.next() {
-                Some(i) => i,
-                None => break,
-            };
-            match c {
-                '\\' => drop(iter.next()),
-                '|' => cond = Some(n),
-                _ => (),
-            }
-        }
-        if let Some(mut cond) = cond {
-            let mut inv = false;
-            if result.starts_with('!') {
-                result.remove(0);
-                cond -= 1;
-                inv = true;
-            }
-            match tags.get(&result[0..cond].to_ascii_lowercase()).is_some() ^ inv {
-                true => result.replace_range(0..=cond, ""),
-                false => result = String::new(),
-            }
-        } else {
-            match tags.get(&result.to_ascii_lowercase()) {
-                Some(tag) => result = tag.to_string(),
-                None => result = String::from("???"),
-            }
-        }
-    }
-    result
-}
+fn parse_recurse(tagstring: &str, tags: &Tags) -> String {
+    let mut result = String::new();
 
-pub fn parse<T: Into<String>>(tagstring: T, tags: &Tags) -> String {
-    let mut result = tagstring.into();
-    let mut literal = true;
+    let mut starts = 0;
+    let mut ends = 0;
+    let mut open = 0;
+    let mut close;
+    let mut iter = tagstring.char_indices();
     loop {
-        let mut start = None;
-        let mut end = None;
-        let mut iter = result.char_indices();
-        loop {
-            let (n, c) = match iter.next() {
-                Some(i) => i,
-                None => break,
-            };
-            match c {
-                '\\' => drop(iter.next()),
-                '<' => start = Some(n),
-                '>' => {
-                    if let Some(s) = start {
-                        // find first end after last start
-                        if s < n {
-                            end = Some(n);
-                            literal = false;
-                            break;
+        match iter.next() {
+            Some((n, c)) => match c {
+                '\\' => {
+                    if let Some(c) = iter.next() {
+                        // reason for the extra check is because if there's an escape in the condition it
+                        // gets pushed twice, as the push happens both on the scan and on the recurse.
+                        // Only pushing if start == 0 *seems* to work since the last recurse will always
+                        // have start == 0 due to the brackets being melted away, BUT something about this
+                        // is very sus and I feel like I'll need more tests to figure out what.
+                        // TL;DR: the solution is *too* easy and I'm worried...
+                        if starts == 0 {
+                            result.push(c.1)
                         }
                     }
                 }
-                _ => (),
-            }
-        }
-        if let (Some(s), Some(e)) = (start, end) {
-            result.replace_range(s..=e, &parse_internal(&result[s..=e], &tags))
-        } else {
-            break;
-        }
-    }
-
-    // clean up escapes
-    let mut iter = result.chars();
-    let mut buff = String::with_capacity(result.len());
-    loop {
-        match iter.next() {
-            Some('\\') => {
-                if let Some(c) = iter.next() {
-                    buff.push(c)
+                '<' if starts == 0 => {
+                    starts += 1;
+                    open = n
                 }
-            }
-            Some(c) => buff.push(c),
+                '<' => starts += 1,
+                '>' if starts > 0 => {
+                    ends += 1;
+                    close = n;
+                    if ends == starts {
+                        let substring = &tagstring[open + 1..close];
+                        (starts, ends) = (0, 0);
+                        if let Some((n, sep)) = substring
+                            .char_indices()
+                            .enumerate()
+                            .find_map(|(n, ci)| if ci.1 == '|' { Some((n, ci)) } else { None })
+                        {
+                            let invert = substring.starts_with('!');
+                            if invert && n > 1 {
+                                // should be safe to slice @ 1.. cause '!' is always 1 byte right?
+                                if !tags.contains_key(&substring[1..sep.0].to_ascii_lowercase()) {
+                                    result.push_str(&parse_recurse(&substring[sep.0 + 1..], tags))
+                                }
+                                continue;
+                            } else if n > 0 {
+                                if tags.contains_key(&substring[0..sep.0].to_ascii_lowercase()) {
+                                    result.push_str(&parse_recurse(&substring[sep.0 + 1..], tags))
+                                }
+                                continue;
+                            }
+                        }
+                        // if there's no valid conditional, dum check.
+                        // means <<album>> will resolve to get("<album>")
+                        // instead of get(get("album")) like the old system.
+                        // probably for the best.
+                        result.push_str(
+                            &tags
+                                .get(&substring.to_ascii_lowercase())
+                                .map(|s| s.as_str())
+                                .unwrap_or("???"),
+                        );
+                    }
+                }
+                c if starts == 0 => result.push(c),
+                _ => (),
+            },
             None => break,
         }
     }
-    result = buff;
-    result.shrink_to_fit();
-
-    if literal {
-        tags.get(&result.to_ascii_lowercase())
-            .unwrap_or(&"???".to_string())
-            .to_string()
-    } else {
-        result
-    }
-}
-
-fn newparse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
-    let mut result = String::new();
-    let tagstring: &str = tagstring.as_ref();
 
     result
+}
+
+pub fn parse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
+    let tagstring = tagstring.as_ref();
+    let mut start = false;
+    let mut iter = tagstring.chars();
+    loop {
+        match iter.next() {
+            // makes sure there's at least one set of good braces
+            Some(c) => match c {
+                '\\' => drop(iter.next()),
+                '<' => start = true,
+                '>' if start => break parse_recurse(tagstring, tags),
+                _ => (),
+            },
+            // else just dumb check
+            None => {
+                break tags
+                    .get(&tagstring.to_ascii_lowercase())
+                    .map(|s| s.as_str())
+                    .unwrap_or("???")
+                    .to_string()
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    //use super::parse;
-    use super::newparse as parse;
+    use super::parse;
     use super::Tags;
     fn tags() -> Tags {
         Tags::from([

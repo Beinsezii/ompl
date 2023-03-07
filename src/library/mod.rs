@@ -596,13 +596,13 @@ impl Library {
     }
 
     /// Fetch all tags from filtered queue. Will map 1:1 with get_queue()
-    pub fn get_taglist<T: Into<String>>(&self, tagstring: T) -> Vec<String> {
+    pub fn get_taglist<T: AsRef<str>>(&self, tagstring: T) -> Vec<String> {
         get_taglist(tagstring, &self.get_queue())
     }
 
     /// Sorts *and* dedupes. Will NOT map 1:1 with get_queue_sort() if there are multiple tracks
     /// with the same tag value.
-    pub fn get_taglist_sort<T: Into<String>>(&self, tagstring: T) -> Vec<String> {
+    pub fn get_taglist_sort<T: AsRef<str>>(&self, tagstring: T) -> Vec<String> {
         get_taglist_sort(tagstring, &self.get_queue())
     }
 

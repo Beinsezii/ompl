@@ -240,18 +240,17 @@ pub fn get_tracks<T: AsRef<Path>>(path: T, include_hidden: bool) -> Vec<Track> {
     tracks
 }
 
-pub fn get_taglist<T: Into<String>, U: Deref<Target = Track>>(
+pub fn get_taglist<T: AsRef<str>, U: Deref<Target = Track>>(
     tagstring: T,
     tracks: &Vec<U>,
 ) -> Vec<String> {
-    let tagstring = tagstring.into();
     tracks
         .iter()
-        .filter_map(|t| Some(tagstring::parse(&tagstring, t.tags())))
+        .filter_map(|t| Some(tagstring::parse(tagstring.as_ref(), t.tags())))
         .collect::<Vec<String>>()
 }
 
-pub fn get_taglist_sort<T: Into<String>, U: Deref<Target = Track>>(
+pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(
     tagstring: T,
     tracks: &Vec<U>,
 ) -> Vec<String> {
@@ -353,7 +352,7 @@ impl Track {
                 &Default::default(),
             )
         }) else {return};
-        let Some(mut metadata) = probed.metadata.get() else {return};
+        let Some(metadata) = probed.metadata.get() else {return};
         if let Some(meta) = metadata.current() {
             for tag in meta.tags() {
                 let mut val = match &tag.value {
@@ -430,7 +429,7 @@ impl Track {
         &self.tags
     }
 
-    pub fn tagstring<T: Into<String>>(&self, tagstring: T) -> String {
+    pub fn tagstring<T: AsRef<str>>(&self, tagstring: T) -> String {
         tagstring::parse(tagstring, self.tags())
     }
 
