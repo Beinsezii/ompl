@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::library::{Color, Filter, LibEvt, Library, Theme};
+use crate::library::{Color, Filter, LibEvt, Library};
 use crate::{l2, log, LOG_LEVEL, LOG_ORD};
 
 #[cfg(feature = "clipboard")]
@@ -828,7 +828,12 @@ impl<T: Backend> UI<T> {
             km!('r') => library.shuffle_toggle(),
 
             // yay vim macros
-            km!('0') => {
+            km!('0')
+            | Event::Key(KeyEvent {
+                code: KeyCode::Esc,
+                modifiers: KeyModifiers::NONE,
+                ..
+            }) => {
                 self.menubar.up();
                 self.draw();
             }
