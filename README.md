@@ -1,9 +1,10 @@
-# OMPL - Opinionated Music Player/Library v 0.5.1
+# OMPL - Opinionated Music Player/Library v 0.6.0
 A music player organized exactly how *I* like it.
 
 ## Features
   * Fully functional TUI with mouse & tty support
     * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
+    * Pretty colors
   * Fully functional CLI that interacts either with the TUI or a daemon
     * Both playback controls and content querying
     * Should be possible to do everything through the TUI in the CLI and vice versa
@@ -19,7 +20,6 @@ A music player organized exactly how *I* like it.
   * Shouldn't crash.
 
 ## WIP/Why this isn't 1.0 yet
-  * Full theme customization
   * Code docs
   * Some bugfix bs
   * See [TODO.md](./TODO.md) for more details
@@ -49,8 +49,6 @@ OMPL can sort by literal tags or "tagstrings", a special markup language for cre
 Extra syntactical notes:
  * `???` will be the result if a non-conditional tag such as `<tag>` isn't found. Use a condition if you don't wish to display this: `<tag|<tag>><!tag|Tag not found!>`
  * Use `\` to escape characters: `\<title\>: <title>` will result in "<title>: Title"
- * The algorithm will recursively  process down every set of angle brackets. This allows you to have checks inside checks `<tag|<tag2|<tag3>>>` but also has the side effect that `<<title>>` will result in a song titled "SongName" printing out "???", as it will first process `<<title>>` into `<SongName>`, *then* process `<SongName>` which likely won't be a valid tag, resulting in "???". Use escape `\` to prevent this if undesired.
- 
 
 ### Compiling
 Have Rust 2021 installed, clone repo and just run `cargo build`.
