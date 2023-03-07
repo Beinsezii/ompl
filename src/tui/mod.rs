@@ -15,7 +15,7 @@ use copypasta::{ClipboardContext, ClipboardProvider};
 
 use crossterm::{
     cursor, event,
-    event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind},
+    event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind},
     queue, terminal,
 };
 
@@ -38,6 +38,7 @@ macro_rules! km {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::NONE,
+            kind: KeyEventKind::Press,
             ..
         })
     };
@@ -49,6 +50,7 @@ macro_rules! km_c {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::CONTROL,
+            kind: KeyEventKind::Press,
             ..
         })
     };
@@ -59,6 +61,7 @@ macro_rules! km_s {
         Event::Key(KeyEvent {
             code: KeyCode::Char($ch),
             modifiers: KeyModifiers::SHIFT,
+            kind: KeyEventKind::Press,
             ..
         })
     };
@@ -554,7 +557,11 @@ impl<T: Backend> UI<T> {
                                 break;
                             }
                         },
-                        Event::Key(KeyEvent { code, .. }) => match code {
+                        Event::Key(KeyEvent {
+                            code,
+                            kind: KeyEventKind::Press,
+                            ..
+                        }) => match code {
                             KeyCode::Esc => break 'outer false,
                             KeyCode::Enter => break 'outer true,
                             KeyCode::Backspace => drop(result.pop()),
@@ -651,6 +658,7 @@ impl<T: Backend> UI<T> {
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if library.filter_count() != 0 {
@@ -663,6 +671,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -678,12 +687,14 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Left,
                 modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
                 ..
             }) => self.move_pane(true),
             km!('l')
             | Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -700,12 +711,14 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Right,
                 modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
                 ..
             }) => self.move_pane(false),
             km!('j')
             | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -719,6 +732,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -734,6 +748,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -747,6 +762,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Up,
                 modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -781,6 +797,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if self.sortpanes.active() {
@@ -795,6 +812,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Enter,
                 modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 if !self.sortpanes.active() {
@@ -832,6 +850,7 @@ impl<T: Backend> UI<T> {
             | Event::Key(KeyEvent {
                 code: KeyCode::Esc,
                 modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
                 ..
             }) => {
                 self.menubar.up();
