@@ -1,7 +1,10 @@
 # OMPL - Opinionated Music Player/Library v 0.6.1
 A music player organized exactly how *I* like it.
 
+<img src="./screenshot.png" height = 400px />
+
 ## Features
+
   * Fully functional TUI with mouse & tty support
     * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings)
     * Pretty colors
@@ -24,10 +27,23 @@ A music player organized exactly how *I* like it.
   * Some bugfix bs
   * See [TODO.md](./TODO.md) for more details
   
+## Installation
+Compiled binaries are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
+
+If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
+
+`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.6.1`
+
+You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
+
+It's recommended you add the downloaded binary or cargo install dir to your `PATH` for ease of use.
+
+### MacOS
+All of the libraries claim to support MacOS, so hypothetically you should be able to build it yourself using `cargo` as mentioned above.
+
+I do not own a Mac. If it works it works, else I won't troubleshoot Mac issues.
+
 ## Usage
-<img src="./screenshot.png" height = 400px />
-Either download a binary from the tags/releases tab or if you already have Rust installed, run `cargo install --git https://github.com/Beinsezii/ompl.git`.
-It is recommended you add the downloaded binary or cargo install dir to your `PATH` for ease of use.
 
 To start a simple example sorting by album run `ompl main Path/To/Music -f album`
 
