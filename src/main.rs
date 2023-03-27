@@ -19,7 +19,7 @@ use library::{Color, Library, Theme};
 #[cfg(feature = "tui")]
 mod tui;
 
-const ID: &str = "OMPL SERVER 0.6.0";
+const ID: &str = "OMPL SERVER 0.7.0";
 const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
@@ -348,7 +348,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     response = format!("{:.2}", library.volume_get());
                                 }
                                 VolumeCmd::Add { amount } => library.volume_add(amount),
-                                VolumeCmd::Sub { amount } => library.volume_sub(amount),
+                                VolumeCmd::Sub { amount } => library.volume_add(-amount),
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
                             Action::Shuffle(shuf_cmd) => match shuf_cmd {
@@ -369,7 +369,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::PlayFile { file } => {
                                 if file.is_file() {
                                     library.play_track(
-                                        library::get_tracks(file, true).into_iter().last().map(
+                                        library::find_tracks(file, &library.types(), true).into_iter().last().map(
                                             |mut t| {
                                                 t.load_meta();
                                                 Arc::new(t)
@@ -417,18 +417,18 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::Sort(cmd) => match cmd {
                                 SortCmd::Get { index } => {
                                     response = if let Some(i) = index {
-                                        library.get_sort(i).unwrap_or(String::new())
+                                        library.get_sorter(i).unwrap_or(String::new())
                                     } else {
-                                        library.get_sort_tagstrings().join("\n")
+                                        library.get_sorters().join("\n")
                                     }
                                 }
                                 SortCmd::Set { index, tagstring } => {
-                                    library.set_sort(index, tagstring)
+                                    library.set_sorter(index, tagstring)
                                 }
                                 SortCmd::SetAll { tagstrings } => {
-                                    library.set_sort_tagstrings(tagstrings)
+                                    library.set_sorters(tagstrings)
                                 }
-                                SortCmd::Remove { index } => library.remove_sort(index),
+                                SortCmd::Remove { index } => library.remove_sorter(index),
                             },
 
                             Action::Print(print_cmd) => match print_cmd {
@@ -516,7 +516,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.volume_set(volume);
             library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
-            library.set_sort_tagstrings(sort_tagstrings);
+            library.set_sorters(sort_tagstrings);
             if let Some(path) = library_path {
                 let now = Instant::now();
                 library.append_library(path);

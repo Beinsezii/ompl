@@ -1,5 +1,4 @@
 use crate::{l1, l2, log, LOG_LEVEL};
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -11,7 +10,6 @@ use std::time::Instant;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::probe::Hint;
 
-use super::player::TYPES;
 use walkdir::WalkDir;
 
 pub type Tags = HashMap<String, String>;
@@ -196,7 +194,7 @@ const ID3_GENRES: &[&'static str] = &[
 
 // ## FNs ## {{{
 
-pub fn get_tracks<T: AsRef<Path>>(path: T, include_hidden: bool) -> Vec<Track> {
+pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bool) -> Vec<Track> {
     l2!("Finding tracks...");
     let now = Instant::now();
 
@@ -218,7 +216,7 @@ pub fn get_tracks<T: AsRef<Path>>(path: T, include_hidden: bool) -> Vec<Track> {
                     .to_str()
                     .map(|s| {
                         let mut res = false;
-                        for t in TYPES.into_iter() {
+                        for t in types.into_iter() {
                             if s.ends_with(t) {
                                 res = true;
                                 break;
@@ -258,24 +256,6 @@ pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(
     result.sort();
     result.dedup();
     result
-}
-
-pub fn sort_by_tag<T: AsRef<str>, U: Deref<Target = Track>>(tag: T, tracks: &mut Vec<U>) {
-    tracks.sort_by(|a, b| {
-        let a = a.tags().get(tag.as_ref());
-        let b = b.tags().get(tag.as_ref());
-        if a.is_none() && b.is_none() {
-            Ordering::Equal
-        } else {
-            match a {
-                Some(a) => match b {
-                    Some(b) => a.cmp(b),
-                    None => Ordering::Greater,
-                },
-                None => Ordering::Less,
-            }
-        }
-    })
 }
 
 // ## FNs }}}

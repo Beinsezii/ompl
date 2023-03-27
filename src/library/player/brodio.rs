@@ -7,20 +7,17 @@ use rodio::{OutputStream, OutputStreamHandle, Sink};
 use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::{Receiver, SyncSender};
 
-use super::track::Track;
-
-use crate::{l1, l2, log, LOG_LEVEL};
-
-pub const TYPES: &[&'static str] = &[".mp3", ".flac", ".ogg", ".wav"];
+use super::{Player, PlayerMessage};
+use crate::{l1, l2, library::Track, log, LOG_LEVEL};
 
 // ### BG TASKS ### {{{
 
-fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: SyncSender<()>) {
+fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: SyncSender<PlayerMessage>) {
     l2!("Track Ender start");
     loop {
         if let Some(sink) = &*sink.read().unwrap() {
             if sink.empty() {
-                if let Err(_) = signal_next.send(()) {
+                if let Err(_) = signal_next.send(PlayerMessage::Request) {
                     break;
                 } else {
                     l2!("Next track!");
@@ -43,7 +40,7 @@ fn stream(han_ch_s: SyncSender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
 
 // ### BG TASKS ### }}}
 
-pub struct Player {
+pub struct Backend {
     stream_handle: RwLock<Option<OutputStreamHandle>>,
     stm_ex_s: RwLock<Option<SyncSender<()>>>,
     volume_retained: RwLock<f32>,
@@ -51,21 +48,20 @@ pub struct Player {
     track: RwLock<Option<Arc<Track>>>,
 }
 
-impl Drop for Player {
+impl Drop for Backend {
     fn drop(&mut self) {
-        self.hard_stop()
+        self.stop()
     }
 }
 
-impl Player {
-    // # new # {{{
-    pub fn new(track: Option<Arc<Track>>, signal_next: Option<SyncSender<()>>) -> Self {
-        l2!("Constructing Player...");
+impl Player for Backend {
+    fn new(sig_end: Option<SyncSender<PlayerMessage>>) -> Self {
+        l2!("Constructing Backend...");
         let now = Instant::now();
 
         let sink = Arc::new(RwLock::new(None));
 
-        if let Some(sig) = signal_next {
+        if let Some(sig) = sig_end {
             let thread_sink = sink.clone();
             thread::spawn(move || track_ender(thread_sink, sig));
         }
@@ -75,18 +71,78 @@ impl Player {
             stream_handle: RwLock::new(None),
             volume_retained: RwLock::new(1.0f32),
             sink,
-            track: RwLock::new(track),
+            track: RwLock::new(None),
         };
 
-        l1!(format!("Player built in {:?}", Instant::now() - now));
+        l1!(format!("Backend built in {:?}", Instant::now() - now));
 
         player
     }
-    // # new # }}}
 
-    // ## PLAYBACK ## {{{
+    fn seekable(&self) -> Option<bool> {
+        None
+    }
 
-    fn start(&self) {
+    fn types(&self) -> Vec<String> {
+        vec![
+            String::from(".mp3"),
+            String::from(".flac"),
+            String::from(".ogg"),
+            String::from(".wav"),
+        ]
+    }
+
+    fn track_get(&self) -> Option<Arc<Track>> {
+        self.track.read().unwrap().as_ref().cloned()
+    }
+
+    fn track_set(&self, mut track: Option<Arc<Track>>) -> Option<Arc<Track>> {
+        let guard: &mut Option<Arc<Track>> = &mut self.track.write().unwrap();
+        std::mem::swap(guard, &mut track);
+        *self.sink.write().unwrap() = None;
+        track
+    }
+
+    fn volume_get(&self) -> f32 {
+        self.volume_retained.read().unwrap().cbrt()
+    }
+
+    fn volume_set(&self, volume: f32) {
+        let volume = 0.0f32.max(1.0f32.min(volume.powi(3)));
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            sink.set_volume(
+                volume
+                    * self
+                        .track
+                        .read()
+                        .unwrap()
+                        .as_ref()
+                        .map(|t| t.gain())
+                        .unwrap_or(1.0),
+            )
+        }
+        *self.volume_retained.write().unwrap() = volume;
+    }
+
+    fn pause(&self) {
+        l2!("Pausing...");
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            sink.pause()
+        }
+        l2!("Paused");
+    }
+
+    fn play(&self) {
+        l2!("Starting playback...");
+        if let Some(sink) = &*self.sink.read().unwrap() {
+            if sink.is_paused() && !sink.empty() {
+                sink.play();
+                return;
+            } else if !sink.empty() {
+                // theoretically should be playing???
+                return;
+            }
+        }
         if self.stream_handle.read().unwrap().is_none() || self.stm_ex_s.read().unwrap().is_none() {
             let (han_ch_s, han_ch_r) = sync_channel(1);
             let (stm_ex_s, stm_ex_r) = sync_channel(1);
@@ -111,42 +167,10 @@ impl Player {
                 Err(e) => panic!("{}", e),
             };
         }
-    }
-
-    pub fn pause(&self) {
-        l2!("Pausing...");
-        if let Some(sink) = &*self.sink.read().unwrap() {
-            sink.pause()
-        }
-        l2!("Paused");
-    }
-
-    pub fn play(&self) {
-        l2!("Starting playback...");
-        if let Some(sink) = &*self.sink.read().unwrap() {
-            if sink.is_paused() && !sink.empty() {
-                sink.play();
-                return;
-            } else if !sink.empty() {
-                // theoretically should be playing???
-                return;
-            }
-        }
-        self.start();
         l2!("Playing");
     }
 
-    /// Clears playback buffer without removing the audio stream.
-    /// Good for playing a different track.
-    pub fn stop(&self) {
-        l2!("Stopping...");
-        *self.sink.write().unwrap() = None;
-        l2!("Stopped");
-    }
-
-    /// Completely removes the audio stream
-    /// Should be used when fully stopping playback to reduce idle load
-    pub fn hard_stop(&self) {
+    fn stop(&self) {
         l2!("Hard Stopping...");
         if let Some(tx) = &*self.stm_ex_s.read().unwrap() {
             tx.send(()).unwrap();
@@ -158,61 +182,25 @@ impl Player {
         *self.stm_ex_s.write().unwrap() = None;
         l2!("Hard Stopped");
     }
-    // ## PLAYBACK ## }}}
 
-    // ## GET/SET ## {{{
-
-    pub fn volume_get(&self) -> f32 {
-        self.volume_retained.read().unwrap().cbrt()
-    }
-    pub fn volume_set(&self, volume: f32) {
-        let volume = 0.0f32.max(1.0f32.min(volume.powi(3)));
-        if let Some(sink) = &*self.sink.read().unwrap() {
-            sink.set_volume(
-                volume
-                    * self
-                        .track
-                        .read()
-                        .unwrap()
-                        .as_ref()
-                        .map(|t| t.gain())
-                        .unwrap_or(1.0),
-            )
-        }
-        *self.volume_retained.write().unwrap() = volume;
-    }
-
-    pub fn track_set(&self, track: Option<Arc<Track>>) {
-        *self.track.write().unwrap() = track;
-    }
-    pub fn track_get(&self) -> Option<Arc<Track>> {
-        self.track.read().unwrap().as_ref().cloned()
-    }
-
-    // ## GET/SET ## }}}
-
-    // ## STATUS ## {{{
-
-    pub fn playing(&self) -> bool {
+    fn playing(&self) -> bool {
         match &*self.sink.read().unwrap() {
             Some(sink) => !sink.empty() && !sink.is_paused(),
             None => false,
         }
     }
 
-    pub fn paused(&self) -> bool {
+    fn paused(&self) -> bool {
         match &*self.sink.read().unwrap() {
             Some(sink) => sink.is_paused() && !sink.empty(),
             None => false,
         }
     }
 
-    pub fn stopped(&self) -> bool {
+    fn stopped(&self) -> bool {
         match &*self.sink.read().unwrap() {
             Some(sink) => sink.empty(),
             None => true,
         }
     }
-
-    // ## STATUS ## }}}
 }

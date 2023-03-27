@@ -88,7 +88,7 @@ impl Clickable for StatusBar {
                 // 123456789 1234567890123456
                 // -- 0.12 ++ | >< :< # /> >: |
                 match event.column {
-                    1..=2 => library.volume_sub(0.05),
+                    1..=2 => library.volume_add(-0.05),
                     9..=10 => library.volume_add(0.05),
                     14..=15 => library.shuffle_toggle(),
                     17..=18 => library.previous(),

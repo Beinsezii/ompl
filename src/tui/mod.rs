@@ -216,9 +216,9 @@ impl<T: Backend> UI<T> {
             let tag = self.input("Tagstring", "", false).trim().to_string();
             if !tag.is_empty() {
                 let pos = self.sortpanes.index() + if before { 0 } else { 1 };
-                library.insert_sort_tagstring(tag, pos);
+                library.insert_sorter(tag, pos);
                 *self.sortpanes.index_mut() =
-                    min(pos, library.get_sort_tagstrings().len().saturating_sub(1));
+                    min(pos, library.get_sorters().len().saturating_sub(1));
             }
         } else {
             let tag = self.input("Filter", "", false).trim().to_string();
@@ -247,7 +247,7 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         if self.sortpanes.active() {
-            library.remove_sort(self.sortpanes.index());
+            library.remove_sorter(self.sortpanes.index());
         } else {
             self.filterpanes.remove();
             library.remove_filter(self.filterpanes.index());
@@ -282,9 +282,9 @@ impl<T: Backend> UI<T> {
                 *index_mut += 1
             }
             if s {
-                let mut items = library.get_sort_tagstrings();
+                let mut items = library.get_sorters();
                 items.swap(from, *index_mut);
-                library.set_sort_tagstrings(items);
+                library.set_sorters(items);
             } else {
                 let mut items = library.get_filters();
                 items.swap(from, *index_mut);
@@ -303,7 +303,7 @@ impl<T: Backend> UI<T> {
         let s = self.sortpanes.active();
 
         let tagstring = if s {
-            library.get_sort(self.sortpanes.index())
+            library.get_sorter(self.sortpanes.index())
         } else {
             library.get_filter(self.filterpanes.index()).map(|f| f.tag)
         };
@@ -319,7 +319,7 @@ impl<T: Backend> UI<T> {
                 input => {
                     if input != &tagstring {
                         if s {
-                            library.set_sort(self.sortpanes.index(), input.to_string())
+                            library.set_sorter(self.sortpanes.index(), input.to_string())
                         } else {
                             library.set_filter(
                                 self.filterpanes.index(),
@@ -699,7 +699,7 @@ impl<T: Backend> UI<T> {
             }) => {
                 if self.sortpanes.active() {
                     *self.sortpanes.index_mut() = (self.sortpanes.index() + 1)
-                        .min(library.get_sort_tagstrings().len().saturating_sub(1));
+                        .min(library.get_sorters().len().saturating_sub(1));
                     self.draw();
                 } else {
                     *self.filterpanes.index_mut() = (self.filterpanes.index() + 1)
@@ -842,7 +842,7 @@ impl<T: Backend> UI<T> {
             km!('n') => library.next(),
             km!('p') => library.previous(),
             km!('=') => library.volume_add(0.05),
-            km!('-') => library.volume_sub(0.05),
+            km!('-') => library.volume_add(-0.05),
             km!('r') => library.shuffle_toggle(),
 
             // yay vim macros

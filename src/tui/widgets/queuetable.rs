@@ -70,7 +70,7 @@ impl QueueTable {
             None => return rows,
         };
 
-        let mut tags = library.get_sort_tagstrings();
+        let mut tags = library.get_sorters();
 
         // if nothing then fetch title since title will always exist
         if tags.is_empty() {
@@ -103,7 +103,7 @@ impl ContainedWidget for QueueTable {
         let mut items = Vec::<(String, Vec<String>)>::new();
         let highlights = Vec::<Vec<String>>::new();
 
-        for ts in library.get_sort_tagstrings() {
+        for ts in library.get_sorters() {
             let list = library.get_taglist(&ts);
             items.push((ts, list));
         }
@@ -162,7 +162,7 @@ impl Clickable for QueueTable {
 
         let mut items = Vec::<(usize, usize)>::new();
 
-        for s in library.get_sort_tagstrings().into_iter() {
+        for s in library.get_sorters().into_iter() {
             items.push((s.len(), library.get_queue().len()))
         }
 
