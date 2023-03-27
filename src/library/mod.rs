@@ -604,11 +604,11 @@ impl Library {
     }
 
     pub fn remove_sorter(&self, index: usize) {
-        let mut sorts = self.sorters.write().unwrap();
-        if index < sorts.len() {
-            sorts.remove(index);
+        let mut sorters = self.sorters.write().unwrap();
+        if index < sorters.len() {
+            sorters.remove(index);
         }
-        drop(sorts);
+        drop(sorters);
         self.sort()
     }
 
@@ -621,7 +621,7 @@ impl Library {
         self.sort();
     }
 
-    // ## Sort Control ## }}}
+    // ## Sorters Control ## }}}
 
     // ## Tracklist Control ## {{{
 

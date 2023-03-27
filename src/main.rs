@@ -153,7 +153,7 @@ pub enum FilterCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-pub enum SortCmd {
+pub enum SorterCmd {
     Get {
         index: Option<usize>,
     },
@@ -231,8 +231,8 @@ pub enum Action {
         filters: Vec<library::Filter>,
 
         #[arg(long = "sort", short, num_args(1..))]
-        /// Starting sort tagstrings
-        sort_tagstrings: Vec<String>,
+        /// Starting sorter tagstrings
+        sorters: Vec<String>,
 
         #[arg(long, short, default_value = "0.5")]
         /// Starting volume
@@ -275,7 +275,7 @@ pub enum Action {
     #[command(subcommand)]
     Filter(FilterCmd),
     #[command(subcommand)]
-    Sort(SortCmd),
+    Sorter(SorterCmd),
     Append {
         path: PathBuf,
     },
@@ -414,21 +414,21 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 FilterCmd::Remove { index } => library.remove_filter(index),
                             },
 
-                            Action::Sort(cmd) => match cmd {
-                                SortCmd::Get { index } => {
+                            Action::Sorter(cmd) => match cmd {
+                                SorterCmd::Get { index } => {
                                     response = if let Some(i) = index {
                                         library.get_sorter(i).unwrap_or(String::new())
                                     } else {
                                         library.get_sorters().join("\n")
                                     }
                                 }
-                                SortCmd::Set { index, tagstring } => {
+                                SorterCmd::Set { index, tagstring } => {
                                     library.set_sorter(index, tagstring)
                                 }
-                                SortCmd::SetAll { tagstrings } => {
+                                SorterCmd::SetAll { tagstrings } => {
                                     library.set_sorters(tagstrings)
                                 }
-                                SortCmd::Remove { index } => library.remove_sorter(index),
+                                SorterCmd::Remove { index } => library.remove_sorter(index),
                             },
 
                             Action::Print(print_cmd) => match print_cmd {
@@ -501,7 +501,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             daemon,
             no_media,
             filters,
-            sort_tagstrings,
+            sorters,
             volume,
             verbosity,
             fg,
@@ -516,7 +516,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.volume_set(volume);
             library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
-            library.set_sorters(sort_tagstrings);
+            library.set_sorters(sorters);
             if let Some(path) = library_path {
                 let now = Instant::now();
                 library.append_library(path);
