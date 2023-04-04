@@ -3,7 +3,7 @@ use crate::library::Library;
 
 use std::sync::{Arc, Weak};
 
-use crossterm::event;
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use tui::{
     layout::Rect,
     text::{Span, Spans},
@@ -74,13 +74,13 @@ impl ContainedWidget for StatusBar {
 }
 
 impl Clickable for StatusBar {
-    fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
+    fn process_event(&mut self, event: MouseEvent) -> super::Action {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return super::Action::None,
         };
 
-        if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
+        if event.kind == MouseEventKind::Down(MouseButton::Left) {
             if self
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
@@ -96,6 +96,20 @@ impl Clickable for StatusBar {
                     22..=23 => library.play_pause(),
                     25..=26 => library.next(),
                     _ => (),
+                }
+            }
+        } else if event.kind == MouseEventKind::ScrollUp || event.kind == MouseEventKind::ScrollDown
+        {
+            if self
+                .area
+                .intersects(Rect::new(event.column, event.row, 1, 1))
+            {
+                if event.column >= 1 && event.column <= 10 {
+                    match event.kind {
+                        MouseEventKind::ScrollDown => library.volume_add(-0.05),
+                        MouseEventKind::ScrollUp => library.volume_add(0.05),
+                        _ => (),
+                    }
                 }
             }
         }
