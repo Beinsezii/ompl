@@ -218,8 +218,12 @@ pub enum Action {
         /// Include hidden items ( '.' prefix )
         hidden: bool,
 
+        #[arg(short = 'S', long)]
+        /// Disable shuffle on startup
+        noshuffle: bool,
+
         #[arg(long, short)]
-        /// [D]aemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
+        /// Daemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
         daemon: bool,
 
         #[arg(long, short)]
@@ -369,12 +373,13 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::PlayFile { file } => {
                                 if file.is_file() {
                                     library.play_track(
-                                        library::find_tracks(file, &library.types(), true).into_iter().last().map(
-                                            |mut t| {
+                                        library::find_tracks(file, &library.types(), true)
+                                            .into_iter()
+                                            .last()
+                                            .map(|mut t| {
                                                 t.load_meta();
                                                 Arc::new(t)
-                                            },
-                                        ),
+                                            }),
                                     )
                                 }
                             }
@@ -425,9 +430,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 SorterCmd::Set { index, tagstring } => {
                                     library.set_sorter(index, tagstring)
                                 }
-                                SorterCmd::SetAll { tagstrings } => {
-                                    library.set_sorters(tagstrings)
-                                }
+                                SorterCmd::SetAll { tagstrings } => library.set_sorters(tagstrings),
                                 SorterCmd::Remove { index } => library.remove_sorter(index),
                             },
 
@@ -498,6 +501,7 @@ fn instance_main(listener: TcpListener, args: Args) {
         Action::Main {
             library: library_path,
             hidden,
+            noshuffle,
             daemon,
             no_media,
             filters,
@@ -514,6 +518,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             let library = Library::new();
             library.hidden_set(hidden);
             library.volume_set(volume);
+            library.shuffle_set(!noshuffle);
             library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sorters(sorters);
