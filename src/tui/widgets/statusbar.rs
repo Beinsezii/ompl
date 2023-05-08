@@ -110,6 +110,12 @@ impl Clickable for StatusBar {
                         MouseEventKind::ScrollUp => library.volume_add(0.05),
                         _ => (),
                     }
+                } else if event.column >= 14 && event.column <= 26 {
+                    match event.kind {
+                        MouseEventKind::ScrollDown => library.next(),
+                        MouseEventKind::ScrollUp => library.previous(),
+                        _ => (),
+                    }
                 }
             }
         }
