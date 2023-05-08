@@ -234,7 +234,7 @@ pub enum Action {
         /// Starting filters
         filters: Vec<library::Filter>,
 
-        #[arg(long = "sort", short, num_args(1..))]
+        #[arg(long = "sorters", short, num_args(1..))]
         /// Starting sorter tagstrings
         sorters: Vec<String>,
 
