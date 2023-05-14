@@ -7,6 +7,7 @@ use std::thread;
 use std::time::Instant;
 
 use rand::random;
+use lexical_sort::natural_lexical_cmp;
 
 use bus::{Bus, BusReader};
 use std::sync::mpsc::sync_channel;
@@ -568,7 +569,7 @@ impl Library {
         self.tracks.write().unwrap().sort_by(|a, b| {
             let mut result = std::cmp::Ordering::Equal;
             for ts in self.sorters.read().unwrap().iter() {
-                result = result.then(a.tagstring(ts).cmp(&b.tagstring(ts)))
+                result = result.then(natural_lexical_cmp(&a.tagstring(ts), &b.tagstring(ts)))
             }
             result
         });

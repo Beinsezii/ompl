@@ -10,6 +10,7 @@ use std::time::Instant;
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::probe::Hint;
 
+use lexical_sort::natural_lexical_cmp;
 use walkdir::WalkDir;
 
 pub type Tags = HashMap<String, String>;
@@ -253,7 +254,7 @@ pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(
     tracks: &Vec<U>,
 ) -> Vec<String> {
     let mut result = get_taglist(tagstring, tracks);
-    result.sort();
+    result.sort_by(|a, b| natural_lexical_cmp(&a, &b));
     result.dedup();
     result
 }
