@@ -1,9 +1,9 @@
-#[cfg(feature = "backend-rodio")]
 // I figured out this cool name for symphonia-cpal 'sympal' and was like "wow thats way cooler than
 // something like 'backend-symphonia.rs' so I just went with it only to later realize that if I
 // have both a local module and a dependancy called 'rodio' its confusing as fuck so naturally I
 // have to rename my rodio backend module with 'b' for backend + rodio which gives me 'brodio' and
 // now I'm mildly disgusted with myself, bro.
+#[cfg(feature = "backend-rodio")]
 mod brodio;
 
 #[cfg(feature = "backend-sympal")]
@@ -15,13 +15,14 @@ use std::sync::Arc;
 use crate::library::Track;
 
 /// Go through available backends and retrieve most optimal Player
-pub fn backend_default(sig_end: Option<SyncSender<PlayerMessage>>) -> Box<dyn Player> {
-    if cfg!(feature = "backend-sympal") {
-        // return Box::new(sympal::Backend::new(sig_end))
-    }
-    if cfg!(feature = "backend-rodio") {
-        return Box::new(brodio::Backend::new(sig_end));
-    }
+pub fn backend_default(sig: Option<SyncSender<PlayerMessage>>) -> Box<dyn Player> {
+
+    #[cfg(feature = "backend-sympal")]
+    return Box::new(sympal::Backend::new(sig));
+
+    #[cfg(feature = "backend-rodio")]
+    return Box::new(brodio::Backend::new(sig));
+
     panic!("No valid backend found!")
 }
 
@@ -39,7 +40,7 @@ pub trait Player: Send + Sync {
 
     /// Constructs new player with optional sender that fires when
     /// the current playing track ends or playback is otherwise interrupted.
-    fn new(sig_end: Option<SyncSender<PlayerMessage>>) -> Self
+    fn new(sig: Option<SyncSender<PlayerMessage>>) -> Self
     where
         Self: Sized;
 

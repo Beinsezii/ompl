@@ -142,7 +142,10 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                     }
                 }
                 PlayerMessage::Error(e) => {
-                    todo!("Forward player errs through library.\nErr: {}", e)
+                    if let Some(l) = library_weak.upgrade() {
+                        // todo!("Forward player errs through library.\nErr: {}", e)
+                        l.bus.lock().unwrap().broadcast(LibEvt::Error(e));
+                    }
                 }
             },
             Err(_) => break,
