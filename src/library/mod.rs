@@ -235,7 +235,10 @@ impl Library {
         self.bus.lock().unwrap().broadcast(LibEvt::Stop);
     }
     pub fn play_pause(&self) {
-        self.player.toggle()
+        self.player.toggle();
+        // I guessss this should technically be a new LibEvt but is there even a point?
+        // Maybe I should just roll them all into `LibEvt::Playback` or something...
+        self.bus.lock().unwrap().broadcast(LibEvt::Play);
     }
     pub fn volume_get(&self) -> f32 {
         self.player.volume_get()
