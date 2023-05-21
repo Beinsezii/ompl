@@ -112,48 +112,51 @@ impl Player for Backend {
         let samples = self.samples.lock().unwrap().clone();
         let channel_err = channel.clone();
 
-        thread::spawn(move || {
-            while !first.load(Ordering::Relaxed) {
-                thread::sleep(Duration::from_millis(1))
-            }
-            let stream = device
-                .build_output_stream(
-                    &config.config(),
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                        for sample in data {
-                            // Wonder how necessary these locks are.
-                            // IDK much about atomics but this seems to make sense to ensure
-                            // the same pos isn't loaded twice, right?
-                            let n = pos.load(Ordering::Acquire);
-                            *sample = gain
-                                * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3)
-                                * match samples.read().unwrap().get(n) {
-                                    Some(s) => s,
-                                    None => {
-                                        if !uj.load(Ordering::Acquire) {
-                                            channel.send(PlayerMessage::Request).unwrap()
-                                        };
-                                        uj.store(true, Ordering::Release);
-                                        &0.0
-                                    }
-                                };
-                            pos.store(n + 1, Ordering::Release);
-                        }
-                        // react to stream events and read or write stream data here.
-                    },
-                    move |err| {
-                        channel_err
-                            .send(PlayerMessage::Error(err.to_string()))
-                            .unwrap();
-                    },
-                    None, // None=blocking, Some(Duration)=timeout
-                )
-                .expect("Could not initialize audio stream");
-            stream.play().unwrap();
-            while !tj.load(Ordering::Relaxed) {
-                thread::sleep(Duration::from_millis(1))
-            }
-        });
+        thread::Builder::new()
+            .name(String::from("Audio Stream"))
+            .spawn(move || {
+                while !first.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(1))
+                }
+                let stream = device
+                    .build_output_stream(
+                        &config.config(),
+                        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                            for sample in data {
+                                // Wonder how necessary these locks are.
+                                // IDK much about atomics but this seems to make sense to ensure
+                                // the same pos isn't loaded twice, right?
+                                let n = pos.load(Ordering::Acquire);
+                                *sample = gain
+                                    * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3)
+                                    * match samples.read().unwrap().get(n) {
+                                        Some(s) => s,
+                                        None => {
+                                            if !uj.load(Ordering::Acquire) {
+                                                channel.send(PlayerMessage::Request).unwrap()
+                                            };
+                                            uj.store(true, Ordering::Release);
+                                            &0.0
+                                        }
+                                    };
+                                pos.store(n + 1, Ordering::Release);
+                            }
+                            // react to stream events and read or write stream data here.
+                        },
+                        move |err| {
+                            channel_err
+                                .send(PlayerMessage::Error(err.to_string()))
+                                .unwrap();
+                        },
+                        None, // None=blocking, Some(Duration)=timeout
+                    )
+                    .expect("Could not initialize audio stream");
+                stream.play().unwrap();
+                while !tj.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(1))
+                }
+            })
+            .unwrap();
     }
     // }}}
 
@@ -247,26 +250,33 @@ impl Player for Backend {
                 self.last.store(false, Ordering::Relaxed);
                 self.pos.store(0, Ordering::Relaxed);
 
-                thread::spawn(move || {
-                    while let Ok(packet) = fr.next_packet() {
-                        if packet.dur() < 1 {
-                            // 0 length packets are possible I guess
-                            continue;
+                thread::Builder::new()
+                    .name(String::from("Decoder"))
+                    .spawn(move || {
+                        while let Ok(packet) = fr.next_packet() {
+                            if packet.dur() < 1 {
+                                // 0 length packets are possible I guess
+                                continue;
+                            }
+                            if let Some(samples) = samples.upgrade() {
+                                let ab = match decoder.decode(&packet) {
+                                    Ok(ab) => ab,
+                                    // Symphonia docs say these errs should just discard packet
+                                    Err(symphonia::core::errors::Error::DecodeError(..))
+                                    | Err(symphonia::core::errors::Error::IoError(..)) => continue,
+                                    Err(e) => std::panic::panic_any(e),
+                                };
+                                let mut sb = SampleBuffer::<f32>::new(packet.dur, *ab.spec());
+                                sb.copy_interleaved_ref(ab);
+                                samples.write().unwrap().extend_from_slice(sb.samples());
+                                first.store(true, Ordering::Relaxed);
+                            } else {
+                                return;
+                            }
                         }
-                        if let Some(samples) = samples.upgrade() {
-                            let ab = decoder
-                                .decode(&packet)
-                                .expect("SYMPAL Decoder failed to decode packet");
-                            let mut sb = SampleBuffer::<f32>::new(packet.dur, *ab.spec());
-                            sb.copy_interleaved_ref(ab);
-                            samples.write().unwrap().extend_from_slice(sb.samples());
-                            first.store(true, Ordering::Relaxed);
-                        } else {
-                            return;
-                        }
-                    }
-                    last.store(true, Ordering::Relaxed);
-                });
+                        last.store(true, Ordering::Relaxed);
+                    })
+                    .unwrap();
             }
         }
         track
