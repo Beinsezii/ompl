@@ -16,7 +16,7 @@ use std::{
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
-    SampleFormat, SampleRate,
+    Sample, SampleFormat, SampleRate,
 };
 use symphonia::core::{audio::SampleBuffer, io::MediaSourceStream, probe::Hint};
 
@@ -27,9 +27,8 @@ pub struct Backend {
     join: Arc<AtomicBool>,
     first: Arc<AtomicBool>,
     last: Arc<AtomicBool>,
-    // TODO: i16 probably better.
-    // Wonder if Windows has as extensive of format support?
-    samples: Mutex<Arc<RwLock<Vec<f32>>>>,
+    // TODO: dynamic typing
+    samples: Mutex<Arc<RwLock<Vec<i16>>>>,
     pos: Arc<AtomicUsize>,
     rate: Arc<AtomicU32>,
     channels: Arc<AtomicUsize>,
@@ -91,7 +90,7 @@ impl Player for Backend {
                         if config.channels() as usize == channels
                             && config.max_sample_rate().0 >= rate
                             && config.min_sample_rate().0 <= rate
-                            && config.sample_format() == SampleFormat::F32
+                            && config.sample_format() == SampleFormat::I16
                         {
                             break config.with_sample_rate(SampleRate(rate));
                         }
@@ -121,24 +120,24 @@ impl Player for Backend {
                 let stream = device
                     .build_output_stream(
                         &config.config(),
-                        move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                        move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
+                            let amplitude =
+                                gain * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3);
                             for sample in data {
                                 // Wonder how necessary these locks are.
                                 // IDK much about atomics but this seems to make sense to ensure
                                 // the same pos isn't loaded twice, right?
                                 let n = pos.load(Ordering::Acquire);
-                                *sample = gain
-                                    * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3)
-                                    * match samples.read().unwrap().get(n) {
-                                        Some(s) => s,
-                                        None => {
-                                            if !uj.load(Ordering::Acquire) {
-                                                channel.send(PlayerMessage::Request).unwrap()
-                                            };
-                                            uj.store(true, Ordering::Release);
-                                            &0.0
-                                        }
-                                    };
+                                *sample = match samples.read().unwrap().get(n) {
+                                    Some(s) => s.mul_amp(amplitude),
+                                    None => {
+                                        if !uj.load(Ordering::Acquire) {
+                                            channel.send(PlayerMessage::Request).unwrap()
+                                        };
+                                        uj.store(true, Ordering::Release);
+                                        0
+                                    }
+                                };
                                 pos.store(n + 1, Ordering::Release);
                             }
                             // react to stream events and read or write stream data here.
@@ -266,7 +265,7 @@ impl Player for Backend {
                                     | Err(symphonia::core::errors::Error::IoError(..)) => continue,
                                     Err(e) => std::panic::panic_any(e),
                                 };
-                                let mut sb = SampleBuffer::<f32>::new(packet.dur, *ab.spec());
+                                let mut sb = SampleBuffer::<i16>::new(packet.dur, *ab.spec());
                                 sb.copy_interleaved_ref(ab);
                                 samples.write().unwrap().extend_from_slice(sb.samples());
                                 first.store(true, Ordering::Relaxed);
