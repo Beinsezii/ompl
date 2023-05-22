@@ -18,7 +18,11 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Sample, SampleFormat, SampleRate,
 };
-use symphonia::core::{audio::SampleBuffer, io::MediaSourceStream, probe::Hint};
+use symphonia::core::{
+    audio::SampleBuffer,
+    io::MediaSourceStream,
+    probe::{Hint, QueryDescriptor},
+};
 
 pub struct Backend {
     track: Mutex<Option<Arc<Track>>>,
@@ -52,14 +56,30 @@ impl Player for Backend {
             channels: Arc::new(AtomicUsize::new(0)),
         }
     }
+    #[rustfmt::skip]
     fn types(&self) -> Vec<String> {
-        vec![
-            String::from("flac"),
-            String::from("m4a"),
-            String::from("mp3"),
-            String::from("ogg"),
-            String::from("wav"),
+        let mut result = [
+            symphonia::default::formats::OggReader::query(),
+            symphonia::default::formats::MkvReader::query(),
+            symphonia::default::formats::MpaReader::query(),
+            symphonia::default::formats::FlacReader::query(),
+            symphonia::default::formats::WavReader::query(),
+            symphonia::default::formats::AdtsReader::query(),
+            // symphonia::default::formats::IsoMp4Reader::query(),
         ]
+        .iter().map(|descriptors|
+            descriptors.iter().map(|descriptor|
+                descriptor.extensions.iter().map(|extension|
+                    extension.to_string()
+                )
+            )
+        )
+        .flatten()
+        .flatten()
+        .collect::<Vec<String>>();
+        result.sort();
+        result.dedup();
+        result
     }
     fn play(&self) {
         // {{{
