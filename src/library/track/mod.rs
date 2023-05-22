@@ -1,7 +1,6 @@
 use crate::{l1, l2, log, LOG_LEVEL};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
 use std::ops::Deref;
 use std::path::Path;
 use std::path::PathBuf;
@@ -401,10 +400,6 @@ impl Track {
     // # vorbis comment # }}}
 
     // ## GET / SET ## {{{
-
-    pub fn get_reader(&self) -> BufReader<File> {
-        BufReader::new(File::open(&self.path).unwrap())
-    }
 
     pub fn tags(&self) -> &Tags {
         &self.tags

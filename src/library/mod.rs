@@ -4,10 +4,10 @@ use std::sync::{
     Arc, Mutex, RwLock,
 };
 use std::thread;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use rand::random;
 use lexical_sort::natural_lexical_cmp;
+use rand::random;
 
 use bus::{Bus, BusReader};
 use std::sync::mpsc::sync_channel;
@@ -134,21 +134,29 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
     let library_weak = Arc::downgrade(&library);
     drop(library);
     loop {
-        match next_r.recv() {
-            Ok(msg) => match msg {
-                PlayerMessage::Request => {
-                    if let Some(l) = library_weak.upgrade() {
-                        l.next()
+        let msg = next_r.recv();
+        if let Some(library) = library_weak.upgrade() {
+            match msg {
+                Ok(msg) => match msg {
+                    PlayerMessage::Request => library.next(),
+
+                    PlayerMessage::Seekable => {
+                        library.bus.lock().unwrap().broadcast(LibEvt::Playback)
                     }
-                }
-                PlayerMessage::Error(e) => {
-                    if let Some(l) = library_weak.upgrade() {
-                        // todo!("Forward player errs through library.\nErr: {}", e)
-                        l.bus.lock().unwrap().broadcast(LibEvt::Error(e));
+                    PlayerMessage::Clock => {
+                        if library.seekable() == Some(true) {
+                            library.bus.lock().unwrap().broadcast(LibEvt::Playback)
+                        }
                     }
-                }
-            },
-            Err(_) => break,
+
+                    PlayerMessage::Error(e) => {
+                        library.bus.lock().unwrap().broadcast(LibEvt::Error(e))
+                    }
+                },
+                Err(_) => break,
+            }
+        } else {
+            break;
         }
     }
     l2!("PMS End");
@@ -158,13 +166,15 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
 
 #[derive(Debug, Clone)]
 pub enum LibEvt {
-    Play,
-    Pause,
-    Stop,
-    Shuffle,
-    Volume,
+    /// Simple state change.
+    /// Pause/Play/Seek/etc.
+    Playback,
+    /// Complex state change.
+    /// Filters updated, etc.
     Update,
+    /// Theme changed.
     Theme,
+    /// Non-fatal error.
     Error(String),
 }
 
@@ -189,7 +199,7 @@ impl Library {
 
         let (next_s, next_r) = sync_channel(1);
         let result = Arc::new(Self {
-            player: player::backend_default(Some(next_s)),
+            player: player::backend_default(next_s),
             tracks: RwLock::new(Vec::new()),
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),
@@ -208,7 +218,10 @@ impl Library {
 
         let result_c = result.clone();
 
-        thread::spawn(move || player_message_server(result_c, next_r));
+        thread::Builder::new()
+            .name(String::from("LIBRARY Player Message Server"))
+            .spawn(move || player_message_server(result_c, next_r))
+            .unwrap();
 
         l1!(format!("Library built in {:?}", Instant::now() - lib_now));
 
@@ -224,32 +237,30 @@ impl Library {
 
     pub fn play(&self) {
         self.player.play();
-        self.bus.lock().unwrap().broadcast(LibEvt::Play);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
     pub fn pause(&self) {
         self.player.pause();
-        self.bus.lock().unwrap().broadcast(LibEvt::Pause);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
     pub fn stop(&self) {
         self.player.stop();
-        self.bus.lock().unwrap().broadcast(LibEvt::Stop);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
     pub fn play_pause(&self) {
         self.player.toggle();
-        // I guessss this should technically be a new LibEvt but is there even a point?
-        // Maybe I should just roll them all into `LibEvt::Playback` or something...
-        self.bus.lock().unwrap().broadcast(LibEvt::Play);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
     pub fn volume_get(&self) -> f32 {
         self.player.volume_get()
     }
     pub fn volume_set(&self, volume: f32) {
         self.player.volume_set(volume);
-        self.bus.lock().unwrap().broadcast(LibEvt::Volume);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
     pub fn volume_add(&self, amount: f32) {
         self.player.volume_add(amount);
-        self.bus.lock().unwrap().broadcast(LibEvt::Volume);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
     pub fn track_get(&self) -> Option<Arc<Track>> {
@@ -278,7 +289,7 @@ impl Library {
         if let Some(track) = self.player.play_track(track) {
             self.history.lock().unwrap().push(track)
         }
-        self.bus.lock().unwrap().broadcast(LibEvt::Play);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
     pub fn playing(&self) -> bool {
@@ -291,6 +302,14 @@ impl Library {
         self.player.stopped()
     }
 
+    pub fn seekable(&self) -> Option<bool> {
+        self.player.seekable()
+    }
+
+    pub fn times(&self) -> Option<(Duration, Duration)> {
+        self.player.times()
+    }
+
     // ## Player Forwards ## }}}
 
     // ## Other Settings ## {{{
@@ -301,7 +320,7 @@ impl Library {
 
     pub fn shuffle_set(&self, shuffle: bool) {
         self.shuffle.store(shuffle, Ordering::Relaxed);
-        self.bus.lock().unwrap().broadcast(LibEvt::Shuffle);
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
     pub fn shuffle_toggle(&self) {

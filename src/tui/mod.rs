@@ -994,64 +994,66 @@ pub fn tui(library: Arc<Library>) -> bool {
     let egg_evt = egg.clone();
 
     let join_tui = join.clone();
-    thread::spawn(move || {
-        let _egg_tui = egg_tui;
-        loop {
-            if let Some(ev) = get_event(None) {
-                match ev {
-                    km_c!('c') | km_c!('q') => break,
-                    km_c!('z') => {
-                        join_tui.store(true, Ordering::Relaxed);
-                        break;
+    thread::Builder::new()
+        .name(String::from("TUI Event Poller"))
+        .spawn(move || {
+            let _egg_tui = egg_tui;
+            loop {
+                if let Some(ev) = get_event(None) {
+                    match ev {
+                        km_c!('c') | km_c!('q') => break,
+                        km_c!('z') => {
+                            join_tui.store(true, Ordering::Relaxed);
+                            break;
+                        }
+                        _ => (),
                     }
-                    _ => (),
+                    // process_event will draw for us
+                    ui.lock().unwrap().process_event(ev);
                 }
-                // process_event will draw for us
-                ui.lock().unwrap().process_event(ev);
             }
-        }
-    });
+        })
+        .unwrap();
 
-    thread::spawn(move || {
-        let _egg_evt = egg_evt;
-        loop {
-            match libevt_r.recv() {
-                Ok(action) => match uiw_libevt.upgrade() {
-                    Some(ui) => match action {
-                        LibEvt::Volume
-                        | LibEvt::Play
-                        | LibEvt::Pause
-                        | LibEvt::Stop
-                        | LibEvt::Shuffle => ui.lock().unwrap().draw(),
-                        LibEvt::Theme => {
-                            if let Ok(mut uiw) = ui.lock() {
-                                if let Some(libw) = libweak_evt.upgrade() {
-                                    uiw.stylesheet = StyleSheet::from(libw.get_theme());
-                                    uiw.draw()
+    thread::Builder::new()
+        .name(String::from("TUI LibEvt Receiver"))
+        .spawn(move || {
+            let _egg_evt = egg_evt;
+            loop {
+                match libevt_r.recv() {
+                    Ok(action) => match uiw_libevt.upgrade() {
+                        Some(ui) => match action {
+                            LibEvt::Playback => ui.lock().unwrap().draw(),
+                            LibEvt::Theme => {
+                                if let Ok(mut uiw) = ui.lock() {
+                                    if let Some(libw) = libweak_evt.upgrade() {
+                                        uiw.stylesheet = StyleSheet::from(libw.get_theme());
+                                        uiw.draw()
+                                    }
                                 }
                             }
-                        }
-                        LibEvt::Update => {
-                            let mut uiw = ui.lock().unwrap();
-                            let i = uiw.filterpanes.index();
-                            for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
-                                *uiw.filterpanes.index_mut() = x;
-                                uiw.filterpanes.scroll_by_n(0);
+                            LibEvt::Update => {
+                                let mut uiw = ui.lock().unwrap();
+                                let i = uiw.filterpanes.index();
+                                for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
+                                    *uiw.filterpanes.index_mut() = x;
+                                    uiw.filterpanes.scroll_by_n(0);
+                                }
+                                *uiw.filterpanes.index_mut() = i;
+                                uiw.draw();
                             }
-                            *uiw.filterpanes.index_mut() = i;
-                            uiw.draw();
-                        }
-                        LibEvt::Error(message) => {
-                            let mut uiw = ui.lock().unwrap();
-                            uiw.message("Library Error", &message)
-                        }
+                            LibEvt::Error(message) => {
+                                let mut uiw = ui.lock().unwrap();
+                                uiw.message("Library Error", &message)
+                            }
+                        },
+                        None => break,
                     },
-                    None => break,
-                },
-                Err(_) => break,
+                    Err(_) => break,
+                }
             }
-        }
-    });
+        })
+        .unwrap();
 
     // waits for any thread to drop the egg and die.
     while Arc::strong_count(&egg) == 3 {

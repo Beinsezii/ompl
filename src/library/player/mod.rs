@@ -11,11 +11,13 @@ mod sympal;
 
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::library::Track;
 
 /// Go through available backends and retrieve most optimal Player
-pub fn backend_default(sig: Option<SyncSender<PlayerMessage>>) -> Box<dyn Player> {
+pub fn backend_default(sig: SyncSender<PlayerMessage>) -> Box<dyn Player> {
+    #![allow(unreachable_code)]
 
     #[cfg(feature = "backend-sympal")]
     return Box::new(sympal::Backend::new(sig));
@@ -31,6 +33,10 @@ pub fn backend_default(sig: Option<SyncSender<PlayerMessage>>) -> Box<dyn Player
 pub enum PlayerMessage {
     /// Request a new track
     Request,
+    /// seekable() will now return true
+    Seekable,
+    /// ONE SECOND HAS PASSED
+    Clock,
     /// Other non-fatal error
     Error(String),
 }
@@ -40,7 +46,7 @@ pub trait Player: Send + Sync {
 
     /// Constructs new player with optional sender that fires when
     /// the current playing track ends or playback is otherwise interrupted.
-    fn new(sig: Option<SyncSender<PlayerMessage>>) -> Self
+    fn new(sig: SyncSender<PlayerMessage>) -> Self
     where
         Self: Sized;
 
@@ -53,6 +59,9 @@ pub trait Player: Send + Sync {
     /// Expect to change @ runtime.
     /// None means player as a whole cannot seek.
     fn seekable(&self) -> Option<bool>;
+
+    /// Returns current and total time
+    fn times(&self) -> Option<(Duration, Duration)>;
 
     /// Set player volume. Multiplier, 1.0 == unchanged
     fn volume_set(&self, volume: f32);

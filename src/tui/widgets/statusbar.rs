@@ -59,12 +59,23 @@ impl ContainedWidget for StatusBar {
                     },
                 ),
                 Span::from(format!(
-                    " {} >: | {}",
+                    " {} >: | {}{}",
                     if library.playing() { "::" } else { "/>" },
                     library
                         .track_get()
                         .map(|t| t.tagstring(&self.tagstring))
-                        .unwrap_or("???".to_string())
+                        .unwrap_or("???".to_string()),
+                    // Not sure if I like this at the end yet.
+                    match library.times() {
+                        Some((cur, tot)) => format!(
+                            " | {:02.0}:{:02.0} / {:02.0}:{:02.0}",
+                            (cur.as_secs_f32() / 60.0).floor(),
+                            (cur.as_secs_f32() % 60.0).floor(),
+                            (tot.as_secs_f32() / 60.0).floor(),
+                            (tot.as_secs_f32() % 60.0).floor(),
+                        ),
+                        None => String::new(),
+                    }
                 )),
             ]))
             .style(stylesheet.base),

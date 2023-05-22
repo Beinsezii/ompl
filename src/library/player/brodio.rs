@@ -1,11 +1,12 @@
+use std::fs::File;
+use std::io::BufReader;
+use std::sync::mpsc::sync_channel;
+use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
-
-use std::sync::mpsc::sync_channel;
-use std::sync::mpsc::{Receiver, SyncSender};
 
 use super::{Player, PlayerMessage};
 use crate::{l1, l2, library::Track, log, LOG_LEVEL};
@@ -55,16 +56,17 @@ impl Drop for Backend {
 }
 
 impl Player for Backend {
-    fn new(sig_end: Option<SyncSender<PlayerMessage>>) -> Self {
+    fn new(sig_end: SyncSender<PlayerMessage>) -> Self {
         l2!("Constructing Backend...");
         let now = Instant::now();
 
         let sink = Arc::new(RwLock::new(None));
 
-        if let Some(sig) = sig_end {
-            let thread_sink = sink.clone();
-            thread::spawn(move || track_ender(thread_sink, sig));
-        }
+        let thread_sink = sink.clone();
+        thread::Builder::new()
+            .name(String::from("BRODIO Track Ender"))
+            .spawn(move || track_ender(thread_sink, sig_end))
+            .unwrap();
 
         let player = Self {
             stm_ex_s: RwLock::new(None),
@@ -80,6 +82,9 @@ impl Player for Backend {
     }
 
     fn seekable(&self) -> Option<bool> {
+        None
+    }
+    fn times(&self) -> Option<(Duration, Duration)> {
         None
     }
 
@@ -146,7 +151,10 @@ impl Player for Backend {
         if self.stream_handle.read().unwrap().is_none() || self.stm_ex_s.read().unwrap().is_none() {
             let (han_ch_s, han_ch_r) = sync_channel(1);
             let (stm_ex_s, stm_ex_r) = sync_channel(1);
-            thread::spawn(|| stream(han_ch_s, stm_ex_r));
+            thread::Builder::new()
+                .name(String::from("BRIDIO Audio Stream"))
+                .spawn(|| stream(han_ch_s, stm_ex_r))
+                .unwrap();
             *self.stm_ex_s.write().unwrap() = Some(stm_ex_s);
             *self.stream_handle.write().unwrap() = Some(han_ch_r.recv().unwrap());
         }
@@ -158,7 +166,7 @@ impl Player for Backend {
                 .unwrap()
                 .as_ref()
                 .unwrap()
-                .play_once(track.get_reader())
+                .play_once(BufReader::new(File::open(track.path()).unwrap()))
             {
                 Ok(sink) => {
                     sink.set_volume(*self.volume_retained.read().unwrap() * track.gain());

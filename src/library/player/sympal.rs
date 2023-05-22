@@ -23,7 +23,7 @@ use symphonia::core::{audio::SampleBuffer, io::MediaSourceStream, probe::Hint};
 pub struct Backend {
     track: Mutex<Option<Arc<Track>>>,
     volume: Arc<AtomicU32>,
-    channel: Option<SyncSender<PlayerMessage>>,
+    channel: SyncSender<PlayerMessage>,
     join: Arc<AtomicBool>,
     first: Arc<AtomicBool>,
     last: Arc<AtomicBool>,
@@ -35,7 +35,7 @@ pub struct Backend {
 }
 
 impl Player for Backend {
-    fn new(sig: Option<SyncSender<PlayerMessage>>) -> Self
+    fn new(sig: SyncSender<PlayerMessage>) -> Self
     where
         Self: Sized,
     {
@@ -63,12 +63,6 @@ impl Player for Backend {
     }
     fn play(&self) {
         // {{{
-        let channel = if let Some(channel) = &self.channel {
-            channel.clone()
-        } else {
-            return;
-        };
-
         self.join.store(true, Ordering::Relaxed);
 
         let vol = self.volume.clone();
@@ -104,15 +98,20 @@ impl Player for Backend {
 
         self.join.store(false, Ordering::Relaxed);
 
-        let tj = self.join.clone();
-        let uj = self.join.clone();
+        let join_thread = self.join.clone();
+        let join_data = self.join.clone();
         let pos = self.pos.clone();
         let first = self.first.clone();
         let samples = self.samples.lock().unwrap().clone();
-        let channel_err = channel.clone();
+        let channels = self.channels.load(Ordering::Relaxed) as u32;
+        let rate = self.rate.load(Ordering::Relaxed);
+        let channel_str = self.channel.clone();
+        let channel_err = self.channel.clone();
+        let join_err = self.join.clone();
+        let pos_err = self.pos.clone();
 
         thread::Builder::new()
-            .name(String::from("Audio Stream"))
+            .name(String::from("SYMPAL Audio Stream"))
             .spawn(move || {
                 while !first.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(1))
@@ -123,35 +122,48 @@ impl Player for Backend {
                         move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
                             let amplitude =
                                 gain * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3);
+                            let p = pos.load(Ordering::Relaxed);
+                            let mut n = 0;
                             for sample in data {
-                                // Wonder how necessary these locks are.
-                                // IDK much about atomics but this seems to make sense to ensure
-                                // the same pos isn't loaded twice, right?
-                                let n = pos.load(Ordering::Acquire);
-                                *sample = match samples.read().unwrap().get(n) {
-                                    Some(s) => s.mul_amp(amplitude),
+                                *sample = match samples.read().unwrap().get(n + p) {
+                                    Some(s) => {
+                                        n += 1;
+                                        s.mul_amp(amplitude)
+                                    }
                                     None => {
-                                        if !uj.load(Ordering::Acquire) {
-                                            channel.send(PlayerMessage::Request).unwrap()
+                                        // these acquire/release should make sure
+                                        // no dupe messages right?
+                                        if !join_data.load(Ordering::Acquire) {
+                                            channel_str.send(PlayerMessage::Request).unwrap()
                                         };
-                                        uj.store(true, Ordering::Release);
+                                        join_data.store(true, Ordering::Release);
                                         0
                                     }
                                 };
-                                pos.store(n + 1, Ordering::Release);
                             }
-                            // react to stream events and read or write stream data here.
+                            pos.store(p + n, Ordering::Relaxed);
+                            if (p as f32 / (rate * channels) as f32).floor()
+                                < ((p + n) as f32 / (rate * channels) as f32).floor()
+                            {
+                                channel_str.send(PlayerMessage::Clock).unwrap();
+                            }
                         },
                         move |err| {
+                            // TODO can some of these actually be handled?
+                            join_err.store(true, Ordering::Relaxed);
                             channel_err
-                                .send(PlayerMessage::Error(err.to_string()))
+                                .send(PlayerMessage::Error(format!(
+                                    "SYMPAL Audio Stream Error:\n{}",
+                                    err
+                                )))
                                 .unwrap();
+                            pos_err.store(0, Ordering::Relaxed);
                         },
                         None, // None=blocking, Some(Duration)=timeout
                     )
                     .expect("Could not initialize audio stream");
                 stream.play().unwrap();
-                while !tj.load(Ordering::Relaxed) {
+                while !join_thread.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(1))
                 }
             })
@@ -164,6 +176,8 @@ impl Player for Backend {
         self.pos.store(0, Ordering::Relaxed);
     }
     fn pause(&self) {
+        // wonder if there should be a 1ms sleep here
+        // since that's what the thread checks on?
         self.join.store(true, Ordering::Relaxed);
     }
     fn playing(&self) -> bool {
@@ -174,6 +188,23 @@ impl Player for Backend {
     }
     fn seekable(&self) -> Option<bool> {
         Some(self.last.load(Ordering::Relaxed))
+    }
+    fn times(&self) -> Option<(Duration, Duration)> {
+        match self.last.load(Ordering::Relaxed) {
+            true => Some((
+                Duration::from_secs_f64(
+                    (self.pos.load(Ordering::Relaxed) as f64)
+                        / (self.rate.load(Ordering::Relaxed) as f64)
+                        / (self.channels.load(Ordering::Relaxed) as f64),
+                ),
+                Duration::from_secs_f64(
+                    (self.samples.lock().unwrap().read().unwrap().len() as f64)
+                        / (self.rate.load(Ordering::Relaxed) as f64)
+                        / (self.channels.load(Ordering::Relaxed) as f64),
+                ),
+            )),
+            false => None,
+        }
     }
     fn volume_set(&self, volume: f32) {
         self.volume
@@ -222,17 +253,17 @@ impl Player for Backend {
                     .sample_rate
                     .expect("SYMPAL Decoder has no sample rate");
                 self.rate.store(rate, Ordering::Relaxed);
-                self.channels.store(
-                    decoder
-                        .codec_params()
-                        .channels
-                        .expect("SYMPAL Decoder has no channels")
-                        .count(),
-                    Ordering::Relaxed,
-                );
+                let channels = decoder
+                    .codec_params()
+                    .channels
+                    .expect("SYMPAL Decoder has no channels")
+                    .count();
+                self.channels.store(channels, Ordering::Relaxed);
 
-                *self.samples.lock().unwrap() =
-                    Arc::new(RwLock::new(Vec::with_capacity(rate as usize * 120)));
+                // allocate 2 minutes' worth of initial space
+                *self.samples.lock().unwrap() = Arc::new(RwLock::new(Vec::with_capacity(
+                    rate as usize * 120 * channels,
+                )));
 
                 let (samples, first, last) = (
                     Arc::downgrade(&self.samples.lock().unwrap()),
@@ -240,17 +271,13 @@ impl Player for Backend {
                     self.last.clone(),
                 );
 
-                // Paranoia, making 100% sure any other decode threads drop first.
-                // Probably not necessary.
-                // Felt cute, might remove later.
-                thread::sleep(Duration::from_millis(1));
-
                 self.first.store(false, Ordering::Relaxed);
                 self.last.store(false, Ordering::Relaxed);
                 self.pos.store(0, Ordering::Relaxed);
+                let channel_dec = self.channel.clone();
 
                 thread::Builder::new()
-                    .name(String::from("Decoder"))
+                    .name(String::from("SYMPAL Decoder"))
                     .spawn(move || {
                         while let Ok(packet) = fr.next_packet() {
                             if packet.dur() < 1 {
@@ -273,7 +300,11 @@ impl Player for Backend {
                                 return;
                             }
                         }
-                        last.store(true, Ordering::Relaxed);
+                        if let Some(samples) = samples.upgrade() {
+                            last.store(true, Ordering::Relaxed);
+                            samples.write().unwrap().shrink_to_fit();
+                            channel_dec.send(PlayerMessage::Seekable).unwrap()
+                        }
                     })
                     .unwrap();
             }
