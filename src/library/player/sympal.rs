@@ -137,7 +137,7 @@ impl Player for Backend {
                                             channel_str.send(PlayerMessage::Request).unwrap()
                                         };
                                         join_data.store(true, Ordering::Release);
-                                        0
+                                        i16::EQUILIBRIUM
                                     }
                                 };
                             }
