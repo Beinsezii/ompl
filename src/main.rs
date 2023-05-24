@@ -212,7 +212,7 @@ pub enum PrintCmd {
 pub enum Action {
     Main {
         /// Path to music libary folder
-        library: Option<PathBuf>,
+        library: Vec<PathBuf>,
 
         #[arg(short = 'H', long)]
         /// Include hidden items ( '.' prefix )
@@ -499,7 +499,7 @@ fn instance_main(listener: TcpListener, args: Args) {
     // main.hidden main.volume etc?
     match args.action {
         Action::Main {
-            library: library_path,
+            library: library_paths,
             hidden,
             noshuffle,
             daemon,
@@ -522,11 +522,11 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sorters(sorters);
-            if let Some(path) = library_path {
-                let now = Instant::now();
-                library.append_library(path);
-                l1!(format!("Tracks loaded in {:?}", Instant::now() - now))
+            let now = Instant::now();
+            for path in library_paths {
+                library.append_library(path)
             }
+            l1!(format!("Tracks loaded in {:?}", Instant::now() - now));
 
             let server_library = library.clone();
             let jh = thread::spawn(move || server(listener, server_library));
