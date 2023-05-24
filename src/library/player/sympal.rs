@@ -226,6 +226,15 @@ impl Player for Backend {
             false => None,
         }
     }
+    fn seek(&self, time: Duration) {
+        self.pos.store(
+            (time.as_secs_f32()
+                * self.rate.load(Ordering::Relaxed) as f32
+                * self.channels.load(Ordering::Relaxed) as f32) as usize,
+            Ordering::Release,
+        );
+        self.channel.send(PlayerMessage::Clock).unwrap();
+    }
     fn volume_set(&self, volume: f32) {
         self.volume
             .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed)

@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 // I figured out this cool name for symphonia-cpal 'sympal' and was like "wow thats way cooler than
 // something like 'backend-symphonia.rs' so I just went with it only to later realize that if I
 // have both a local module and a dependancy called 'rodio' its confusing as fuck so naturally I
@@ -62,6 +64,8 @@ pub trait Player: Send + Sync {
 
     /// Returns current and total time
     fn times(&self) -> Option<(Duration, Duration)>;
+
+    fn seek(&self, time: Duration);
 
     /// Set player volume. Multiplier, 1.0 == unchanged
     fn volume_set(&self, volume: f32);

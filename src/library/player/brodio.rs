@@ -87,6 +87,7 @@ impl Player for Backend {
     fn times(&self) -> Option<(Duration, Duration)> {
         None
     }
+    fn seek(&self, _time: Duration) {}
 
     fn types(&self) -> Vec<String> {
         vec![

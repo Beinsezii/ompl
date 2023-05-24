@@ -310,6 +310,10 @@ impl Library {
         self.player.times()
     }
 
+    pub fn seek(&self, time: Duration) {
+        self.player.seek(time)
+    }
+
     // ## Player Forwards ## }}}
 
     // ## Other Settings ## {{{

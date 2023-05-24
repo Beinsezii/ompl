@@ -8,7 +8,7 @@ use std::sync::{
     Arc,
 };
 use std::thread;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 #[cfg(feature = "media-controls")]
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
@@ -119,6 +119,14 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
 // Weird macro lifetime bullshit. Could either spend a few hours researching or just do this
 fn parse_color(s: &str) -> Result<Color, String> {
     Color::try_from(s)
+}
+
+fn parse_time(s: &str) -> Result<Duration,  String> {
+    let string = s.trim().to_ascii_lowercase();
+    if let Ok(float) = string.parse::<f32>() {
+        return Ok(Duration::from_secs_f32(float))
+    }
+    Err(String::from("TODO: rest of parsing"))
 }
 
 // ### PARSERS ### }}}
@@ -264,6 +272,10 @@ pub enum Action {
     PlayPause,
     Next,
     Previous,
+    Seek {
+        #[arg(value_parser=parse_time)]
+        time: Duration
+    },
     Exit,
     #[command(subcommand)]
     Volume(VolumeCmd),
@@ -347,6 +359,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::Play => library.play(),
                             Action::PlayPause => library.play_pause(),
                             Action::Stop => library.stop(),
+                            Action::Seek { time } => library.seek(time),
                             Action::Volume(vol_cmd) => match vol_cmd {
                                 VolumeCmd::Get => {
                                     response = format!("{:.2}", library.volume_get());
