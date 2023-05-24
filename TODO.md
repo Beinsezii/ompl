@@ -12,8 +12,8 @@
     * also variants, methods, and fields all need sorting and clustering beyond just whim
 
 ### LIBRARY
-* Rodio isn't updated to 0.17 cause it had some issues when tracks would end.
-    * Explore Symphonia + cpal custom backend
+* I'm just gonna copy the ID3 human names for frames from ffmpeg or vlc or something
+* Needs a way to not loop
 
 ## Long-term aka unhinged ramblings
 
@@ -25,7 +25,3 @@
         * This will be a pain in the ASS to type. maybe it could capture the whole screen like message(), and show a list of folders auto-completion style below..? Or I could write a whole ass directory browser. Or ignore it and just rely on input-bar's copy-paste.
 * Display album art? I know certain terminals can, but checking compatibility and finding a library to do it nicely is gonna be pain.
 * a bargraph visualizer would be dope. idk how it'd read the samples for that.
-
-### LIBRARY
-* Should really be able to seek. Possible gStreamer alternate backend?
-* Pausing should drop the sound device. This might actually be possible with Rodio if I can somehow 'save' the decoded samples and re-use them.
