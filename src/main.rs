@@ -10,6 +10,8 @@ use std::sync::{
 use std::thread;
 use std::time::{Instant, Duration};
 
+use regex::Regex;
+
 #[cfg(feature = "media-controls")]
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
@@ -123,10 +125,27 @@ fn parse_color(s: &str) -> Result<Color, String> {
 
 fn parse_time(s: &str) -> Result<Duration,  String> {
     let string = s.trim().to_ascii_lowercase();
+    // seconds in decimal.
     if let Ok(float) = string.parse::<f32>() {
         return Ok(Duration::from_secs_f32(float))
     }
-    Err(String::from("TODO: rest of parsing"))
+    // hh:mm:ss.ddd format. hh:mm optional.
+    if let Some(captures) = Regex::new(r"^(?:(\d\d):)?(?:(\d\d):)?(\d\d(?:\.\d+)?)$").unwrap().captures(&string) {
+        // secs
+        let mut result = Duration::from_secs_f32(captures[3].parse::<f32>().unwrap());
+        let mut hm = 1;
+        // mins
+        if let Some(m) = captures.get(2) {
+            result += Duration::from_secs(m.as_str().parse::<u64>().unwrap() * 60);
+            hm = 60
+        }
+        // hours
+        if let Some(m) = captures.get(1) {
+            result += Duration::from_secs(m.as_str().parse::<u64>().unwrap() * 60 * hm);
+        }
+        return Ok(result)
+    }
+    Err(format!("Could not parse {} as time signature", string))
 }
 
 // ### PARSERS ### }}}
