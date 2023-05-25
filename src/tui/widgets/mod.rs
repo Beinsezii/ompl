@@ -8,6 +8,8 @@ mod filtertreeview;
 pub use filtertreeview::FilterTreeView;
 mod queuetable;
 pub use queuetable::QueueTable;
+mod seeker;
+pub use seeker::Seeker;
 
 use tui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},

@@ -65,7 +65,11 @@ pub trait Player: Send + Sync {
     /// Returns current and total time
     fn times(&self) -> Option<(Duration, Duration)>;
 
+    /// Seek to specified time
     fn seek(&self, time: Duration);
+
+    /// Sample whole buffer to generate a waveform
+    fn waveform(&self, count: usize) -> Option<Vec<f32>>;
 
     /// Set player volume. Multiplier, 1.0 == unchanged
     fn volume_set(&self, volume: f32);

@@ -314,6 +314,10 @@ impl Library {
         self.player.seek(time)
     }
 
+    pub fn waveform(&self, count: usize) -> Option<Vec<f32>> {
+        self.player.waveform(count)
+    }
+
     // ## Player Forwards ## }}}
 
     // ## Other Settings ## {{{

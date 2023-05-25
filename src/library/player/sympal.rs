@@ -237,6 +237,41 @@ impl Player for Backend {
             self.channel.send(PlayerMessage::Clock).unwrap();
         }
     }
+    fn waveform(&self, count: usize) -> Option<Vec<f32>> {
+        if self.last.load(Ordering::Relaxed) {
+            let samples = self.samples.lock().unwrap().clone();
+            let read = samples.read().unwrap();
+
+            // Interleaved channels + rate over 20KHz for 'resolution' right?
+            let res_base = self.channels.load(Ordering::Relaxed)
+                * (self.rate.load(Ordering::Relaxed) as usize / 20_000);
+            // Cap sample amount @ 256 total. Causes timeH with Reptile to be about 1/2 of timeP
+            // Seems appropriate.
+            let res_adapt = (read.len() / res_base / count).min(256);
+
+            let mut result = Vec::with_capacity(count);
+            for chunk in read.chunks_exact(read.len() / count) {
+                if chunk.len() >= res_base * res_adapt {
+                    let padding = (chunk.len() - res_base * res_adapt) / 2;
+                    result.push(
+                        chunk[padding..res_base * res_adapt + padding]
+                            .iter()
+                            .map(|n| n.abs() as f32 / i16::MAX as f32)
+                            .sum::<f32>()
+                            / res_adapt as f32,
+                        // maybe this should be base & adapt?
+                        // Imma be real, I don't know what I'm doing but it seems to work okay-ish
+                        // Maybe it should just hardcode @ 256 then half until
+                        // chunk size is small enough
+                        // TODO test this on a track that sweeps 0.0 -> 1.0
+                    )
+                }
+            }
+            Some(result)
+        } else {
+            None
+        }
+    }
     fn volume_set(&self, volume: f32) {
         self.volume
             .store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed)

@@ -28,7 +28,7 @@ mod stylesheet;
 use stylesheet::StyleSheet;
 mod widgets;
 use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
-use widgets::{FilterTreeView, MTree, MenuBar, QueueTable, StatusBar};
+use widgets::{FilterTreeView, MTree, MenuBar, QueueTable, Seeker, StatusBar};
 
 // ### FNs ### {{{
 
@@ -139,6 +139,7 @@ struct UI<T: Backend> {
     lib_weak: Weak<Library>,
     menubar: MenuBar<Action>,
     status_bar: StatusBar,
+    seeker: Seeker,
     filterpanes: FilterTreeView,
     sortpanes: QueueTable,
     stylesheet: StyleSheet,
@@ -193,6 +194,7 @@ impl<T: Backend> UI<T> {
             lib_weak: Arc::downgrade(&library),
             menubar: MenuBar::new(tree),
             status_bar: StatusBar::new(&library, "title"),
+            seeker: Seeker::new(&library),
             filterpanes: FilterTreeView::new(library.clone()),
             sortpanes: QueueTable::new(library.clone()),
             stylesheet,
@@ -382,13 +384,10 @@ impl<T: Backend> UI<T> {
                     .constraints(vec![
                         Constraint::Length(1),
                         Constraint::Length(1),
+                        Constraint::Length(if let Some(_) = library.seekable() {2} else {0}),
                         Constraint::Length(if self.debug { 1 } else { 0 }),
-                        Constraint::Length(if library.filter_count() == 0 {
-                            0
-                        } else {
-                            size.height
-                                .saturating_sub(2 + if self.debug { 1 } else { 1 })
-                                / 2
+                        Constraint::Length(if library.filter_count() == 0 {0} else {
+                            size.height.saturating_sub(2 + if self.debug { 1 } else { 1 }) / 2
                         }),
                         Constraint::Min(1),
                     ])
@@ -400,15 +399,20 @@ impl<T: Backend> UI<T> {
                 self.menubar.area = zones[1];
                 self.menubar.draw(f, self.stylesheet);
 
+                if let Some(_) = library.seekable() {
+                    self.seeker.area = zones[2];
+                    self.seeker.draw(f, self.stylesheet)
+                }
+
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                *self.filterpanes.area_mut() = zones[3];
+                *self.filterpanes.area_mut() = zones[4];
                 self.filterpanes.draw(f, self.stylesheet);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                *self.sortpanes.area_mut() = zones[4];
+                *self.sortpanes.area_mut() = zones[5];
                 self.sortpanes.draw(f, self.stylesheet);
                 let time_queue2 = Instant::now();
 
@@ -422,7 +426,7 @@ impl<T: Backend> UI<T> {
                             (time_queue2 - time_queue).as_secs_f64() * 1000.0,
                         ))
                         .style(self.stylesheet.base),
-                        zones[2],
+                        zones[3],
                     );
                 }
 
@@ -907,6 +911,7 @@ impl<T: Backend> UI<T> {
                 let actions = &[
                     self.status_bar.process_event(event),
                     self.menubar.process_event(event),
+                    self.seeker.process_event(event),
                     self.filterpanes.process_event(event),
                     self.sortpanes.process_event(event),
                 ];
