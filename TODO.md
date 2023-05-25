@@ -7,6 +7,7 @@
     * Maybe instead of a custom draw_inject() fn, UI could keep a list of extra layers that each have their own drawing and event processing fns that are run in the main loops. Then input/message simply add a layer top. Might need an additional identifier of some kind if you wish to avoid 75 of the same popup but right now there's nothing that could cause that so idk how worthwhile that would be..
 
 ### MAIN
+* CLAP groups?
 * Logging overhaul. 3rd-party crate?
 * When the codesplosions are done, every project file needs #![warn(missing_docs)]
     * also variants, methods, and fields all need sorting and clustering beyond just whim
@@ -24,4 +25,4 @@
         * If launched without a .json present, should ideally prompt for a library path. orrrrr maybe it could just default to ~/Music....
         * This will be a pain in the ASS to type. maybe it could capture the whole screen like message(), and show a list of folders auto-completion style below..? Or I could write a whole ass directory browser. Or ignore it and just rely on input-bar's copy-paste.
 * Display album art? I know certain terminals can, but checking compatibility and finding a library to do it nicely is gonna be pain.
-* a bargraph visualizer would be dope. idk how it'd read the samples for that.
+* a bargraph visualizer would be dope. Where would I even put that...
