@@ -88,7 +88,7 @@ impl Player for Backend {
         None
     }
     fn seek(&self, _time: Duration) {}
-    fn waveform(&self, _count: usize) {None}
+    fn waveform(&self, _count: usize) -> Option<Vec<f32>> {None}
 
     fn types(&self) -> Vec<String> {
         vec![
