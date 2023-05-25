@@ -132,15 +132,20 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
 
 impl<T: Clone> Clickable for MenuBar<T> {
     fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
+        let mut result = super::Action::None;
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
             if self
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
                 match event.column + if !self.nav.is_empty() { 0 } else { 7 } {
-                    1..=4 => self.up(),
+                    1..=4 => {
+                        self.up();
+                        result = super::Action::Draw
+                    }
                     x => {
                         if let Some(tree) = self.nav_to_tree() {
+                            result = super::Action::Draw;
                             // " 0.<- | " == 7
                             let mut base = 8;
                             for (num, (string, _)) in tree.iter().enumerate() {
@@ -161,6 +166,6 @@ impl<T: Clone> Clickable for MenuBar<T> {
                 }
             }
         }
-        super::Action::None
+        result
     }
 }

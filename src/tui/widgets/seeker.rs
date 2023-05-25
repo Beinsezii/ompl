@@ -14,6 +14,7 @@ use tui::{
 
 pub struct Seeker {
     lib_weak: Weak<Library>,
+    previous: u16,
     pub area: Rect,
 }
 
@@ -21,6 +22,7 @@ impl Seeker {
     pub fn new(library: &Arc<Library>) -> Self {
         Self {
             lib_weak: Arc::downgrade(library),
+            previous: u16::MAX,
             area: Rect::default(),
         }
     }
@@ -92,15 +94,23 @@ impl Clickable for Seeker {
                     .intersects(Rect::new(event.column, event.row, 1, 1))
                 {
                     match event.kind {
-                        MouseEventKind::Down(MouseButton::Left)
-                        | MouseEventKind::Drag(MouseButton::Left) => {
+                        MouseEventKind::Down(MouseButton::Left) => {
                             library.seek(Duration::from_secs_f32(
                                 (event.column as f32 / self.area.width as f32)
                                     * times.1.as_secs_f32(),
                             ))
                         }
+                        MouseEventKind::Drag(MouseButton::Left) => {
+                            if event.column != self.previous {
+                                library.seek(Duration::from_secs_f32(
+                                    (event.column as f32 / self.area.width as f32)
+                                        * times.1.as_secs_f32(),
+                                ))
+                            }
+                        }
                         _ => (),
                     }
+                    self.previous = event.column
                 }
             }
         }

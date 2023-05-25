@@ -924,7 +924,6 @@ impl<T: Backend> UI<T> {
                         true => *self.sortpanes.active_mut() = true,
                         false => *self.filterpanes.active_mut() = true,
                     }
-                    self.draw()
                 }
 
                 // handle draws later
