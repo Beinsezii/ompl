@@ -11,7 +11,7 @@ mkdir ./bin 2>/dev/null
 
 if [ -f "$LINUX" ]; then
     cp "$LINUX" "./bin/${BIN}"
-    cargo build --release $FEATURES --target x86_64-pc-windows-gnu
+    cargo build --release --no-default-features --features=media-controls,tui,clipboard,backend-rodio --target x86_64-pc-windows-gnu
     cp "./target/x86_64-pc-windows-gnu/release/${BIN}.exe" "./bin/${BIN}.exe"
 fi
 
