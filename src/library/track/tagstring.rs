@@ -102,7 +102,7 @@ pub fn parse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+mod tagstring_tests {
     use super::parse;
     use super::Tags;
     fn tags() -> Tags {
