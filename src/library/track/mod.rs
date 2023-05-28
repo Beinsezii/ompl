@@ -16,46 +16,167 @@ pub type Tags = HashMap<String, String>;
 pub mod tagstring;
 
 // ## ID3 TAGS ## {{{
+// TODO eventually cross-reference with non-free stuff?
+// Might be overkill...
+//
+// Foobar2000:
+// https://wiki.hydrogenaud.io/index.php?title=Foobar2000:ID3_Tag_Mapping
+// Why even keep the source closed? It's been freeware since forever.
+//
+// Mp3Tag:
+// https://docs.mp3tag.de/mapping-table/
+
+/// Actually official reference. No human names?
 /// https://id3.org/id3v2.3.0#Declared_ID3v2_frames
+/// Also site has been down for a few months...
+///
+/// What other apps do for human names in order of personal preference:
+///
+/// FFmpeg:
+/// https://git.ffmpeg.org/gitweb/ffmpeg.git/blob/HEAD:/libavformat/id3v2.c
+///
+/// puddletag:
+/// https://docs.puddletag.net/source/id3.html
+///
+/// QuodLibet/ExFalso:
+/// https://github.com/quodlibet/quodlibet/blob/main/quodlibet/formats/_id3.py
+/// "ID3 is absolutely the worst thing ever." - lol
 const ID3_TAGS: &[(&'static str, &'static str)] = &[
+    //
+    //
+    // Seen in all 3
+    //
+    //
     ("talb", "album"),
-    ("tbpm", "bpm"),
     ("tcom", "composer"),
     ("tcon", "genre"),
     ("tcop", "copyright"),
-    ("tdat", "date"),
-    ("tdly", "delay"),
-    ("tenc", "encoder"),
-    ("text", "lyricist"),
-    ("tflt", "filetype"),
-    ("time", "time"),
+    ("tenc", "encodedby"),
     ("tit1", "grouping"),
     ("tit2", "title"),
-    ("tit3", "subtitle"),
-    ("tkey", "key"),
     ("tlan", "language"),
-    ("tlen", "length"),
-    ("tmed", "mediatype"),
-    ("toal", "originalalbum"),
-    ("tofn", "originalfilename"),
-    ("toly", "originallyricist"),
-    ("tope", "originalartist"),
-    ("tory", "originalyear"),
-    ("town", "owner"),
     ("tpe1", "artist"),
-    ("tpe2", "accompaniment"),
+    //
+    // itunescompilationflag in puddletag compilation elsewhere
+    ("tcmp", "compilation"),
+    //
+    // year in puddletag date elsewhere.
+    // Fuck both of them, TDAT exists, this is
+    // record date now
+    ("tdrc", "recorddate"),
+    //
+    // performer in quodlibet albumartist elsewhere
+    ("tpe2", "albumartist"),
+    //
+    // performer in ffmpeg conductor elsewhere
     ("tpe3", "performer"),
-    ("tpe4", "mixer"),
-    ("tpos", "set"),
+    //
+    // disc in ffmpeg discnumber elsewhere
+    ("tpos", "disc"),
+    //
+    // publisher in ffmpeg orginization elsewhere
     ("tpub", "publisher"),
+    //
+    // tracknumber in quodlibet track elsewhere
     ("trck", "track"),
-    ("trda", "recordingdate"),
-    ("trsn", "station"),
-    ("trso", "stationowner"),
-    ("tsiz", "size"),
+    //
+    // albumsortorder in puddletag albumsort elsewhere
+    ("tsoa", "albumsort"),
+    //
+    // performersortoder in puddletag artistsort elsewhere
+    ("tsop", "artistsort"),
+    //
+    // titlesortorder in puddletag titlesort elsewhere
+    ("tsot", "titlesort"),
+    //
+    // unsyncedlyrics in puddletag lyrics elsewhere
+    ("uslt", "lyrics"),
+    //
+    // FFmpeg and PuddleTag
+    //
+    ("tsse", "encodingsettings"),
+    //
+    // creationtime in ffmpeg encodingtime in puddletag
+    ("tden", "creationtime"),
+    //
+    // date in ffmpeg releasetime in puddletag
+    // using releasedate for consistency with tdrc &&
+    // avoiding TDAT 3 electric boogaloo
+    ("tdrl", "releasedate"),
+    //
+    //
+    // QuodLibet and Puddleteg
+    //
+    //
+    ("tbpm", "bpm"),
+    ("text", "lyricist"),
+    ("tit3", "version"),
+    ("tkey", "initialkey"),
+    ("tmoo", "mood"),
+    ("toal", "originalalbum"),
+    ("toly", "author"),
+    ("tope", "originalartist"),
+    ("tpe4", "arranger"),
     ("tsrc", "isrc"),
-    ("tsee", "equipment"),
+    //
+    // discsubtitle in quodlibet setsubtitle in puddletag
+    ("tsst", "setsubtitle"),
+    //
+    // originaldate in quodlibet originalreleasetime in puddletag
+    ("tdor", "originaldate"),
+    //
+    // website in quodlibet wwwartist in puddletag
+    ("woar", "website"),
+    //
+    // albumartistsort in quodlibet itunesalbumsortorder in puddletag
+    ("tso2", "albumartistsort"),
+    //
+    // composersort in quodlibet itunescomposersortorder in puddletag
+    ("tsoc", "composersort"),
+    //
+    // media in quodlibet mediatype in puddletag
+    ("tmed", "media"),
+    //
+    //
+    // Only PuddleTag
+    //
+    //
+    ("pcnt", "playcount"),
+    ("popm", "popularimeter"),
+    ("rva2", "rgain"), // apparently its for replaygain???
+    ("tdat", "date"),
+    ("tdly", "audiodelay"),
+    ("tdtg", "taggingtime"),
+    ("tflt", "filetype"),
+    ("time", "time"),
+    ("tipl", "involvedpeople"),
+    ("tlen", "audiolength"),
+    ("tmcl", "musiciancredits"),
+    ("tofn", "filename"),
+    ("tory", "originalyear"),
+    ("town", "fileowner"),
+    ("tpro", "producednotice"),
+    ("trda", "recordingdates"),
+    ("trsn", "radiostationname"),
+    ("trso", "radioowner"),
+    ("tsiz", "audiosize"),
     ("tyer", "year"),
+    // the following normally have www in front which looks gross.
+    // changing to site at end instead
+    // have these been used for anything ever?
+    ("wcom", "commercialinfosite"),
+    ("wcop", "copyrightsite"),
+    ("woaf", "fileinfosite"),
+    ("woas", "sourcesite"),
+    ("wors", "radiosite"),
+    ("wpay", "paymentsite"),
+    ("wpub", "publishersite"),
+    //
+    //
+    // Not in any sourcej
+    //
+    //
+    ("tsee", "equipment"),
 ];
 // ## ID3 TAGS ## }}}
 
@@ -436,5 +557,87 @@ impl std::fmt::Display for Track {
         }
 
         f.write_str(&buff)
+    }
+}
+
+#[cfg(test)]
+mod id3tests {
+    use super::ID3_TAGS;
+
+    fn tovecs() -> (Vec<&'static str>, Vec<&'static str>) {
+        let mut frames = Vec::new();
+        let mut names = Vec::new();
+        for (frame, name) in ID3_TAGS.into_iter() {
+            frames.push(*frame);
+            names.push(*name)
+        }
+
+        (frames, names)
+    }
+
+    #[test]
+    /// No duplicates of anything
+    fn duplicates() {
+        let (mut frames, mut names) = tovecs();
+
+        frames.sort();
+        names.sort();
+
+        let mut framesdedup = frames.clone();
+        let mut namesdedup = names.clone();
+
+        framesdedup.dedup();
+        namesdedup.dedup();
+
+        assert_eq!(
+            frames.len(),
+            framesdedup.len(),
+            "{}",
+            frames
+                .iter()
+                .zip(framesdedup.iter())
+                .map(|(a, b)| format!("{} | {}", a, b))
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+        assert_eq!(
+            names.len(),
+            namesdedup.len(),
+            "{}",
+            names
+                .iter()
+                .zip(namesdedup.iter())
+                .map(|(a, b)| format!("{} | {}", a, b))
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
+    }
+
+    #[test]
+    /// Makes sure they're all lowercase for matching
+    fn is_lowercase() {
+        for (frame, name) in ID3_TAGS {
+            assert_eq!(frame, &frame.to_lowercase());
+            assert_eq!(name, &name.to_lowercase());
+        }
+    }
+
+    #[test]
+    /// Make sure all ID3 frames are covered.
+    fn exists() {
+        // Outdated and incomplete, as id3.org is down
+        // so I only have the V2.3 frames from an old OMPL version
+        const DECLARED_FRAMES: &[&'static str] = &[
+            "talb", "tbpm", "tcom", "tcon", "tcop", "tdat", "tdly", "tenc", "text", "tflt", "time",
+            "tit1", "tit2", "tit3", "tkey", "tlan", "tlen", "tmed", "toal", "tofn", "toly", "tope",
+            "tory", "town", "tpe1", "tpe2", "tpe3", "tpe4", "tpos", "tpub", "trck", "trda", "trsn",
+            "trso", "tsiz", "tsrc", "tsee", "tyer",
+        ];
+
+        let (frames, _names) = tovecs();
+
+        for frame in DECLARED_FRAMES {
+            assert!(frames.contains(frame), "FRAME: {}", frame)
+        }
     }
 }
