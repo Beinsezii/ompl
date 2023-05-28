@@ -81,6 +81,8 @@ impl Player for Backend {
         result.dedup();
         result
     }
+    // TODO if this is called twice in a row it can fail to join the 1st stream
+    // Reproduce with `ompl play; ompl play`
     fn play(&self) {
         // {{{
         self.join.store(true, Ordering::Relaxed);

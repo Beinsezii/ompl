@@ -408,7 +408,6 @@ impl Library {
         } else {
             self.play_track(self.get_sequential(true))
         }
-        self.play();
     }
 
     // ## Track Controls ## }}}
