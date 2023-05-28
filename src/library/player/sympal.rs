@@ -81,10 +81,17 @@ impl Player for Backend {
         result.dedup();
         result
     }
-    // TODO if this is called twice in a row it can fail to join the 1st stream
-    // Reproduce with `ompl play; ompl play`
     fn play(&self) {
         // {{{
+
+        // if already playing then just set pos to 0
+        // so far no negative side-effects
+        // prevents duplicate streams caused by join store/load by returning
+        if !self.join.load(Ordering::Relaxed) {
+            self.pos.store(0, Ordering::Relaxed);
+            return;
+        }
+
         self.join.store(true, Ordering::Relaxed);
 
         let vol = self.volume.clone();
