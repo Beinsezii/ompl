@@ -134,6 +134,7 @@ impl Player for Backend {
         let join_data = self.join.clone();
         let pos = self.pos.clone();
         let first = self.first.clone();
+        let last = self.last.clone();
         let samples = self.samples.lock().unwrap().clone();
         let channels = self.channels.load(Ordering::Relaxed) as u32;
         let rate = self.rate.load(Ordering::Relaxed);
@@ -176,6 +177,7 @@ impl Player for Backend {
                             pos.store(p + n, Ordering::Relaxed);
                             if (p as f32 / (rate * channels) as f32).floor()
                                 < ((p + n) as f32 / (rate * channels) as f32).floor()
+                                && last.load(Ordering::Relaxed)
                             {
                                 channel_str.send(PlayerMessage::Clock).unwrap();
                             }

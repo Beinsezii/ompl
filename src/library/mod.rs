@@ -140,15 +140,9 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                 Ok(msg) => match msg {
                     PlayerMessage::Request => library.next(),
 
-                    PlayerMessage::Seekable => {
+                    PlayerMessage::Seekable | PlayerMessage::Clock => {
                         library.bus.lock().unwrap().broadcast(LibEvt::Playback)
                     }
-                    PlayerMessage::Clock => {
-                        if library.seekable() == Some(true) {
-                            library.bus.lock().unwrap().broadcast(LibEvt::Playback)
-                        }
-                    }
-
                     PlayerMessage::Error(e) => {
                         library.bus.lock().unwrap().broadcast(LibEvt::Error(e))
                     }
