@@ -84,6 +84,9 @@ impl Player for Backend {
     fn play(&self) {
         // {{{
 
+        if self.track_get().is_none() {
+            return;
+        }
         // if already playing then just set pos to 0
         // so far no negative side-effects
         // prevents duplicate streams caused by join store/load by returning
@@ -382,6 +385,10 @@ impl Player for Backend {
                         }
                     })
                     .unwrap();
+            } else {
+                self.first.store(false, Ordering::Relaxed);
+                self.last.store(false, Ordering::Relaxed);
+                self.pos.store(0, Ordering::Relaxed);
             }
         }
         track
