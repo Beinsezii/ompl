@@ -32,7 +32,7 @@ Compiled binaries are provided on the [releases tab](https://github.com/Beinsezi
 
 If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
 
-`cargo install --release --git https://github.com/Beinsezii/ompl.git --tag 0.7.0`
+`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.7.0`
 
 You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
 
