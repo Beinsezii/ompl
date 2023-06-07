@@ -1,4 +1,4 @@
-use super::{Clickable, ContainedWidget};
+use super::{Action, Clickable, ContainedWidget};
 use crate::library::Library;
 
 use std::sync::{Arc, Weak};
@@ -13,15 +13,13 @@ use tui::{
 #[derive(Clone)]
 pub struct StatusBar {
     lib_weak: Weak<Library>,
-    pub tagstring: String,
     pub area: Rect,
 }
 
 impl StatusBar {
-    pub fn new<T: Into<String>>(library: &Arc<Library>, tagstring: T) -> Self {
+    pub fn new(library: &Arc<Library>) -> Self {
         Self {
             lib_weak: Arc::downgrade(library),
-            tagstring: tagstring.into(),
             area: Rect::default(),
         }
     }
@@ -71,7 +69,7 @@ impl ContainedWidget for StatusBar {
                     if library.playing() { "::" } else { "/>" },
                     library
                         .track_get()
-                        .map(|t| t.tagstring(&self.tagstring))
+                        .map(|t| t.tagstring(library.statusline_get()))
                         .unwrap_or("???".to_string()),
                     // Not sure if I like this at the end yet.
                     match library.times() {
@@ -99,22 +97,33 @@ impl Clickable for StatusBar {
             None => return super::Action::None,
         };
 
-        if event.kind == MouseEventKind::Down(MouseButton::Left) {
+        if let MouseEventKind::Down(button) = event.kind {
             if self
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
-                // 123456789 123456789 1234567890
-                // -- 0.12 ++ | (1) >< :< # /> >: |
-                match event.column {
-                    1..=2 => library.volume_add(-0.05),
-                    9..=10 => library.volume_add(0.05),
-                    14..=16 => library.repeat_toggle(),
-                    18..=19 => library.shuffle_toggle(),
-                    21..=22 => library.previous(),
-                    24..=24 => library.stop(),
-                    26..=27 => library.play_pause(),
-                    29..=30 => library.next(),
+                // 123456789 123456789 123456789 1234
+                // -- 0.12 ++ | (1) >< :< # /> >: | {..}
+                match button {
+                    MouseButton::Left => match event.column {
+                        1..=2 => library.volume_add(-0.05),
+                        9..=10 => library.volume_add(0.05),
+                        14..=16 => library.repeat_toggle(),
+                        18..=19 => library.shuffle_toggle(),
+                        21..=22 => library.previous(),
+                        24..=24 => library.stop(),
+                        26..=27 => library.play_pause(),
+                        29..=30 => library.next(),
+                        _ => (),
+                    },
+                    MouseButton::Right => {
+                        if event.column >= 34
+                            && usize::from(event.column)
+                                < 34 + library.statusline_get_format().len()
+                        {
+                            return Action::Statusline;
+                        }
+                    }
                     _ => (),
                 }
             }
@@ -139,6 +148,6 @@ impl Clickable for StatusBar {
                 }
             }
         }
-        super::Action::None
+        Action::None
     }
 }

@@ -192,8 +192,9 @@ pub struct Library {
     sorters: RwLock<Vec<String>>,
     bus: Mutex<Bus<LibEvt>>,
     shuffle: AtomicBool,
-    repeat: Mutex<Option<bool>>,
+    repeat: RwLock<Option<bool>>,
     hidden: AtomicBool,
+    statusline: RwLock<String>,
     theme: RwLock<Theme>,
 }
 
@@ -213,8 +214,9 @@ impl Library {
             sorters: RwLock::new(Vec::new()),
             bus,
             shuffle: AtomicBool::new(true),
-            repeat: Mutex::new(Some(true)),
+            repeat: RwLock::new(Some(true)),
             hidden: AtomicBool::new(false),
+            statusline: RwLock::new(String::from("title")),
             theme: RwLock::new(Theme {
                 fg: Color::None,
                 bg: Color::None,
@@ -347,20 +349,20 @@ impl Library {
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_get(&self) -> Option<bool> {
-        *self.repeat.lock().unwrap()
+        *self.repeat.read().unwrap()
     }
 
     /// None - No loop
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_set(&self, repeat: Option<bool>) {
-        *self.repeat.lock().unwrap() = repeat;
+        *self.repeat.write().unwrap() = repeat;
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
     /// Advances None -> Some(false) -> Some(true)
     pub fn repeat_toggle(&self) {
-        let mut guard = self.repeat.lock().unwrap();
+        let mut guard = self.repeat.write().unwrap();
         *guard = match *guard {
             None => Some(false),
             Some(false) => Some(true),
@@ -377,11 +379,26 @@ impl Library {
         self.hidden.store(include_hidden, Ordering::Relaxed)
     }
 
-    pub fn get_theme(&self) -> Theme {
+    pub fn statusline_get(&self) -> String {
+        self.statusline.read().unwrap().to_string()
+    }
+
+    pub fn statusline_set<T: ToString>(&self, statusline: T) {
+        *self.statusline.write().unwrap() = statusline.to_string();
+        self.bus.lock().unwrap().broadcast(LibEvt::Theme);
+    }
+
+    /// Parses tagstring from playing track and statusline
+    pub fn statusline_get_format(&self) -> String {
+        self.track_get()
+            .map_or(String::from(""), |t| t.tagstring(self.statusline_get()))
+    }
+
+    pub fn theme_get(&self) -> Theme {
         *self.theme.read().unwrap()
     }
 
-    pub fn set_theme(&self, theme: Theme) {
+    pub fn theme_set(&self, theme: Theme) {
         *self.theme.write().unwrap() = theme;
         self.bus.lock().unwrap().broadcast(LibEvt::Theme);
     }

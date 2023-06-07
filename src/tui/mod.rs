@@ -120,6 +120,7 @@ pub enum Action {
     None,
 
     // Library
+    Statusline,
     ACC,
     FG,
     BG,
@@ -182,6 +183,7 @@ impl<T: Backend> UI<T> {
             (
             String::from("UI"),
             MTree::Tree(vec![
+                (String::from("Statusline"), MTree::Action(Action::Statusline)),
                 (String::from("Foreground"), MTree::Action(Action::FG)),
                 (String::from("Background"), MTree::Action(Action::BG)),
                 (String::from("Accent"), MTree::Action(Action::ACC)),
@@ -194,7 +196,7 @@ impl<T: Backend> UI<T> {
         Self {
             lib_weak: Arc::downgrade(&library),
             menubar: MenuBar::new(tree),
-            status_bar: StatusBar::new(&library, "title"),
+            status_bar: StatusBar::new(&library),
             seeker: Seeker::new(&library),
             filterpanes: FilterTreeView::new(library.clone()),
             sortpanes: QueueTable::new(library.clone()),
@@ -598,7 +600,7 @@ impl<T: Backend> UI<T> {
         if submit {
             result
         } else {
-            String::new()
+            String::from(prefill)
         }
     }
 
@@ -617,20 +619,29 @@ impl<T: Backend> UI<T> {
             Action::None => (),
 
             // Library
+            Action::Statusline => {
+                if let Some(library) = self.lib_weak.upgrade() {
+                    library.statusline_set(self.input(
+                        "Statusline",
+                        &library.statusline_get(),
+                        true,
+                    ))
+                }
+            }
             Action::ACC | Action::FG | Action::BG => {
                 if let Some(library) = self.lib_weak.upgrade() {
                     let text = self.input("Hex #, terminal number/name, or none", "", true);
                     if !text.is_empty() {
                         match Color::try_from(text) {
                             Ok(color) => {
-                                let mut theme = library.get_theme();
+                                let mut theme = library.theme_get();
                                 match action {
                                     Action::ACC => theme.acc = color,
                                     Action::FG => theme.fg = color,
                                     Action::BG => theme.bg = color,
                                     _ => unreachable!(),
                                 }
-                                library.set_theme(theme)
+                                library.theme_set(theme)
                             }
                             Err(e) => self.message("Error reading text as color: ", &e),
                         }
@@ -993,7 +1004,7 @@ pub fn tui(library: Arc<Library>) -> bool {
     let join = Arc::new(AtomicBool::new(false));
     let libweak_evt = Arc::downgrade(&library);
 
-    let theme = library.get_theme();
+    let theme = library.theme_get();
     let ui = Arc::new(Mutex::new(UI::from_library(
         library,
         Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
@@ -1041,7 +1052,7 @@ pub fn tui(library: Arc<Library>) -> bool {
                             LibEvt::Theme => {
                                 if let Ok(mut uiw) = ui.lock() {
                                     if let Some(libw) = libweak_evt.upgrade() {
-                                        uiw.stylesheet = StyleSheet::from(libw.get_theme());
+                                        uiw.stylesheet = StyleSheet::from(libw.theme_get());
                                         uiw.draw()
                                     }
                                 }

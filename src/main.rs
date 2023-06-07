@@ -238,12 +238,19 @@ pub enum ThemeCmd {
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
     Track,
-    Tagstring { tagstring: String },
+    /// Format given tagstring with playing track
+    Tagstring {
+        tagstring: String,
+    },
     File,
     Status,
     Playing,
     Stopped,
     Paused,
+    /// Raw statusline tagstring
+    Statusline,
+    /// Status line formatted with playing track
+    StatuslineFormat,
     Theme,
 }
 
@@ -265,7 +272,7 @@ pub enum Action {
         /// Loop single track
         repeat_track: bool,
 
-        #[arg(short = 'R', long, conflicts_with="repeat_track")]
+        #[arg(short = 'R', long, conflicts_with = "repeat_track")]
         /// Disable looping
         norepeat: bool,
 
@@ -288,6 +295,10 @@ pub enum Action {
         #[arg(long, short, default_value = "0.5")]
         /// Starting volume
         volume: f32,
+
+        /// Tagstring to display on statusline
+        #[arg(long, default_value = "title")]
+        statusline: String,
 
         /// UI Foreground color
         #[arg(long, default_value = "none", value_parser=parse_color)]
@@ -322,6 +333,10 @@ pub enum Action {
     Shuffle(ShuffleCmd),
     #[command(subcommand)]
     Theme(ThemeCmd),
+    Statusline {
+        /// New tagstring to display on statusline
+        statusline: String,
+    },
     #[command(subcommand)]
     Print(PrintCmd),
     PlayFile {
@@ -413,14 +428,15 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 ShuffleCmd::False => library.shuffle_set(false),
                                 ShuffleCmd::Toggle => library.shuffle_toggle(),
                             },
+                            Action::Statusline { statusline } => library.statusline_set(statusline),
                             Action::Theme(theme_cmd) => {
-                                let mut theme = library.get_theme();
+                                let mut theme = library.theme_get();
                                 match theme_cmd {
                                     ThemeCmd::FG { foreground } => theme.fg = foreground,
                                     ThemeCmd::BG { background } => theme.bg = background,
                                     ThemeCmd::ACC { accent } => theme.acc = accent,
                                 };
-                                library.set_theme(theme)
+                                library.theme_set(theme)
                             }
                             Action::PlayFile { file } => {
                                 if file.is_file() {
@@ -520,7 +536,11 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
-                                PrintCmd::Theme => response = library.get_theme().to_string(),
+                                PrintCmd::Statusline => response = library.statusline_get(),
+                                PrintCmd::StatuslineFormat => {
+                                    response = library.statusline_get_format()
+                                }
+                                PrintCmd::Theme => response = library.theme_get().to_string(),
                             },
                             Action::Append { path } => library.append_library(path),
                             Action::Purge => library.purge(),
@@ -562,6 +582,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             sorters,
             volume,
             verbosity,
+            statusline,
             fg,
             bg,
             acc,
@@ -580,7 +601,8 @@ fn instance_main(listener: TcpListener, args: Args) {
             } else {
                 Some(true)
             });
-            library.set_theme(Theme { fg, bg, acc });
+            library.statusline_set(statusline);
+            library.theme_set(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sorters(sorters);
             let now = Instant::now();
