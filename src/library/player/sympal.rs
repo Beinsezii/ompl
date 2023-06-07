@@ -149,6 +149,7 @@ impl Player for Backend {
                 while !first.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(1))
                 }
+                pos.store(0, Ordering::Relaxed);
                 let stream = device
                     .build_output_stream(
                         &config.config(),

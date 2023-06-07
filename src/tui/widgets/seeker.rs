@@ -52,7 +52,7 @@ impl ContainedWidget for Seeker {
                                 .direction(Direction::Horizontal)
                                 .constraints([
                                     Constraint::Length(split),
-                                    Constraint::Length(self.area.width - split),
+                                    Constraint::Length(self.area.width.saturating_sub(split)),
                                 ])
                                 .split(self.area);
 

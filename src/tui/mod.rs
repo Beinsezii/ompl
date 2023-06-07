@@ -90,7 +90,8 @@ pub const HELP: &str = &"\
 * x | stop
 * n/p | next/previous
 * -/+ | volume decrease/increase
-* r | toggle shuffle
+* e | toggle shuffle
+* r | toggle repeat
 * h/j/k/l | left/down/up/right
 * H/L | move panes
 * g/G scroll to top/bottom
@@ -384,10 +385,18 @@ impl<T: Backend> UI<T> {
                     .constraints(vec![
                         Constraint::Length(1),
                         Constraint::Length(1),
-                        Constraint::Length(if let Some(_) = library.seekable() {2} else {0}),
+                        Constraint::Length(if let Some(_) = library.seekable() {
+                            2
+                        } else {
+                            0
+                        }),
                         Constraint::Length(if self.debug { 1 } else { 0 }),
-                        Constraint::Length(if library.filter_count() == 0 {0} else {
-                            size.height.saturating_sub(2 + if self.debug { 1 } else { 1 }) / 2
+                        Constraint::Length(if library.filter_count() == 0 {
+                            0
+                        } else {
+                            size.height
+                                .saturating_sub(2 + if self.debug { 1 } else { 1 })
+                                / 2
                         }),
                         Constraint::Min(1),
                     ])
@@ -847,7 +856,8 @@ impl<T: Backend> UI<T> {
             km!('p') => library.previous(),
             km!('=') => library.volume_add(0.05),
             km!('-') => library.volume_add(-0.05),
-            km!('r') => library.shuffle_toggle(),
+            km!('e') => library.shuffle_toggle(),
+            km!('r') => library.repeat_toggle(),
 
             // yay vim macros
             km!('0')
@@ -1067,7 +1077,7 @@ pub fn tui(library: Arc<Library>) -> bool {
     // lets you read panic messages
     // yes this is the dumbest solution
     if log_level > 1 {
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        std::thread::sleep(std::time::Duration::from_secs(10));
     }
 
     queue!(

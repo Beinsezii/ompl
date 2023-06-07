@@ -138,7 +138,19 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
         if let Some(library) = library_weak.upgrade() {
             match msg {
                 Ok(msg) => match msg {
-                    PlayerMessage::Request => library.next(),
+                    PlayerMessage::Request => match library.repeat_get() {
+                        None => {
+                            if library.get_queue().last() == library.track_get().as_ref()
+                                && !library.shuffle_get()
+                            {
+                                library.bus.lock().unwrap().broadcast(LibEvt::Playback)
+                            } else {
+                                library.next()
+                            }
+                        }
+                        Some(false) => library.play(),
+                        Some(true) => library.next(),
+                    },
 
                     PlayerMessage::Seekable | PlayerMessage::Clock => {
                         library.bus.lock().unwrap().broadcast(LibEvt::Playback)
@@ -180,6 +192,7 @@ pub struct Library {
     sorters: RwLock<Vec<String>>,
     bus: Mutex<Bus<LibEvt>>,
     shuffle: AtomicBool,
+    repeat: Mutex<Option<bool>>,
     hidden: AtomicBool,
     theme: RwLock<Theme>,
 }
@@ -200,6 +213,7 @@ impl Library {
             sorters: RwLock::new(Vec::new()),
             bus,
             shuffle: AtomicBool::new(true),
+            repeat: Mutex::new(Some(true)),
             hidden: AtomicBool::new(false),
             theme: RwLock::new(Theme {
                 fg: Color::None,
@@ -327,6 +341,32 @@ impl Library {
 
     pub fn shuffle_toggle(&self) {
         self.shuffle_set(!self.shuffle_get())
+    }
+
+    /// None - No loop
+    /// Some(false) - track loop
+    /// Some(true) - full loop
+    pub fn repeat_get(&self) -> Option<bool> {
+        *self.repeat.lock().unwrap()
+    }
+
+    /// None - No loop
+    /// Some(false) - track loop
+    /// Some(true) - full loop
+    pub fn repeat_set(&self, repeat: Option<bool>) {
+        *self.repeat.lock().unwrap() = repeat;
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+    }
+
+    /// Advances None -> Some(false) -> Some(true)
+    pub fn repeat_toggle(&self) {
+        let mut guard = self.repeat.lock().unwrap();
+        *guard = match *guard {
+            None => Some(false),
+            Some(false) => Some(true),
+            Some(true) => None,
+        };
+        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
     pub fn hidden_get(&self) -> bool {

@@ -8,7 +8,7 @@ use std::sync::{
     Arc,
 };
 use std::thread;
-use std::time::{Instant, Duration};
+use std::time::{Duration, Instant};
 
 use regex::Regex;
 
@@ -123,14 +123,17 @@ fn parse_color(s: &str) -> Result<Color, String> {
     Color::try_from(s)
 }
 
-fn parse_time(s: &str) -> Result<Duration,  String> {
+fn parse_time(s: &str) -> Result<Duration, String> {
     let string = s.trim().to_ascii_lowercase();
     // seconds in decimal.
     if let Ok(float) = string.parse::<f32>() {
-        return Ok(Duration::from_secs_f32(float))
+        return Ok(Duration::from_secs_f32(float));
     }
     // hh:mm:ss.ddd format. hh:mm optional.
-    if let Some(captures) = Regex::new(r"^(?:(\d\d):)?(?:(\d\d):)?(\d\d(?:\.\d+)?)$").unwrap().captures(&string) {
+    if let Some(captures) = Regex::new(r"^(?:(\d\d):)?(?:(\d\d):)?(\d\d(?:\.\d+)?)$")
+        .unwrap()
+        .captures(&string)
+    {
         // secs
         let mut result = Duration::from_secs_f32(captures[3].parse::<f32>().unwrap());
         let mut hm = 1;
@@ -143,7 +146,7 @@ fn parse_time(s: &str) -> Result<Duration,  String> {
         if let Some(m) = captures.get(1) {
             result += Duration::from_secs(m.as_str().parse::<u64>().unwrap() * 60 * hm);
         }
-        return Ok(result)
+        return Ok(result);
     }
     Err(format!("Could not parse {} as time signature", string))
 }
@@ -207,6 +210,15 @@ pub enum ShuffleCmd {
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum RepeatCmd {
+    Get,
+    False,
+    Track,
+    True,
+    Toggle,
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), or none
 pub enum ThemeCmd {
     FG {
@@ -248,6 +260,14 @@ pub enum Action {
         #[arg(short = 'S', long)]
         /// Disable shuffle on startup
         noshuffle: bool,
+
+        #[arg(short = 'r', long)]
+        /// Loop single track
+        repeat_track: bool,
+
+        #[arg(short = 'R', long, conflicts_with="repeat_track")]
+        /// Disable looping
+        norepeat: bool,
 
         #[arg(long, short)]
         /// Daemon / no-gui mode. Does nothing if `tui` is disabled at compile-time
@@ -293,7 +313,7 @@ pub enum Action {
     Previous,
     Seek {
         #[arg(value_parser=parse_time)]
-        time: Duration
+        time: Duration,
     },
     Exit,
     #[command(subcommand)]
@@ -534,6 +554,8 @@ fn instance_main(listener: TcpListener, args: Args) {
             library: library_paths,
             hidden,
             noshuffle,
+            norepeat,
+            repeat_track,
             daemon,
             no_media,
             filters,
@@ -551,6 +573,13 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.hidden_set(hidden);
             library.volume_set(volume);
             library.shuffle_set(!noshuffle);
+            library.repeat_set(if norepeat {
+                None
+            } else if repeat_track {
+                Some(false)
+            } else {
+                Some(true)
+            });
             library.set_theme(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sorters(sorters);
