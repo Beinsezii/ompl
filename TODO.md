@@ -13,11 +13,9 @@
     * also variants, methods, and fields all need sorting and clustering beyond just whim
 
 ### LIBRARY
-* I'm just gonna copy the ID3 human names for frames from ffmpeg or vlc or something
-* Needs a way to not loop
+* :D
 
-## Long-term aka unhinged ramblings
-
+## Very stretchy goals
 ### TUI
 * Could use a method of opening without CLI commands. Handy for Windows specifially.
     * Could just barf filters, library path, and volume into a .json file at the os-appropriate config home, then if ompl is run with no args or --resume it loads the TUI from there.
