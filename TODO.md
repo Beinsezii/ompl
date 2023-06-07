@@ -1,8 +1,6 @@
 ## Just a disorganized to-do list since notes in my phone are too complicated for me
 
 ### TUI
-* I just realized there's still no way to change the header from `title`
-    * In addition to CLI and menubar, could change it by clicking on the section of statusbar. On the one hand I could calculate the length of the current title, on the other I could just take the easy way out and match against anything above the last separator...
 * Right now pop-ups are kinda jank. Can only be one at a time and they each have their 100% separate own event loop.
     * Maybe instead of a custom draw_inject() fn, UI could keep a list of extra layers that each have their own drawing and event processing fns that are run in the main loops. Then input/message simply add a layer top. Might need an additional identifier of some kind if you wish to avoid 75 of the same popup but right now there's nothing that could cause that so idk how worthwhile that would be..
 
