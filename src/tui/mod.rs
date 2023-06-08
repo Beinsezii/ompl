@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::library::{Color, Filter, LibEvt, Library};
-use crate::{l2, log, LOG_LEVEL, LOG_ORD};
+use crate::{l2, log, parse_time, LOG_LEVEL, LOG_ORD};
 
 #[cfg(feature = "clipboard")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -90,6 +90,7 @@ pub const HELP: &str = &"\
 * x | stop
 * n/p | next/previous
 * -/+ | volume decrease/increase
+* .,>< | seek 5/30 seconds
 * e | toggle shuffle
 * r | toggle repeat
 * h/j/k/l | left/down/up/right
@@ -120,6 +121,7 @@ pub enum Action {
     None,
 
     // Library
+    SeekTo,
     Statusline,
     ACC,
     FG,
@@ -175,6 +177,7 @@ impl<T: Backend> UI<T> {
             (
             String::from("Library"),
             MTree::Tree(vec![
+                (String::from("Seek To"), MTree::Action(Action::SeekTo)),
                 (String::from("Append"), MTree::Action(Action::Append)),
                 (String::from("Purge"), MTree::Action(Action::Purge)),
             ]),
@@ -619,6 +622,19 @@ impl<T: Backend> UI<T> {
             Action::None => (),
 
             // Library
+            Action::SeekTo => {
+                if let Some(library) = self.lib_weak.upgrade() {
+                    if library.seekable() == Some(true) {
+                        let text = self.input("hh:mm:ss.dd", "", true);
+                        if text.len() > 0 {
+                            match parse_time(&text) {
+                                Ok(time) => library.seek(time),
+                                Err(s) => self.message("", &s),
+                            }
+                        }
+                    }
+                }
+            }
             Action::Statusline => {
                 if let Some(library) = self.lib_weak.upgrade() {
                     library.statusline_set(self.input(
@@ -869,6 +885,11 @@ impl<T: Backend> UI<T> {
             km!('-') => library.volume_add(-0.05),
             km!('e') => library.shuffle_toggle(),
             km!('r') => library.repeat_toggle(),
+
+            km!('.') => library.seek_by(5.0),
+            km!(',') => library.seek_by(-5.0),
+            km!('>') => library.seek_by(30.0),
+            km!('<') => library.seek_by(-30.0),
 
             // yay vim macros
             km!('0')

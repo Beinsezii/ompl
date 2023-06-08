@@ -125,12 +125,8 @@ fn parse_color(s: &str) -> Result<Color, String> {
 
 fn parse_time(s: &str) -> Result<Duration, String> {
     let string = s.trim().to_ascii_lowercase();
-    // seconds in decimal.
-    if let Ok(float) = string.parse::<f32>() {
-        return Ok(Duration::from_secs_f32(float));
-    }
     // hh:mm:ss.ddd format. hh:mm optional.
-    if let Some(captures) = Regex::new(r"^(?:(\d\d):)?(?:(\d\d):)?(\d\d(?:\.\d+)?)$")
+    if let Some(captures) = Regex::new(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$")
         .unwrap()
         .captures(&string)
     {
@@ -216,6 +212,26 @@ pub enum RepeatCmd {
     Track,
     True,
     Toggle,
+}
+
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+pub enum SeekCmd {
+    /// Get time in hh:mm:ss.dd / hh:mm::ss.dd format
+    Get,
+    /// Get time in float / float format
+    GetSecs,
+    /// Get time in floating point format normalized 0.0 -> 1.0
+    GetFloat,
+    Seekable,
+    /// Seek to exact time in hh:mm:ss.dd format
+    To {
+        #[arg(value_parser=parse_time)]
+        time: Duration,
+    },
+    /// Advance time by seconds, positive or negative
+    By {
+        secs: f32,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -322,15 +338,13 @@ pub enum Action {
     PlayPause,
     Next,
     Previous,
-    Seek {
-        #[arg(value_parser=parse_time)]
-        time: Duration,
-    },
     Exit,
     #[command(subcommand)]
     Volume(VolumeCmd),
     #[command(subcommand)]
     Shuffle(ShuffleCmd),
+    #[command(subcommand)]
+    Seek(SeekCmd),
     #[command(subcommand)]
     Theme(ThemeCmd),
     Statusline {
@@ -413,7 +427,43 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::Play => library.play(),
                             Action::PlayPause => library.play_pause(),
                             Action::Stop => library.stop(),
-                            Action::Seek { time } => library.seek(time),
+                            Action::Seek(seek_cmd) => match seek_cmd {
+                                SeekCmd::Get => {
+                                    if let Some((current, total)) = library.times() {
+                                        response = format!(
+                                            "{:02}:{:02}:{:05.2} / {:02}:{:02}:{:05.2}",
+                                            current.as_secs() / 360,
+                                            current.as_secs() / 60 % 60,
+                                            current.as_secs_f32() % 60.0,
+                                            total.as_secs() / 360,
+                                            total.as_secs() / 60 % 60,
+                                            total.as_secs_f32() % 60.0,
+                                        )
+                                    }
+                                }
+                                SeekCmd::GetSecs => {
+                                    if let Some((current, total)) = library.times() {
+                                        response = format!(
+                                            "{:.2} / {:.2}",
+                                            current.as_secs_f32(),
+                                            total.as_secs_f32()
+                                        )
+                                    }
+                                }
+                                SeekCmd::GetFloat => {
+                                    if let Some((current, total)) = library.times() {
+                                        response = format!(
+                                            "{:.8}",
+                                            current.as_secs_f32() / total.as_secs_f32()
+                                        )
+                                    }
+                                }
+                                SeekCmd::Seekable => {
+                                    response = (library.seekable() == Some(true)).to_string()
+                                }
+                                SeekCmd::To { time } => library.seek(time),
+                                SeekCmd::By { secs } => library.seek_by(secs),
+                            },
                             Action::Volume(vol_cmd) => match vol_cmd {
                                 VolumeCmd::Get => {
                                     response = format!("{:.2}", library.volume_get());

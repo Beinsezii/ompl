@@ -324,6 +324,10 @@ impl Library {
         self.player.seek(time)
     }
 
+    pub fn seek_by(&self, secs: f32) {
+        self.player.seek_by(secs)
+    }
+
     pub fn waveform(&self, count: usize) -> Option<Vec<f32>> {
         self.player.waveform(count)
     }

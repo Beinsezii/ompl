@@ -125,5 +125,16 @@ pub trait Player: Send + Sync {
         (!self.playing()) && (!self.paused())
     }
 
+    /// Advance seek by seconds, positive or negative
+    fn seek_by(&self, secs: f32) {
+        if let Some(true) = self.seekable() {
+            if let Some((current, total)) = self.times() {
+                self.seek(
+                    Duration::from_secs_f32((current.as_secs_f32() + secs).max(0.0)).min(total),
+                )
+            }
+        }
+    }
+
     // ### PROVIDED FNS ### }}}
 }

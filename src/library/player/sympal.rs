@@ -149,7 +149,14 @@ impl Player for Backend {
                 while !first.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(1))
                 }
-                pos.store(0, Ordering::Relaxed);
+                // if play requested on last pos, reset.
+                // basically if you manage to pause it after samples[] ends,
+                // this restarts playback instead of playing nothing
+                if last.load(Ordering::Relaxed)
+                    && samples.read().unwrap().len() == pos.load(Ordering::Relaxed)
+                {
+                    pos.store(0, Ordering::Relaxed)
+                }
                 let stream = device
                     .build_output_stream(
                         &config.config(),

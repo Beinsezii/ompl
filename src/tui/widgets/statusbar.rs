@@ -102,8 +102,8 @@ impl Clickable for StatusBar {
                 .area
                 .intersects(Rect::new(event.column, event.row, 1, 1))
             {
-                // 123456789 123456789 123456789 1234
-                // -- 0.12 ++ | (1) >< :< # /> >: | {..}
+                // 123456789 123456789 123456789 1234  +123456789 123456
+                // -- 0.12 ++ | (1) >< :< # /> >: | {..} | 00:00 / 00:00
                 match button {
                     MouseButton::Left => match event.column {
                         1..=2 => library.volume_add(-0.05),
@@ -117,11 +117,11 @@ impl Clickable for StatusBar {
                         _ => (),
                     },
                     MouseButton::Right => {
-                        if event.column >= 34
-                            && usize::from(event.column)
-                                < 34 + library.statusline_get_format().len()
-                        {
+                        let len_sl = library.statusline_get_format().len() as u16;
+                        if event.column >= 34 && event.column < 34 + len_sl {
                             return Action::Statusline;
+                        } else if event.column >= 37 + len_sl && event.column < 50 + len_sl {
+                            return Action::SeekTo;
                         }
                     }
                     _ => (),
