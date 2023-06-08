@@ -207,10 +207,16 @@ pub enum ShuffleCmd {
 
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum RepeatCmd {
+    /// true, false, or track
     Get,
+    /// Do not repeat.
+    /// Only works if Shuffle is false
     False,
+    /// Repeat only current track
     Track,
+    /// Repeat forever
     True,
+    /// Advance between False -> Track -> True
     Toggle,
 }
 
@@ -342,6 +348,8 @@ pub enum Action {
     #[command(subcommand)]
     Volume(VolumeCmd),
     #[command(subcommand)]
+    Repeat(RepeatCmd),
+    #[command(subcommand)]
     Shuffle(ShuffleCmd),
     #[command(subcommand)]
     Seek(SeekCmd),
@@ -472,11 +480,24 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 VolumeCmd::Sub { amount } => library.volume_add(-amount),
                                 VolumeCmd::Set { amount } => library.volume_set(amount),
                             },
-                            Action::Shuffle(shuf_cmd) => match shuf_cmd {
+                            Action::Shuffle(shuffle_cmd) => match shuffle_cmd {
                                 ShuffleCmd::Get => response = library.shuffle_get().to_string(),
                                 ShuffleCmd::True => library.shuffle_set(true),
                                 ShuffleCmd::False => library.shuffle_set(false),
                                 ShuffleCmd::Toggle => library.shuffle_toggle(),
+                            },
+                            Action::Repeat(repeat_cmd) => match repeat_cmd {
+                                RepeatCmd::Get => {
+                                    response = match library.repeat_get() {
+                                        Some(true) => true.to_string(),
+                                        Some(false) => "track".to_string(),
+                                        None => false.to_string(),
+                                    }
+                                }
+                                RepeatCmd::True => library.repeat_set(Some(true)),
+                                RepeatCmd::Track => library.repeat_set(Some(false)),
+                                RepeatCmd::False => library.repeat_set(None),
+                                RepeatCmd::Toggle => library.repeat_toggle(),
                             },
                             Action::Statusline { statusline } => library.statusline_set(statusline),
                             Action::Theme(theme_cmd) => {
