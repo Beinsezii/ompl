@@ -42,7 +42,12 @@ impl ContainedWidget for StatusBar {
                     " -- {:.2} ++ | ({}) ",
                     library.volume_get(),
                     match library.repeat_get() {
-                        None => 'X',
+                        None =>
+                            if library.shuffle_get() {
+                                '-'
+                            } else {
+                                'X'
+                            },
                         Some(false) => '1',
                         Some(true) => ' ',
                     }
