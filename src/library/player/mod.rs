@@ -11,23 +11,50 @@ mod brodio;
 #[cfg(feature = "backend-sympal")]
 mod sympal;
 
+use std::env::consts::OS;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
 
+use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
+
 use crate::library::Track;
 
-/// Go through available backends and retrieve most optimal Player
-pub fn backend_default(sig: SyncSender<PlayerMessage>) -> Box<dyn Player> {
-    #![allow(unreachable_code)]
-
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+pub enum Backend {
+    /// Pick from enabled backends, prioritizing Rodio on Windows, otherwise Sympal
+    Default,
+    /// Advanced backend with extra features.
     #[cfg(feature = "backend-sympal")]
-    return Box::new(sympal::Backend::new(sig));
-
+    Sympal,
+    /// Safe backend with maximum compatibility
     #[cfg(feature = "backend-rodio")]
-    return Box::new(brodio::Backend::new(sig));
+    Rodio,
+}
 
-    panic!("No valid backend found!")
+/// Panics if no backends are enabled at compile time.
+pub fn backend(backend: Backend, signal: SyncSender<PlayerMessage>) -> Box<dyn Player> {
+    // {{{
+    #[allow(unreachable_code)]
+    match backend {
+        Backend::Default => {
+            if OS == "windows" {
+                #[cfg(feature = "backend-rodio")]
+                return Box::new(brodio::Backend::new(signal));
+            }
+            #[cfg(feature = "backend-sympal")]
+            return Box::new(sympal::Backend::new(signal));
+            #[cfg(feature = "backend-rodio")]
+            return Box::new(brodio::Backend::new(signal));
+            panic!("No backends enabled during compile!")
+        }
+        #[cfg(feature = "backend-sympal")]
+        Backend::Sympal => Box::new(sympal::Backend::new(signal)),
+        #[cfg(feature = "backend-rodio")]
+        Backend::Rodio => Box::new(brodio::Backend::new(signal)),
+    }
+    // }}}
 }
 
 /// Messages from Player -> Library

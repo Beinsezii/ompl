@@ -16,7 +16,7 @@ use std::sync::mpsc::Receiver;
 mod player;
 mod track;
 
-pub use player::Player;
+pub use player::{Backend, Player};
 pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, Track};
 
 use crate::{l1, l2, log, LOG_LEVEL};
@@ -200,14 +200,14 @@ pub struct Library {
 
 impl Library {
     // # new # {{{
-    pub fn new() -> Arc<Self> {
+    pub fn new(backend: Backend) -> Arc<Self> {
         let lib_now = Instant::now();
 
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
         let (next_s, next_r) = sync_channel(1);
         let result = Arc::new(Self {
-            player: player::backend_default(next_s),
+            player: player::backend(backend, next_s),
             tracks: RwLock::new(Vec::new()),
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),

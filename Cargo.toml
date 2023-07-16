@@ -37,7 +37,7 @@ clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal"]
 
-default = ["media-controls", "tui", "clipboard", "backend-sympal"]
+default = ["media-controls", "tui", "clipboard", "backend-sympal", "backend-rodio"]
 
 [target.'cfg(windows)'.dependencies]
 winit = "0.26"

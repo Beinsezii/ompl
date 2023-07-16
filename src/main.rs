@@ -16,7 +16,7 @@ use regex::Regex;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
 mod library;
-use library::{Color, Library, Theme};
+use library::{Backend, Color, Library, Theme};
 
 #[cfg(feature = "tui")]
 mod tui;
@@ -333,6 +333,10 @@ pub enum Action {
         /// UI Accent color
         #[arg(long, default_value = "yellow", value_parser=parse_color)]
         acc: Color,
+
+        /// Select audio streaming backend
+        #[arg(long, default_value = "default")]
+        backend: Backend,
 
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
         #[arg(long, short = 'V', action(ArgAction::Count))]
@@ -657,11 +661,12 @@ fn instance_main(listener: TcpListener, args: Args) {
             fg,
             bg,
             acc,
+            backend,
         } => {
             LOG_LEVEL.store(verbosity, LOG_ORD);
 
             l2!("Starting main...");
-            let library = Library::new();
+            let library = Library::new(backend);
             library.hidden_set(hidden);
             library.volume_set(volume);
             library.shuffle_set(!noshuffle);
