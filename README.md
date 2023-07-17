@@ -110,7 +110,7 @@ I noticed OMPL communicates to itself with network ports. Is it possible to send
 * Left click on a filter's tagstring to invert the selection
 * Right click on a filter's tagstring to clear the selection
 * Right click and drag to [de]highlight many filter items
-* The symbols on the bottom of filter/sorter panes are buttons for move<-/add<-/edit/remove/add->/move->
+* The symbols on the bottom of filter/sorter panes are buttons for move<- add<- edit remove add-> move->
 * Middle click a pane to highlight it without selecting anything
 * Right click in the queue to select a track without playing it
 * Right click the selected track again to center the view
