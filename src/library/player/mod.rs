@@ -25,10 +25,10 @@ use crate::library::Track;
 pub enum Backend {
     /// Pick from enabled backends, prioritizing Rodio on Windows, otherwise Sympal
     Default,
-    /// Advanced backend with extra features.
+    /// Advanced backend with extra features
     #[cfg(feature = "backend-sympal")]
     Sympal,
-    /// Safe backend with maximum compatibility
+    /// Safe backend with maximum compatibility and lower memory usage
     #[cfg(feature = "backend-rodio")]
     Rodio,
 }

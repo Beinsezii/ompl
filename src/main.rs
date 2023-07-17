@@ -1,3 +1,10 @@
+//! OMPL Opinionated Music Player/Library
+//! Everything licensed under GNU General Public License V3
+//! Alternatively, OMPL can be licensed under GOGAC which means if you can
+//! officially 1v1 me and win you get it licensed under what's effectively MIT
+
+#![warn(missing_docs)]
+
 use clap::{ArgAction, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -21,7 +28,7 @@ use library::{Backend, Color, Library, Theme};
 #[cfg(feature = "tui")]
 mod tui;
 
-const ID: &str = "OMPL SERVER 0.7.0";
+const ID: &str = "OMPL SERVER 0.8.0";
 const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
@@ -30,6 +37,7 @@ const PORT: &str = "18346";
 static LOG_LEVEL: AtomicU8 = AtomicU8::new(0);
 const LOG_ORD: Ordering = Ordering::Relaxed;
 
+/// If $v <= LOG_LEVEL print values
 #[macro_export]
 macro_rules! log {
     ($v:expr, $($info:expr),*) => {
@@ -43,26 +51,15 @@ macro_rules! log {
     };
 }
 
-// Must build individually: https://github.com/rust-lang/rust/issues/35853
+/// Benchmarking
 #[macro_export]
-/// Level 1 is more intended for performance metrics
 macro_rules! l1 {
     ($($info:expr),*) => {log!(1, $($info)*)}
 }
+/// Walkthrough
 #[macro_export]
-/// Level 2 is the 'rubber duck' level that walks you through the program
 macro_rules! l2 {
     ($($info:expr),*) => {log!(2, $($info)*)}
-}
-#[macro_export]
-/// Level 3 is for dumping various bits of information
-macro_rules! l3 {
-    ($($info:expr),*) => {log!(3, $($info)*)}
-}
-#[macro_export]
-/// Level 4 is for spamming the shit out of your terminal in a last-resort attempt at debugging
-macro_rules! l4 {
-    ($($info:expr),*) => {log!(4, $($info)*)}
 }
 
 // ### LOGGING ### }}}
@@ -151,60 +148,100 @@ fn parse_time(s: &str) -> Result<Duration, String> {
 
 // ### ARGS {{{
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum VolumeCmd {
+    /// Current volume, 0.0 -> 1.0
     Get,
-    Add { amount: f32 },
-    Sub { amount: f32 },
-    Set { amount: f32 },
+    /// Add value onto current volume, clamped to 1.0
+    Add {
+        ///
+        amount: f32,
+    },
+    /// Subtract value from current volume, clamped to 0.0
+    Sub {
+        ///
+        amount: f32,
+    },
+    /// Set volume directly, clamped to 0.0 -> 1.0
+    Set {
+        ///
+        amount: f32,
+    },
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum FilterCmd {
+    /// Retrieves either INDEX Filter layer or all
     Get {
+        ///
         index: Option<usize>,
     },
+    /// Set INDEX filter layer to FILTER
     Set {
+        ///
         index: usize,
+        ///
         #[arg(value_parser=parse_filter)]
         filter: library::Filter,
     },
+    /// Replace all Filter layers with provided list of filters
     SetAll {
+        ///
         #[arg(num_args(1..), value_parser=parse_filter)]
         filters: Vec<library::Filter>,
     },
+    /// Remove INDEX Filter layer
     Remove {
+        ///
         index: usize,
     },
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum SorterCmd {
+    /// Retrieves either INDEX Sorter layer or all
     Get {
+        ///
         index: Option<usize>,
     },
+    /// Set INDEX Sorter layer to TAGSTRING
     Set {
+        ///
         index: usize,
+        ///
         tagstring: String,
     },
 
+    /// Replace all Sorter layers with provided list of tagstrings
     SetAll {
+        ///
         #[arg(num_args(1..))]
         tagstrings: Vec<String>,
     },
+    /// Remove INDEX Sorter layer
     Remove {
+        ///
         index: usize,
     },
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum ShuffleCmd {
+    /// true/false
     Get,
+    /// Set true, next track picked randomly
     True,
+    /// Set false, next track picked based on Sorter
     False,
+    /// Toggle beteween true/false
     Toggle,
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum RepeatCmd {
     /// true, false, or track
@@ -220,6 +257,7 @@ pub enum RepeatCmd {
     Toggle,
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum SeekCmd {
     /// Get time in hh:mm:ss.dd / hh:mm::ss.dd format
@@ -228,58 +266,78 @@ pub enum SeekCmd {
     GetSecs,
     /// Get time in floating point format normalized 0.0 -> 1.0
     GetFloat,
+    /// true/false, whether or not seeking is possible
     Seekable,
     /// Seek to exact time in hh:mm:ss.dd format
     To {
         #[arg(value_parser=parse_time)]
+        /// hh:mm:ss.dd
         time: Duration,
     },
     /// Advance time by seconds, positive or negative
     By {
+        ///
         secs: f32,
     },
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
-/// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), or none
 pub enum ThemeCmd {
+    /// Foreground
     FG {
         #[arg(value_parser=parse_color)]
+        ///
         foreground: Color,
     },
+    /// Background
     BG {
         #[arg(value_parser=parse_color)]
+        ///
         background: Color,
     },
+    /// Accent
     ACC {
         #[arg(value_parser=parse_color)]
+        ///
         accent: Color,
     },
 }
 
+/// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum PrintCmd {
+    /// Dump all information about current track
     Track,
-    /// Format given tagstring with playing track
+    /// Retrieve information from playing track using a tagstring
     Tagstring {
+        ///
         tagstring: String,
     },
+    /// Path to currently playing track
     File,
+    /// 'playing'/'stopped'/'paused'
     Status,
+    /// true/false
     Playing,
+    /// true/false
     Stopped,
+    /// true/false
     Paused,
     /// Raw statusline tagstring
     Statusline,
     /// Status line formatted with playing track
     StatuslineFormat,
+    /// Print current theme in either hex or terminal ID
     Theme,
 }
 
+/// see Args
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum Action {
+    /// Create new server on PORT
     Main {
-        /// Path to music libary folder
+        /// Paths to scan for music
         library: Vec<PathBuf>,
 
         #[arg(short = 'H', long)]
@@ -311,7 +369,7 @@ pub enum Action {
         filters: Vec<library::Filter>,
 
         #[arg(long = "sorters", short, num_args(1..))]
-        /// Starting sorter tagstrings
+        /// Starting sorters
         sorters: Vec<String>,
 
         #[arg(long, short, default_value = "0.5")]
@@ -342,45 +400,67 @@ pub enum Action {
         #[arg(long, short = 'V', action(ArgAction::Count))]
         verbosity: u8,
     },
+    /// Set audio player to 'playing'
     Play,
+    /// Set audio player to 'paused'
     Pause,
+    /// Set audio player to 'stopped'
     Stop,
+    /// Toggle between Play/Pause
     PlayPause,
+    /// Send next track in queue to the player
     Next,
+    /// Send last previously played track to player, removing it from history
     Previous,
+    /// Calls on the server to exit
     Exit,
+    /// Work with volume in float, 0.0 minimum -> 1.0 maximum
     #[command(subcommand)]
     Volume(VolumeCmd),
+    /// Control behavior after track ends
     #[command(subcommand)]
     Repeat(RepeatCmd),
+    /// Control selection of next tracks
     #[command(subcommand)]
     Shuffle(ShuffleCmd),
+    /// Scrub and seek current playback time. Sympal backend only
     #[command(subcommand)]
     Seek(SeekCmd),
+    /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), or none
     #[command(subcommand)]
     Theme(ThemeCmd),
+    /// Set new TUI statusline
     Statusline {
         /// New tagstring to display on statusline
         statusline: String,
     },
+    /// Retrieve various server information not in other commands
     #[command(subcommand)]
     Print(PrintCmd),
+    /// Send a file directly to the audio player
     PlayFile {
+        /// A single audio track
         file: PathBuf,
     },
+    /// Control how tracks are filtered for final play queue using layers of Filters.
     #[command(subcommand)]
     Filter(FilterCmd),
+    /// Control how tracks are sorted internally using layers of tagstrings
     #[command(subcommand)]
     Sorter(SorterCmd),
+    /// Append tracks to library from path
     Append {
+        /// Path to scan for audio files
         path: PathBuf,
     },
+    /// Remove all currently loaded tracks
     Purge,
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
 #[command(author, about, version)]
 struct Args {
+    /// Action to perform. Required
     #[command(subcommand)]
     action: Action,
 

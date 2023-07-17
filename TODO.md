@@ -5,19 +5,17 @@
     * Maybe instead of a custom draw_inject() fn, UI could keep a list of extra layers that each have their own drawing and event processing fns that are run in the main loops. Then input/message simply add a layer top. Might need an additional identifier of some kind if you wish to avoid 75 of the same popup but right now there's nothing that could cause that so idk how worthwhile that would be..
 
 ### MAIN
-* CLAP groups?
-* Logging overhaul. 3rd-party crate?
+* Logging overhaul. Should properly save log entries and output after TUI is closed. 3rd-party crate?
 * When the codesplosions are done, every project file needs #![warn(missing_docs)]
     * also variants, methods, and fields all need sorting and clustering beyond just whim
 
 ### LIBRARY
-* :D
+* Sympal needs proper error handling. Also nothing should stop it from playing files like .mkv and .mp4, but it currently dies.
+* Should also investigate resampling in Sympal for use on Windows [and direct ALSA?]
+    * I saw a crate for this somewhere on the CPAL page but I don't remember what it's called.
+* Possibly implement multiple or generic bit depths
+    * Even most FLAC files I see are only 16 so maybe not useful
 
 ## Very stretchy goals
 ### TUI
-* Could use a method of opening without CLI commands. Handy for Windows specifially.
-    * Could just barf filters, library path, and volume into a .json file at the os-appropriate config home, then if ompl is run with no args or --resume it loads the TUI from there.
-    * TUI will need a way to set library path from within.
-        * If launched without a .json present, should ideally prompt for a library path. orrrrr maybe it could just default to ~/Music....
-        * This will be a pain in the ASS to type. maybe it could capture the whole screen like message(), and show a list of folders auto-completion style below..? Or I could write a whole ass directory browser. Or ignore it and just rely on input-bar's copy-paste.
 * Display album art? I know certain terminals can, but checking compatibility and finding a library to do it nicely is gonna be pain.
