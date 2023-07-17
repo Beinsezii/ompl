@@ -11,17 +11,17 @@ A music player organized exactly how I like it.
   * Fully functional CLI that interacts either with the TUI or a daemon
     * Identical functionality and control in both TUI and CLI/daemon
   * Sympal backend (default)
-    + Extremely efficient seeking and playback
-    + Supports many formats
-    - May use > 200MB of RAM for (extremely long tracks)[https://youtu.be/fQQxhyhdg-w]
-    - Incompatible with Windows
-    - Less stable, partially work-in-progress for edge cases
+    * \+ Extremely efficient seeking and playback
+    * \+ Supports many formats
+    * \- May use > 200MB of RAM for (extremely long tracks)[https://youtu.be/fQQxhyhdg-w]
+    * \- Incompatible with Windows
+    * \- Less stable, partially work-in-progress for edge cases
   * [Rodio](https://github.com/RustAudio/rodio) backend (default on Windows)
-    + Very safe, should always work
-    + Extremely low memory usage
-    + Compatible with Windows
-    - No seeking of any kind
-    - Limited supported formats
+    * \+ Very safe, should always work
+    * \+ Extremely low memory usage
+    * \+ Compatible with Windows
+    * \- No seeking of any kind
+    * \- Limited supported formats
   * Support for many audio formats
     * Sympal backend: everything [Symphonia supports](https://github.com/pdeljanov/Symphonia#codecs-decoders)
       * Theoretically. Some things like .mp4 video files crash at the moment.
