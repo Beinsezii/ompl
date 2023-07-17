@@ -13,7 +13,7 @@ A music player organized exactly how I like it.
   * Sympal backend (default)
     * \+ Extremely efficient seeking and playback
     * \+ Supports many formats
-    * \- May use > 200MB of RAM for (extremely long tracks)[https://youtu.be/fQQxhyhdg-w]
+    * \- May use > 200MB of RAM for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
     * \- Incompatible with Windows
     * \- Less stable, partially work-in-progress for edge cases
   * [Rodio](https://github.com/RustAudio/rodio) backend (default on Windows)
