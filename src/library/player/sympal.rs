@@ -29,6 +29,7 @@ pub struct Backend {
     volume: Arc<AtomicU32>,
     channel: SyncSender<PlayerMessage>,
     join: Arc<AtomicBool>,
+    streaming: Arc<AtomicBool>,
     first: Arc<AtomicBool>,
     last: Arc<AtomicBool>,
     // TODO: dynamic typing
@@ -48,6 +49,7 @@ impl Player for Backend {
             volume: Arc::new(AtomicU32::from(1.0f32.to_bits())),
             channel: sig,
             join: Arc::new(AtomicBool::new(true)),
+            streaming: Arc::new(AtomicBool::new(false)),
             first: Arc::new(AtomicBool::new(false)),
             last: Arc::new(AtomicBool::new(false)),
             samples: Default::default(),
@@ -128,10 +130,15 @@ impl Player for Backend {
             panic!("No configs for audio device found!")
         };
 
+        while self.streaming.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(1))
+        }
+
         self.join.store(false, Ordering::Relaxed);
 
         let join_thread = self.join.clone();
         let join_data = self.join.clone();
+        let streaming = self.streaming.clone();
         let pos = self.pos.clone();
         let first = self.first.clone();
         let last = self.last.clone();
@@ -157,6 +164,7 @@ impl Player for Backend {
                 {
                     pos.store(0, Ordering::Relaxed)
                 }
+                streaming.store(true, Ordering::Relaxed);
                 let stream = device
                     .build_output_stream(
                         &config.config(),
@@ -208,6 +216,7 @@ impl Player for Backend {
                 while !join_thread.load(Ordering::Relaxed) {
                     thread::sleep(Duration::from_millis(1))
                 }
+                streaming.store(false, Ordering::Relaxed);
             })
             .unwrap();
     }
@@ -358,6 +367,10 @@ impl Player for Backend {
                     self.first.clone(),
                     self.last.clone(),
                 );
+
+                while self.streaming.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(1))
+                }
 
                 self.first.store(false, Ordering::Relaxed);
                 self.last.store(false, Ordering::Relaxed);
