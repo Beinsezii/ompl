@@ -5,6 +5,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt install libasound2-dev libdbus-1-dev pkg-config
       - name: Build Linux Release
         run: cargo build --release
       - name: Upload Linux Artifact
