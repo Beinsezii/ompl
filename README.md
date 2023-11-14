@@ -30,7 +30,7 @@ A music player organized exactly how I like it.
     * Vorbis comments for FLAC/OGG
     * Utilizes ReplayGain (track gain only)
   * Pure Rust where possible. Very portable
-  * Interfaces as a media player for Linux MPRIS, Windows, and MacOS[untested]
+  * Interfaces as a media player for direct OS control
   * Very fast - Handle a few thousand files effortlessly on a glorified tablet
   * Shouldn't crash
 
@@ -41,7 +41,10 @@ A music player organized exactly how I like it.
   * See [TODO.md](./TODO.md) for more details
   
 ## Installation
-Compiled binaries are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
+Manually compiled and tested binaries for Linux and Windows are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
+
+Additionally, binaries are automatically compiled and uploaded for Linux, Windows, and MacOS with the [Build Master Release Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_master.yml)
+Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run.
 
 If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
 
@@ -58,11 +61,6 @@ These are all enabled by default, but can be disabled if a lighter binary is des
   * `backend-sympal` : Sympal backend
 
 It's recommended you add the downloaded binary or cargo install directory to your environment `PATH` for ease of use.
-
-### MacOS
-All of the libraries claim to support MacOS, so hypothetically you should be able to build it yourself using `cargo` as mentioned above.
-
-I do not own a Mac. If it works it works, else I won't troubleshoot Mac issues.
 
 ## Usage
 
