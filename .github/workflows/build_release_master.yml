@@ -18,12 +18,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build MacOs Release
         run: cargo build --release
-      - run: ls target/release/
-      # - name: Upload MacOS Artifact
-      #   uses: actions/upload-artifact@v3
-      #   with:
-      #     name: macos
-      #     path: target/release/ompl
+      - name: Upload MacOS Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos_binary
+          path: target/release/ompl
   build-windows:
     runs-on: windows-latest
     steps:

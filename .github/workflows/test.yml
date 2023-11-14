@@ -7,8 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Install deps for alsa-sys
-      run: sudo apt install libasound2-dev
+    - name: Install deps
+      run: sudo apt install libasound2-dev libdbus-1-dev pkg-config
     - name: Build
       run: cargo build --verbose
     - name: Run tests
