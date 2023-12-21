@@ -467,6 +467,10 @@ struct Args {
     /// Port with which to communicate with other OMPL instances
     #[arg(long, default_value = PORT)]
     port: u16,
+
+    /// Address to listen on for client signals
+    #[arg(long, default_value = "127.0.0.1")]
+    host: Ipv4Addr,
 }
 
 // ### ARGS }}}
@@ -922,7 +926,7 @@ fn main() {
 
     match args.action {
         Action::Main { .. } => {
-            match TcpListener::bind(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), args.port)) {
+            match TcpListener::bind(SocketAddrV4::new(args.host, args.port)) {
                 Ok(listener) => instance_main(listener, args),
                 Err(_) => panic!(
                     "\n\nCouldn't bind server socket to port {}.\n\
@@ -931,7 +935,7 @@ fn main() {
                 ),
             }
         }
-        _ => match TcpStream::connect(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), args.port)) {
+        _ => match TcpStream::connect(SocketAddrV4::new(args.host, args.port)) {
             Ok(stream) => instance_sub(stream, args),
             Err(_) => panic!(
                 "\n\nCouldn't connect client socket to port {}.\n\
