@@ -335,7 +335,7 @@ pub enum PrintCmd {
     Stopped,
     /// true/false
     Paused,
-    /// Raw statusline tagstring
+    /// Print formatted statusline according to the set tagstring
     Statusline,
     /// Print current theme in either hex or terminal ID
     Theme,
