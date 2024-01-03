@@ -147,6 +147,17 @@ fn parse_time(s: &str) -> Result<Duration, String> {
 // ### PARSERS ### }}}
 
 // ### ARGS {{{
+#[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
+/// see Action
+pub enum StatuslineCmd {
+    /// Retreive statusline tagstring
+    Get,
+    /// Set statusline tagstring
+    Set {
+        ///
+        tagstring: String,
+    },
+}
 
 /// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
@@ -326,8 +337,6 @@ pub enum PrintCmd {
     Paused,
     /// Raw statusline tagstring
     Statusline,
-    /// Status line formatted with playing track
-    StatuslineFormat,
     /// Print current theme in either hex or terminal ID
     Theme,
 }
@@ -429,11 +438,9 @@ pub enum Action {
     /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), function (oklch 0.65 0.1 160), or none
     #[command(subcommand)]
     Theme(ThemeCmd),
-    /// Set new TUI statusline
-    Statusline {
-        /// New tagstring to display on statusline
-        statusline: String,
-    },
+    /// Set/retrieve UI statusline
+    #[command(subcommand)]
+    Statusline(StatuslineCmd),
     /// Retrieve various server information not in other commands
     #[command(subcommand)]
     Print(PrintCmd),
@@ -587,7 +594,12 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 RepeatCmd::False => library.repeat_set(None),
                                 RepeatCmd::Toggle => library.repeat_toggle(),
                             },
-                            Action::Statusline { statusline } => library.statusline_set(statusline),
+                            Action::Statusline(statusline_cmd) => match statusline_cmd {
+                                StatuslineCmd::Set { tagstring } => {
+                                    library.statusline_set(tagstring)
+                                }
+                                StatuslineCmd::Get => response = library.statusline_get(),
+                            },
                             Action::Theme(theme_cmd) => {
                                 let mut theme = library.theme_get();
                                 match theme_cmd {
@@ -695,10 +707,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 PrintCmd::Playing => response = library.playing().to_string(),
                                 PrintCmd::Paused => response = library.paused().to_string(),
                                 PrintCmd::Stopped => response = library.stopped().to_string(),
-                                PrintCmd::Statusline => response = library.statusline_get(),
-                                PrintCmd::StatuslineFormat => {
-                                    response = library.statusline_get_format()
-                                }
+                                PrintCmd::Statusline => response = library.statusline_get_format(),
                                 PrintCmd::Theme => response = library.theme_get().to_string(),
                             },
                             Action::Append { path } => library.append_library(path),
