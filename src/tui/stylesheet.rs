@@ -47,8 +47,8 @@ impl From<Theme> for StyleSheet {
         let fg = value.fg.into();
         let bg = value.bg.into();
         let acc = value.acc.into();
-        let fg_alt = if bg == Color::Reset {Color::Black} else {bg};
-        let bg_alt = if fg == Color::Reset {Color::White} else {fg};
+        let fg_alt = if bg == Color::Reset { Color::Black } else { bg };
+        let bg_alt = if fg == Color::Reset { Color::White } else { fg };
 
         Self {
             base: Style::default().fg(fg).bg(bg),
@@ -58,9 +58,7 @@ impl From<Theme> for StyleSheet {
                 .bg(bg)
                 .add_modifier(Modifier::UNDERLINED),
 
-            base_hi: Style::default()
-                .fg(fg_alt)
-                .bg(bg_alt),
+            base_hi: Style::default().fg(fg_alt).bg(bg_alt),
 
             base_hi_sel: Style::default()
                 .fg(fg_alt)
@@ -75,9 +73,7 @@ impl From<Theme> for StyleSheet {
                 .add_modifier(Modifier::UNDERLINED)
                 .add_modifier(Modifier::BOLD),
 
-            active_hi: Style::default()
-                .fg(fg_alt)
-                .bg(acc),
+            active_hi: Style::default().fg(fg_alt).bg(acc),
 
             active_hi_sel: Style::default()
                 .fg(fg_alt)

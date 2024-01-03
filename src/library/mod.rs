@@ -70,22 +70,20 @@ impl TryFrom<&str> for Color {
             "lightmagenta" => Ok(Color::Term(13)),
             "lightcyan" => Ok(Color::Term(14)),
             "white" => Ok(Color::Term(15)),
-            val => match colcon::hex_to_irgb(&value).map(|rgb| Color::RGB(rgb)) {
-                Ok(col) => Ok(col),
-                Err(hexerr) => {
-                    if val.is_empty() {
-                        Ok(Color::None)
-                    } else if let Ok(n) = val.parse::<u8>() {
-                        if n < 16 {
-                            Ok(Color::Term(n))
-                        } else {
-                            Err(String::from("Terminal color must be < 16"))
-                        }
+            val => {
+                if let Ok(col) = val.parse::<u8>() {
+                    if col < 16 {
+                        Ok(Color::Term(col))
                     } else {
-                        Err(hexerr)
+                        Err(format!("Terminal color {} greater than 15", col))
+                    }
+                } else {
+                    match colcon::str2space(val, colcon::Space::SRGB) {
+                        Some(col) => Ok(Color::RGB(colcon::srgb_to_irgb(col))),
+                        None => Err(format!("Unable to parse \"{}\" as a color", val)),
                     }
                 }
-            },
+            }
         }
     }
 }

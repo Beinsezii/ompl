@@ -925,16 +925,14 @@ fn main() {
     let args = Args::parse();
 
     match args.action {
-        Action::Main { .. } => {
-            match TcpListener::bind(SocketAddrV4::new(args.host, args.port)) {
-                Ok(listener) => instance_main(listener, args),
-                Err(_) => panic!(
-                    "\n\nCouldn't bind server socket to port {}.\n\
+        Action::Main { .. } => match TcpListener::bind(SocketAddrV4::new(args.host, args.port)) {
+            Ok(listener) => instance_main(listener, args),
+            Err(_) => panic!(
+                "\n\nCouldn't bind server socket to port {}.\n\
                     Try another port, or perhaps an instance is already running?\n\n",
-                    args.port
-                ),
-            }
-        }
+                args.port
+            ),
+        },
         _ => match TcpStream::connect(SocketAddrV4::new(args.host, args.port)) {
             Ok(stream) => instance_sub(stream, args),
             Err(_) => panic!(

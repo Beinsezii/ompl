@@ -452,8 +452,12 @@ impl Track {
                 &Default::default(),
                 &Default::default(),
             )
-        }) else {return};
-        let Some(metadata) = probed.metadata.get() else {return};
+        }) else {
+            return;
+        };
+        let Some(metadata) = probed.metadata.get() else {
+            return;
+        };
         if let Some(meta) = metadata.current() {
             for tag in meta.tags() {
                 let mut val = match &tag.value {
@@ -510,7 +514,9 @@ impl Track {
                 ),
                 &symphonia::core::formats::FormatOptions::default(),
             )
-        }) else {return};
+        }) else {
+            return;
+        };
         if let Some(meta) = reader.metadata().current() {
             for tag in meta.tags() {
                 self.tags
