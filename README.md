@@ -44,11 +44,12 @@ A music player organized exactly how I like it.
 Manually compiled and tested binaries for Linux and Windows are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
 
 Additionally, binaries are automatically compiled and uploaded for Linux, Windows, and MacOS with the [Build Master Release Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_master.yml)
+
 Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run.
 
 If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
 
-`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.8.0`
+`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.8.1`
 
 You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
 
@@ -102,7 +103,6 @@ Question|Answer
 Can you add support for my strange and unusual use-case?|OMPL isn't designed in any way to stream Spotify/show synchronized lyrics/etc. Use [quodlibet](https://quodlibet.readthedocs.io/en/latest/) or [foobar2000](https://www.foobar2000.org/), they both have similar layouts to OMPL
 Can you change X functionality to be more like existing standards?|Maybe. Create an Issue with a good reason for the change, and ideally a source showing the standard implementation
 Where is the configuration file?|In your heart. Every configurable setting is exposed by the CLI, so simply create a shortcut wherever you want and load up the command line flags. If something *isn't* available through CLI in some way, create an Issue
-I noticed OMPL communicates to itself with network ports. Is it possible to send commands to another machine?|No. OMPL is hardcoded to listen at localhost. While its probably possible to enable listening over LAN or even across the internet, I don't see a purpose to it. Last thing I need is Github emailing me about a network security vulnerability in my music player.
 
 ## SECRET KNOWLEDGE
 * Left click on a filter's tagstring to invert the selection
