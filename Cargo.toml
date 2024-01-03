@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-colcon = "0.1" # mine
+colcon = "0.7" # mine
 bincode = "1"
 bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }
@@ -23,10 +23,10 @@ cpal = {version = "0.15", optional=true}
 
 souvlaki = {version = "0.6", optional = true}
 
-crossterm = {version = "0.26", optional = true}
+crossterm = {version = "0.27", optional = true}
 tui = { version = "0.19", default-features = false, features = ['crossterm'] , optional = true}
 
-copypasta = {version = "0.8", optional=true}
+copypasta = {version = "0.10", optional=true}
 
 
 
