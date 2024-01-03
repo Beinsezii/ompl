@@ -426,7 +426,7 @@ pub enum Action {
     /// Scrub and seek current playback time. Sympal backend only
     #[command(subcommand)]
     Seek(SeekCmd),
-    /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), or none
+    /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), function (oklch 0.65 0.1 160), or none
     #[command(subcommand)]
     Theme(ThemeCmd),
     /// Set new TUI statusline
