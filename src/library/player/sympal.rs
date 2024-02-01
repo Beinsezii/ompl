@@ -2,6 +2,7 @@
 
 use super::{Player, PlayerMessage};
 use crate::library::Track;
+use crate::{l2, log, LOG_LEVEL};
 
 use std::{
     fs::File,
@@ -37,6 +38,17 @@ pub struct Backend {
     pos: Arc<AtomicUsize>,
     rate: Arc<AtomicU32>,
     channels: Arc<AtomicUsize>,
+}
+
+impl Backend {
+    fn err<T: ToString>(&self, message: T) {
+        self.channel
+            .send(PlayerMessage::Error(message.to_string()))
+            .expect(&format!(
+                "Sympal could not forward error {}",
+                message.to_string()
+            ));
+    }
 }
 
 impl Player for Backend {
@@ -102,8 +114,10 @@ impl Player for Backend {
         let vol = self.volume.clone();
         let gain = self.track.lock().unwrap().as_ref().unwrap().gain();
 
+        l2!("Sympal play acquire host");
         let host = cpal::default_host();
 
+        l2!("Sympal play acquire device");
         let device = host
             .default_output_device()
             .expect("No audio output device found");
@@ -111,25 +125,50 @@ impl Player for Backend {
         let rate = self.rate.load(Ordering::Relaxed);
         let channels = self.channels.load(Ordering::Relaxed);
 
-        let config = if let Ok(mut configs) = device.supported_output_configs() {
-            loop {
-                match configs.next() {
-                    Some(config) => {
-                        if config.channels() as usize == channels
-                            && config.max_sample_rate().0 >= rate
-                            && config.min_sample_rate().0 <= rate
-                            && config.sample_format() == SampleFormat::I16
-                        {
-                            break config.with_sample_rate(SampleRate(rate));
-                        }
-                    }
-                    None => panic!("No valid config for audio device found!"),
+        l2!("Sympal play acquire config");
+        let mut config = None;
+        if let Ok(configs) = device.supported_output_configs() {
+            for c in configs {
+                if c.channels() as usize == channels
+                    && c.max_sample_rate().0 >= rate
+                    && c.min_sample_rate().0 <= rate
+                    && c.sample_format() == SampleFormat::I16
+                {
+                    config = Some(c.with_sample_rate(SampleRate(rate)));
+                    break;
                 }
             }
+            if config.is_none() {
+                self.err(&format!("Sympal: Could not find a valid configuration for device '{}'.\nRequested: i16b {}x {}Hz\nFound: {}",
+                device.name().unwrap_or(String::from("ERR")),
+                channels,
+                rate,
+                device.supported_output_configs().map(|configs|
+                        configs.map(|c|
+                            format!(
+                                "{}b {}x {}-{}Hz",
+                                c.sample_format(),
+                                c.channels(),
+                                c.min_sample_rate().0,
+                                c.min_sample_rate().0,
+                            )
+                        ).collect::<Vec<String>>().join("\n")
+                    ).unwrap_or("NONE".to_string())
+            ));
+                self.stop();
+                return;
+            }
         } else {
-            panic!("No configs for audio device found!")
-        };
+            self.err(&format!(
+                "Sympal: Audio device '{}' has no output configurations",
+                device.name().unwrap_or(String::from("ERR"))
+            ));
+            self.stop();
+            return;
+        }
+        let config = config.unwrap();
 
+        l2!("Sympal play await stream");
         while self.streaming.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(1))
         }
@@ -150,6 +189,7 @@ impl Player for Backend {
         let join_err = self.join.clone();
         let pos_err = self.pos.clone();
 
+        l2!("Sympal play spawn stream");
         thread::Builder::new()
             .name(String::from("SYMPAL Audio Stream"))
             .spawn(move || {
@@ -219,6 +259,7 @@ impl Player for Backend {
                 streaming.store(false, Ordering::Relaxed);
             })
             .unwrap();
+        l2!("Sympal play end");
     }
     // }}}
 
