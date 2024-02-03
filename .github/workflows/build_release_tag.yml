@@ -1,0 +1,41 @@
+name: Build Latest Release Tag
+on:
+  push:
+    tags:
+      '*'
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: sudo apt install libasound2-dev libdbus-1-dev pkg-config
+      - name: Build Linux Release
+        run: cargo build --release
+      - name: Upload Linux Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux_binary
+          path: target/release/ompl
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build MacOs Release
+        run: cargo build --release
+      - name: Upload MacOS Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos_binary
+          path: target/release/ompl
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Windows Release
+        run: cargo build --release
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows_exe
+          path: target/release/ompl.exe
