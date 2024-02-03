@@ -1,12 +1,13 @@
 [package]
 name = "ompl"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-colcon = "0.7" # mine
+colcon = ">=0.8.1"
+# colcon = { git = "https://github.com/Beinsezii/colcon.git" }
 bincode = "1"
 bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }

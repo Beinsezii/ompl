@@ -379,9 +379,9 @@ dependencies = [
 
 [[package]]
 name = "colcon"
-version = "0.7.1"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bbcf54931ee7eb916b292f3c1bc58ce175b497a113cfcdf270c3a3666145624"
+checksum = "9d4294c5f33b99b3a63e9289027f09b2b3e3dcf14413f73c37303373ff5d2026"
 
 [[package]]
 name = "colorchoice"
@@ -1408,7 +1408,7 @@ dependencies = [
 
 [[package]]
 name = "ompl"
-version = "0.8.1"
+version = "0.8.2"
 dependencies = [
  "bincode",
  "bus",
@@ -2872,9 +2872,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.5.36"
+version = "0.5.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "818ce546a11a9986bc24f93d0cdf38a8a1a400f1473ea8c82e59f6e0ffab9249"
+checksum = "a7cad8365489051ae9f054164e459304af2e7e9bb407c958076c8bf4aef52da5"
 dependencies = [
  "memchr",
 ]
