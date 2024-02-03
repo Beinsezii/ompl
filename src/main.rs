@@ -162,19 +162,19 @@ pub enum StatuslineCmd {
 /// see Action
 #[derive(Subcommand, Debug, Clone, Serialize, Deserialize)]
 pub enum VolumeCmd {
-    /// Current volume, 0.0 -> 1.0
+    /// Current volume in range 0.0 -> 1.0
     Get,
-    /// Add value onto current volume, clamped to 1.0
+    /// Add value onto current volume
     Add {
         ///
         amount: f32,
     },
-    /// Subtract value from current volume, clamped to 0.0
+    /// Subtract value from current volume
     Sub {
         ///
         amount: f32,
     },
-    /// Set volume directly, clamped to 0.0 -> 1.0
+    /// Set volume directly from range 0.0 -> 1.0
     Set {
         ///
         amount: f32,
@@ -370,7 +370,11 @@ pub enum Action {
         daemon: bool,
 
         #[arg(long, short)]
-        /// Disable media interface. Useful if you want to only use the CLI as opposed to MPRIS. Does nothing if `media-controls` disabled at compile time
+        /// Disable media interface.
+        ///
+        /// Useful if you want to only use the CLI as opposed to MPRIS.
+        ///
+        /// Does nothing if `media-controls` disabled at compile time
         no_media: bool,
 
         #[arg(long, short, num_args(1..), value_parser=parse_filter)]
@@ -423,7 +427,7 @@ pub enum Action {
     Previous,
     /// Calls on the server to exit
     Exit,
-    /// Work with volume in float, 0.0 minimum -> 1.0 maximum
+    /// Work with volume in a range of 0.0 -> 1.0
     #[command(subcommand)]
     Volume(VolumeCmd),
     /// Control behavior after track ends
@@ -435,7 +439,19 @@ pub enum Action {
     /// Scrub and seek current playback time. Sympal backend only
     #[command(subcommand)]
     Seek(SeekCmd),
-    /// Update theme colors. Can be either hex (#129AEF), terminal colors (red, green, 0-15), function (oklch 0.65 0.1 160), or none
+    /// Update theme colors.
+    ///
+    /// Examples:
+    ///
+    /// "0.2, 0.5, 0.6"
+    ///
+    /// "lch:50;20;120"
+    ///
+    /// "oklab(0.2, 0.6, -0.5)"
+    ///
+    /// "srgb 100% 50% 25%"
+    ///
+    /// "#BB9944"
     #[command(subcommand)]
     Theme(ThemeCmd),
     /// Set/retrieve UI statusline
