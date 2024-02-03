@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v 0.8.1
+# OMPL - Opinionated Music Player/Library v0.8.2
 A music player organized exactly how I like it.
 
 <img src="./screenshot.png" height = 400px />
@@ -13,7 +13,7 @@ A music player organized exactly how I like it.
   * Sympal backend (default)
     * \+ Extremely efficient seeking and playback
     * \+ Supports many formats
-    * \- May use > 200MB of RAM for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
+    * \- Uses more RAM, particularly for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
     * \- Incompatible with Windows
     * \- Less stable, partially work-in-progress for edge cases
   * [Rodio](https://github.com/RustAudio/rodio) backend (default on Windows)
@@ -37,19 +37,20 @@ A music player organized exactly how I like it.
 ### Goals for 1.0
   * Code docs
   * Stability
-  * Sympal backend completion
+  * More robust Sympal backend
   * See [TODO.md](./TODO.md) for more details
   
 ## Installation
 Manually compiled and tested binaries for Linux and Windows are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
 
-Additionally, binaries are automatically compiled and uploaded for Linux, Windows, and MacOS with the [Build Master Release Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_master.yml)
+Additionally, stable release binaries are automatically compiled and uploaded for Linux, Windows, and MacOS with the [Build Latest Release Tag Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_tag.yml)
+while the latest unstable binaries are can be found in the [Build Master Release Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_master.yml)
 
-Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run.
+Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run anywhere.
 
 If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
 
-`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.8.1`
+`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.8.2`
 
 You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
 
@@ -92,10 +93,6 @@ Filters are just Tagstrings that can also have values assigned to them.
  * In the TUI this is done by selecting them.
  * In the CLI you may append items after an equal `=`, ex `title=Song1,Song2` or `<genre>/<album>="Spicy/Meatball"`
    * Using Tagstrings directly (ie, without any items) is valid. This results in an empty filter, useful for laying out the TUI
-
-### Compiling
-Have Rust 2021 installed, clone repo and just run `cargo build`.
-`build_bin.sh` will build in binaries in release mode for linux/windows, moving the binaries to ./bin/
 
 ## F.A.Q.
 Question|Answer
