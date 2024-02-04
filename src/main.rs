@@ -829,7 +829,7 @@ fn instance_main(listener: TcpListener, args: Args) {
                 };
 
                 match MediaControls::new(PlatformConfig {
-                    dbus_name: &format!("ompl.port{}", args.port),
+                    dbus_name: &format!("ompl-{}", args.port),
                     display_name: "OMPL",
                     hwnd,
                 }) {
