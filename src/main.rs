@@ -804,7 +804,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             #[cfg(feature = "media-controls")]
             if !no_media {
                 l2!("Initializing media controls...");
-                // let mut libevt_r = library.get_receiver();
+                let mut libevt_r = library.get_receiver();
 
                 #[cfg(not(target_os = "windows"))]
                 let hwnd = None;
@@ -872,55 +872,52 @@ fn instance_main(listener: TcpListener, args: Args) {
                             .unwrap();
                         let meta_libr_wk = Arc::downgrade(&library);
                         thread::spawn(move || loop {
-                            // // Seems like if it updates too fast it overqueus?
-                            // // For now just poll 1sec
-                            // match libevt_r.recv() {
-                            //     Ok(_) => {
-                            thread::sleep(Duration::from_secs(1));
-                            if let Some(library) = meta_libr_wk.upgrade() {
-                                let (pos, tot) = if let Some((cur, tot)) = library.times() {
-                                    (Some(souvlaki::MediaPosition(cur)), Some(tot))
-                                } else {
-                                    (None, None)
-                                };
-                                controls
-                                    .set_metadata(MediaMetadata {
-                                        title: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("title").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        artist: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("artist").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        album: library
-                                            .track_get()
-                                            .map(|t| t.tags().get("album").cloned())
-                                            .flatten()
-                                            .as_deref(),
-                                        duration: tot,
-                                        cover_url: None,
-                                    })
-                                    .unwrap();
-                                controls
-                                    .set_playback(if library.playing() {
-                                        MediaPlayback::Playing { progress: pos }
-                                    } else if library.paused() {
-                                        MediaPlayback::Paused { progress: pos }
+                            match libevt_r.recv() {
+                                Ok(_) => {
+                                    if let Some(library) = meta_libr_wk.upgrade() {
+                                        let (pos, tot) = if let Some((cur, tot)) = library.times() {
+                                            (Some(souvlaki::MediaPosition(cur)), Some(tot))
+                                        } else {
+                                            (None, None)
+                                        };
+                                        controls
+                                            .set_metadata(MediaMetadata {
+                                                title: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("title").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                artist: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("artist").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                album: library
+                                                    .track_get()
+                                                    .map(|t| t.tags().get("album").cloned())
+                                                    .flatten()
+                                                    .as_deref(),
+                                                duration: tot,
+                                                cover_url: None,
+                                            })
+                                            .unwrap();
+                                        controls
+                                            .set_playback(if library.playing() {
+                                                MediaPlayback::Playing { progress: pos }
+                                            } else if library.paused() {
+                                                MediaPlayback::Paused { progress: pos }
+                                            } else {
+                                                MediaPlayback::Stopped
+                                            })
+                                            .unwrap();
+                                        #[cfg(target_os = "linux")]
+                                        controls.set_volume(library.volume_get() as f64).unwrap();
                                     } else {
-                                        MediaPlayback::Stopped
-                                    })
-                                    .unwrap();
-                                #[cfg(target_os = "linux")]
-                                controls.set_volume(library.volume_get() as f64).unwrap();
-                            } else {
-                                break;
+                                        break;
+                                    }
+                                }
+                                Err(_) => break,
                             }
-                            //     }
-                            //     Err(_) => break,
-                            // }
                         });
                     }
                     Err(e) => println!("Media control failure: {:?}", e),
