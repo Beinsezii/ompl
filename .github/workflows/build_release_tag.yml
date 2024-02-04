@@ -13,7 +13,7 @@ jobs:
       - name: Build Linux Release
         run: cargo build --release
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: linux_binary
           path: target/release/ompl
@@ -24,7 +24,7 @@ jobs:
       - name: Build MacOs Release
         run: cargo build --release
       - name: Upload MacOS Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos_binary
           path: target/release/ompl
@@ -35,7 +35,7 @@ jobs:
       - name: Build Windows Release
         run: cargo build --release
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: windows_exe
           path: target/release/ompl.exe
