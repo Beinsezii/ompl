@@ -845,6 +845,26 @@ fn instance_main(listener: TcpListener, args: Args) {
                                         MediaControlEvent::Toggle => library.play_pause(),
                                         MediaControlEvent::Next => library.next(),
                                         MediaControlEvent::Previous => library.previous(),
+                                        MediaControlEvent::SetVolume(n) => {
+                                            library.volume_set(n as f32)
+                                        }
+                                        MediaControlEvent::SetPosition(p) => library.seek(p.0),
+                                        MediaControlEvent::Seek(d) => match d {
+                                            souvlaki::SeekDirection::Forward => {
+                                                library.seek_by(5.0)
+                                            }
+                                            souvlaki::SeekDirection::Backward => {
+                                                library.seek_by(-5.0)
+                                            }
+                                        },
+                                        MediaControlEvent::SeekBy(d, n) => match d {
+                                            souvlaki::SeekDirection::Forward => {
+                                                library.seek_by(n.as_secs_f32())
+                                            }
+                                            souvlaki::SeekDirection::Backward => {
+                                                library.seek_by(-n.as_secs_f32())
+                                            }
+                                        },
                                         _ => (),
                                     }
                                 }
@@ -855,6 +875,11 @@ fn instance_main(listener: TcpListener, args: Args) {
                             match libevt_r.recv() {
                                 Ok(_) => {
                                     if let Some(library) = meta_libr_wk.upgrade() {
+                                        let (pos, tot) = if let Some((cur, tot)) = library.times() {
+                                            (Some(souvlaki::MediaPosition(cur)), Some(tot))
+                                        } else {
+                                            (None, None)
+                                        };
                                         controls
                                             .set_metadata(MediaMetadata {
                                                 title: library
@@ -872,18 +897,21 @@ fn instance_main(listener: TcpListener, args: Args) {
                                                     .map(|t| t.tags().get("album").cloned())
                                                     .flatten()
                                                     .as_deref(),
-                                                ..Default::default()
+                                                duration: tot,
+                                                cover_url: None,
                                             })
                                             .unwrap();
                                         controls
                                             .set_playback(if library.playing() {
-                                                MediaPlayback::Playing { progress: None }
+                                                MediaPlayback::Playing { progress: pos }
                                             } else if library.paused() {
-                                                MediaPlayback::Paused { progress: None }
+                                                MediaPlayback::Paused { progress: pos }
                                             } else {
                                                 MediaPlayback::Stopped
                                             })
                                             .unwrap();
+                                        #[cfg(target_os = "linux")]
+                                        controls.set_volume(library.volume_get() as f64).unwrap();
                                     } else {
                                         break;
                                     }
