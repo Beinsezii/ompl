@@ -814,7 +814,7 @@ fn instance_main(listener: TcpListener, args: Args) {
                     // You *could* use winapi::um::wincon::GetConsoleWindow()
                     // but if you're running ompl from the CLI, conhost.exe will own the window process
                     // so souvlaki can't hook into it. This just creates a hidden window instead.
-                    use winit::raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+                    use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
                     match winit::window::WindowBuilder::new()
                         .with_decorations(false)
                         .with_visible(false)
