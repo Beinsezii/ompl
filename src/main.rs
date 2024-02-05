@@ -814,23 +814,18 @@ fn instance_main(listener: TcpListener, args: Args) {
                     // You *could* use winapi::um::wincon::GetConsoleWindow()
                     // but if you're running ompl from the CLI, conhost.exe will own the window process
                     // so souvlaki can't hook into it. This just creates a hidden window instead.
-                    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-                    winit::window::WindowBuilder::new()
+                    use raw_window_handle::{HasRawWindowHandle, RawWindowHandle};
+                    match winit::window::WindowBuilder::new()
                         .with_decorations(false)
                         .with_visible(false)
                         .with_title("OMPL Media Control Window")
                         .build(&winit::event_loop::EventLoop::new().unwrap())
                         .unwrap()
-                        .window_handle()
-                        .ok()
-                        .map(|h| match h.as_raw() {
-                            RawWindowHandle::Win32(wh) => {
-                                let p: *mut isize = &mut wh.hwnd.get();
-                                Some(p.cast())
-                            }
-                            _ => None,
-                        })
-                        .flatten()
+                        .raw_window_handle()
+                    {
+                        RawWindowHandle::Win32(han) => Some(han.hwnd),
+                        _ => panic!("Unknown window handle type!"),
+                    }
                 };
 
                 match MediaControls::new(PlatformConfig {
