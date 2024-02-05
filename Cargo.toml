@@ -22,7 +22,7 @@ rodio = { version = "0.16", optional = true } # 0.17 panics when source ends
 
 cpal = {version = "0.15", optional=true}
 
-souvlaki = {version = "0.7", optional = true}
+souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
 crossterm = {version = "0.27", optional = true}
 tui = { version = "0.19", default-features = false, features = ['crossterm'] , optional = true}
