@@ -41,7 +41,7 @@ backend-sympal = ["dep:cpal"]
 default = ["media-controls", "tui", "clipboard", "backend-sympal", "backend-rodio"]
 
 [target.'cfg(windows)'.dependencies]
-winit = {version = "0.29", features = ['rwh_06']}
+winit = {version = "0.29", features = ['rwh_05']}
 
 [profile.dev]
 opt-level = 1
