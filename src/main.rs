@@ -835,7 +835,7 @@ fn instance_main(listener: TcpListener, args: Args) {
 
                 match MediaControls::new(PlatformConfig {
                     // <https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus>
-                    dbus_name: &format!("ompl.{}", args.port),
+                    dbus_name: &format!("ompl.port{}", args.port),
                     display_name: "OMPL",
                     hwnd,
                 }) {
