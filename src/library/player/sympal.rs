@@ -114,13 +114,28 @@ impl Player for Backend {
         let vol = self.volume.clone();
         let gain = self.track.lock().unwrap().as_ref().unwrap().gain();
 
-        l2!("Sympal play acquire host");
-        let host = cpal::default_host();
+        #[cfg(feature = "jack")]
+        let requested_id = Some(cpal::HostId::Jack);
+
+        #[cfg(not(feature = "jack"))]
+        let requested_id = None;
 
         l2!("Sympal play acquire device");
-        let device = host
-            .default_output_device()
-            .expect("No audio output device found");
+        let device = if let Some(device) =
+            if let Some(host) = requested_id.map(|id| cpal::host_from_id(id).ok()).flatten() {
+                if host.default_output_device().is_some() {
+                    host.default_output_device()
+                } else {
+                    cpal::default_host().default_output_device()
+                }
+            } else {
+                cpal::default_host().default_output_device()
+            } {
+            device
+        } else {
+            self.err("Could not find a valid output device.");
+            return;
+        };
 
         let rate = self.rate.load(Ordering::Relaxed);
         let channels = self.channels.load(Ordering::Relaxed);
@@ -146,7 +161,9 @@ impl Player for Backend {
             self.stop();
             return;
         }
-        if config.is_none() {
+        let config = if let Some(config) = config {
+            config
+        } else {
             self.err(&format!("Sympal: Could not find a valid configuration for device '{}'.\nRequested: i16b {}x {}Hz\nFound: {}",
             device.name().unwrap_or(String::from("ERR")),
             channels,
@@ -165,8 +182,7 @@ impl Player for Backend {
         ));
             self.stop();
             return;
-        }
-        let config = config.unwrap();
+        };
 
         l2!("Sympal play await stream");
         while self.streaming.load(Ordering::Relaxed) {
