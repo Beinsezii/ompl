@@ -138,31 +138,31 @@ impl Player for Backend {
                     break;
                 }
             }
-            if config.is_none() {
-                self.err(&format!("Sympal: Could not find a valid configuration for device '{}'.\nRequested: i16b {}x {}Hz\nFound: {}",
-                device.name().unwrap_or(String::from("ERR")),
-                channels,
-                rate,
-                device.supported_output_configs().map(|configs|
-                        configs.map(|c|
-                            format!(
-                                "{}b {}x {}-{}Hz",
-                                c.sample_format(),
-                                c.channels(),
-                                c.min_sample_rate().0,
-                                c.min_sample_rate().0,
-                            )
-                        ).collect::<Vec<String>>().join("\n")
-                    ).unwrap_or("NONE".to_string())
-            ));
-                self.stop();
-                return;
-            }
         } else {
             self.err(&format!(
                 "Sympal: Audio device '{}' has no output configurations",
                 device.name().unwrap_or(String::from("ERR"))
             ));
+            self.stop();
+            return;
+        }
+        if config.is_none() {
+            self.err(&format!("Sympal: Could not find a valid configuration for device '{}'.\nRequested: i16b {}x {}Hz\nFound: {}",
+            device.name().unwrap_or(String::from("ERR")),
+            channels,
+            rate,
+            device.supported_output_configs().map(|configs|
+                    configs.map(|c|
+                        format!(
+                            "{}b {}x {}-{}Hz",
+                            c.sample_format(),
+                            c.channels(),
+                            c.min_sample_rate().0,
+                            c.min_sample_rate().0,
+                        )
+                    ).collect::<Vec<String>>().join("\n")
+                ).unwrap_or("NONE".to_string())
+        ));
             self.stop();
             return;
         }
