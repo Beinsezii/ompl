@@ -95,7 +95,8 @@ pub const HELP: &str = &"\
 * r | toggle repeat
 * h/j/k/l | left/down/up/right
 * H/L | move panes
-* g/G scroll to top/bottom
+* g/G | scroll to top/bottom
+* z | Focus playing
 * f | select item
 * F | select only item
 * v/V | invert/clear selection
@@ -832,6 +833,19 @@ impl<T: Backend> UI<T> {
                     self.filterpanes.scroll_by_n(i16::MAX.into())
                 };
                 self.draw();
+            }
+
+            km!('z') => {
+                if let Some(track) = library.track_get() {
+                    if self.sortpanes.active() {
+                        if let Some(index) = library.get_queue().iter().position(|t| *t == track) {
+                            self.sortpanes.scroll_by_n(i32::MIN);
+                            self.sortpanes.scroll_by_n_lock(index as i32);
+                            self.draw();
+                        }
+                    } else {
+                    }
+                }
             }
 
             km!('f')
