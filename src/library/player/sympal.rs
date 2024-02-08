@@ -2,7 +2,7 @@
 
 use super::{Player, PlayerMessage};
 use crate::library::Track;
-use crate::{l2, log, LOG_LEVEL};
+use crate::{l1, l2, log, LOG_LEVEL};
 
 use std::{
     fs::File,
@@ -12,7 +12,7 @@ use std::{
         Arc, Mutex, RwLock,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use cpal::{
@@ -421,6 +421,7 @@ impl Player for Backend {
                 thread::Builder::new()
                     .name(String::from("SYMPAL Decoder"))
                     .spawn(move || {
+                        let begin = Instant::now();
                         while let Ok(packet) = fr.next_packet() {
                             if packet.dur() < 1 {
                                 // 0 length packets are possible I guess
@@ -442,6 +443,7 @@ impl Player for Backend {
                                 return;
                             }
                         }
+                        l1!(format!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis()));
                         if let Some(samples) = samples.upgrade() {
                             last.store(true, Ordering::Relaxed);
                             samples.write().unwrap().shrink_to_fit();
