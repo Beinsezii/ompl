@@ -79,7 +79,7 @@ impl Player for Backend {
             symphonia::default::formats::FlacReader::query(),
             symphonia::default::formats::WavReader::query(),
             symphonia::default::formats::AdtsReader::query(),
-            // symphonia::default::formats::IsoMp4Reader::query(),
+            symphonia::default::formats::IsoMp4Reader::query(),
         ]
         .iter().map(|descriptors|
             descriptors.iter().map(|descriptor|
