@@ -40,7 +40,7 @@ backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]
 jack = ["cpal/jack"]
 
-default = ["media-controls", "tui", "clipboard", "backend-sympal", "backend-rodio"]
+default = ["media-controls", "tui", "clipboard", "backend-sympal"]
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.5"
