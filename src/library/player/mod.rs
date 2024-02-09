@@ -11,7 +11,6 @@ mod brodio;
 #[cfg(feature = "backend-sympal")]
 mod sympal;
 
-use std::env::consts::OS;
 use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
 use std::time::Duration;
@@ -39,10 +38,6 @@ pub fn backend(backend: Backend, signal: SyncSender<PlayerMessage>) -> Box<dyn P
     #[allow(unreachable_code)]
     match backend {
         Backend::Default => {
-            if OS == "windows" {
-                #[cfg(feature = "backend-rodio")]
-                return Box::new(brodio::Backend::new(signal));
-            }
             #[cfg(feature = "backend-sympal")]
             return Box::new(sympal::Backend::new(signal));
             #[cfg(feature = "backend-rodio")]
@@ -156,9 +151,7 @@ pub trait Player: Send + Sync {
     fn seek_by(&self, secs: f32) {
         if let Some(true) = self.seekable() {
             if let Some((current, total)) = self.times() {
-                self.seek(
-                    Duration::from_secs_f32((current.as_secs_f32() + secs).max(0.0)).min(total),
-                )
+                self.seek(Duration::from_secs_f32((current.as_secs_f32() + secs).max(0.0)).min(total))
             }
         }
     }
