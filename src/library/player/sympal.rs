@@ -258,6 +258,7 @@ impl Player for Backend {
                 if last.load(Ordering::Relaxed) && samples.read().unwrap().len() == pos.load(Ordering::Relaxed) {
                     pos.store(0, Ordering::Relaxed)
                 }
+                streaming.store(true, Ordering::Relaxed);
                 let stream = device
                     .build_output_stream_raw(
                         &config.config(),
