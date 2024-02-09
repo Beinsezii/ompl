@@ -14,6 +14,13 @@ jobs:
         with:
           name: linux_binary
           path: target/release/ompl
+      - name: Build Linux Release (Jack)
+        run: cargo build --release --features = "jack"
+      - name: Upload Linux Artifact (Jack)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux_binary_jack
+          path: target/release/ompl
   build-macos:
     runs-on: macos-latest
     steps:
