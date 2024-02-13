@@ -320,6 +320,7 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
     let now = Instant::now();
 
     let tracks: Vec<Track> = WalkDir::new(path)
+        .follow_links(true)
         .max_depth(10)
         .into_iter()
         .filter_entry(|e| {
