@@ -20,7 +20,8 @@ walkdir = "2"
 
 rodio = { version = "0.16", optional = true } # 0.17 panics when source ends
 
-cpal = {version = "0.15", optional=true}
+cpal = {version = "0.15", optional = true}
+dasp = {version = "0.11", optional = true, features = ["all"]}
 
 souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
@@ -36,9 +37,10 @@ media-controls = ["dep:souvlaki"]
 tui = ["dep:tui", "dep:crossterm"]
 clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
-backend-sympal = ["dep:cpal"]
+backend-sympal = ["dep:cpal", "dep:dasp"]
+jack = ["cpal/jack"]
 
-default = ["media-controls", "tui", "clipboard", "backend-sympal", "backend-rodio"]
+default = ["media-controls", "tui", "clipboard", "backend-sympal"]
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.5"

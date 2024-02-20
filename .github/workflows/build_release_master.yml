@@ -6,20 +6,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install deps
-        run: sudo apt install libasound2-dev libdbus-1-dev pkg-config
+        run: sudo apt install libasound2-dev libdbus-1-dev pkg-config libjack-jackd2-dev
       - name: Build Linux Release
-        run: cargo build --release
+        run: cargo build --release --features "backend-rodio"
       - name: Upload Linux Artifact
         uses: actions/upload-artifact@v4
         with:
           name: linux_binary
+          path: target/release/ompl
+      - name: Build Linux Release (Jack)
+        run: cargo build --release --features "backend-rodio jack"
+      - name: Upload Linux Artifact (Jack)
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux_binary_jack
           path: target/release/ompl
   build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build MacOs Release
-        run: cargo build --release
+        run: cargo build --release --features "backend-rodio"
       - name: Upload MacOS Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -30,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build Windows Release
-        run: cargo build --release
+        run: cargo build --release --features "backend-rodio"
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
