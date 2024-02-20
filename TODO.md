@@ -10,11 +10,7 @@
     * also variants, methods, and fields all need sorting and clustering beyond just whim
 
 ### LIBRARY
-* Sympal needs proper error handling. Also nothing should stop it from playing files like .mkv and .mp4, but it currently dies.
-* Should also investigate resampling in Sympal for use on Windows [and direct ALSA?]
-    * I saw a crate for this somewhere on the CPAL page but I don't remember what it's called.
-* Possibly implement multiple or generic bit depths
-    * Even most FLAC files I see are only 16 so maybe not useful
+* Sympal should play any file you can imagine, like .mkv and .mp4. Right now it dies on video containers and some extra goofy audio streams.
 
 ## Very stretchy goals
 ### TUI

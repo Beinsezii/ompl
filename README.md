@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v0.8.2
+# OMPL - Opinionated Music Player/Library v0.9.0
 A music player organized exactly how I like it.
 
 <img src="./screenshot.png" height = 400px />
@@ -14,12 +14,10 @@ A music player organized exactly how I like it.
     * \+ Extremely efficient seeking and playback
     * \+ Supports many formats
     * \- Uses more RAM, particularly for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
-    * \- Incompatible with Windows
     * \- Less stable, partially work-in-progress for edge cases
   * [Rodio](https://github.com/RustAudio/rodio) backend (default on Windows)
     * \+ Very safe, should always work
     * \+ Extremely low memory usage
-    * \+ Compatible with Windows
     * \- No seeking of any kind
     * \- Limited supported formats
   * Support for many audio formats
@@ -48,9 +46,11 @@ while the latest unstable binaries are can be found in the [Build Master Release
 
 Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run anywhere.
 
+As of OMPL 0.9, the default features do not include `backend-rodio`. The binaries created by Actions opt-in to including it.
+
 If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
 
-`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.8.2`
+`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.9.0`
 
 You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
 
