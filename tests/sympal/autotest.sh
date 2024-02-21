@@ -6,6 +6,8 @@ media="${fp%/*}/media"
 export RUSTFLAGS=-Awarnings
 cmd="cargo run --quiet --no-default-features --features backend-sympal -- --port 54321"
 
+trap "$cmd exit 2> /dev/null; exit 0" INT
+
 SUCCESS=true
 
 $cmd exit 2> /dev/null
