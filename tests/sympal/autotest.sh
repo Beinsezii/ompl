@@ -20,17 +20,19 @@ do
     done
     $cmd play-file "$file"
     sleep 0.1
+    played=`$cmd print playing 2> /dev/null`
     while [[ `$cmd print playing 2> /dev/null` = true ]]; do
         sleep 0.1
     done
     $cmd exit 2> /dev/null
-    if wait $!
-    then
-        echo $file PASS
-    else
-        echo $file FAIL
-        SUCCESS=false
+    if wait $!; then
+        if [[ $played = true ]]; then
+            echo $file PASS
+            continue
+        fi
     fi
+    echo $file FAIL
+    SUCCESS=false
 done
 
 [[ $SUCCESS = true ]] && exit 0 || exit 1
