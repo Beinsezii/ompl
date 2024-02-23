@@ -265,7 +265,8 @@ impl Player for Backend {
                         device_format,
                         move |ring_buffer: &mut cpal::Data, _: &cpal::OutputCallbackInfo| {
                             let amplitude = gain * f32::from_bits(vol.load(Ordering::Relaxed)).powi(3);
-                            let start_pos = pos.load(Ordering::Relaxed);
+                            let mut start_pos = pos.load(Ordering::Relaxed);
+                            start_pos -= start_pos % channels as usize;
                             let mut cur_pos = start_pos;
                             let samples = samples.read().unwrap();
 
@@ -391,7 +392,7 @@ impl Player for Backend {
     fn seek(&self, time: Duration) {
         if self.last.load(Ordering::Relaxed) {
             self.pos.store(
-                (time.as_secs_f32() * self.rate.load(Ordering::Relaxed) as f32 * self.channels.load(Ordering::Relaxed) as f32) as usize,
+                (time.as_secs_f32() * self.rate.load(Ordering::Relaxed) as f32) as usize * self.channels.load(Ordering::Relaxed),
                 Ordering::Release,
             );
             self.channel.send(PlayerMessage::Clock).unwrap();
