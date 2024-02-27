@@ -290,8 +290,9 @@ impl Library {
                     tracks.remove(id);
                 }
                 drop(tracks);
-                self.next();
                 self.force_build_filters();
+                self.next();
+                return;
             }
         }
         if let Some(track) = self.player.play_track(track) {
