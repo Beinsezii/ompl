@@ -8,7 +8,7 @@ cmd="cargo run --quiet --no-default-features --features backend-sympal -- --port
 
 trap "$cmd exit 2> /dev/null; exit 0" INT
 
-SUCCESS=true
+EXIT_CODE=0
 
 $cmd exit 2> /dev/null
 for file in $media/*
@@ -32,7 +32,7 @@ do
         fi
     fi
     echo $file FAIL
-    SUCCESS=false
+    ((EXIT_CODE++))
 done
 
-[[ $SUCCESS = true ]] && exit 0 || exit 1
+exit $EXIT_CODE
