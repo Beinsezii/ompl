@@ -12,7 +12,7 @@ jobs:
     - name: Install yt-dlp
       run: python3 -m pip install -U 'yt-dlp[default]'
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --no-default-features --features backend-sympal
     - name: Fetch media
       run: bash tests/sympal/fetch_media.sh
     - name: Run tests
