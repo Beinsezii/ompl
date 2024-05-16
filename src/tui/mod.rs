@@ -226,21 +226,14 @@ impl<T: Backend> UI<T> {
             if !tag.is_empty() {
                 let pos = self.sortpanes.index() + if before { 0 } else { 1 };
                 library.insert_sorter(tag, pos);
-                *self.sortpanes.index_mut() =
-                    min(pos, library.get_sorters().len().saturating_sub(1));
+                *self.sortpanes.index_mut() = min(pos, library.get_sorters().len().saturating_sub(1));
             }
         } else {
             let tag = self.input("Filter", "", false).trim().to_string();
             if !tag.is_empty() {
                 self.filterpanes.insert(before);
                 let pos = self.filterpanes.index() + if before { 0 } else { 1 };
-                library.insert_filter(
-                    Filter {
-                        tag,
-                        items: Vec::new(),
-                    },
-                    pos,
-                );
+                library.insert_filter(Filter { tag, items: Vec::new() }, pos);
                 *self.filterpanes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
             }
             *self.sortpanes.active_mut() = false;
@@ -318,12 +311,7 @@ impl<T: Backend> UI<T> {
         };
 
         if let Some(tagstring) = tagstring {
-            match self
-                .input("Edit", &tagstring, false)
-                .trim()
-                .to_ascii_lowercase()
-                .as_str()
-            {
+            match self.input("Edit", &tagstring, false).trim().to_ascii_lowercase().as_str() {
                 "" => (),
                 input => {
                     if input != &tagstring {
@@ -347,12 +335,7 @@ impl<T: Backend> UI<T> {
 
     // # search {{{
     fn search(&mut self) {
-        match self
-            .input("Search", "", false)
-            .trim()
-            .to_ascii_lowercase()
-            .as_str()
-        {
+        match self.input("Search", "", false).trim().to_ascii_lowercase().as_str() {
             "" => (),
             input => {
                 if self.sortpanes.active() {
@@ -391,18 +374,12 @@ impl<T: Backend> UI<T> {
                     .constraints(vec![
                         Constraint::Length(1),
                         Constraint::Length(1),
-                        Constraint::Length(if let Some(_) = library.seekable() {
-                            2
-                        } else {
-                            0
-                        }),
+                        Constraint::Length(if let Some(_) = library.seekable() { 2 } else { 0 }),
                         Constraint::Length(if self.debug { 1 } else { 0 }),
                         Constraint::Length(if library.filter_count() == 0 {
                             0
                         } else {
-                            size.height
-                                .saturating_sub(2 + if self.debug { 1 } else { 1 })
-                                / 2
+                            size.height.saturating_sub(2 + if self.debug { 1 } else { 1 }) / 2
                         }),
                         Constraint::Min(1),
                     ])
@@ -484,12 +461,10 @@ impl<T: Backend> UI<T> {
             });
             match get_event(None) {
                 Some(Event::Mouse(MouseEvent {
-                    kind: MouseEventKind::Moved,
-                    ..
+                    kind: MouseEventKind::Moved, ..
                 })) => (),
                 Some(Event::Mouse(MouseEvent {
-                    kind: MouseEventKind::Up(_),
-                    ..
+                    kind: MouseEventKind::Up(_), ..
                 })) => (),
                 Some(Event::Mouse(MouseEvent {
                     kind: MouseEventKind::Drag(_),
@@ -523,9 +498,7 @@ impl<T: Backend> UI<T> {
                     height: 3.min(size.height),
                     // +5 -> borders(2), pad(1), ": "(2)
                     width: if header {
-                        (size.width / 4)
-                            .max((result.len() + query.len()) as u16 + 5)
-                            .min(size.width)
+                        (size.width / 4).max((result.len() + query.len()) as u16 + 5).min(size.width)
                     } else {
                         ((result.len() + query.len()) as u16 + 5).min(size.width)
                     },
@@ -533,13 +506,9 @@ impl<T: Backend> UI<T> {
                 f.render_widget(Clear, area);
                 let text = format!("{}: {}", query, result);
                 f.render_widget(
-                    Paragraph::new(
-                        &text[text
-                            .len()
-                            .saturating_sub(size.width.saturating_sub(2) as usize)..],
-                    )
-                    .style(style)
-                    .block(Block::default().borders(Borders::ALL)),
+                    Paragraph::new(&text[text.len().saturating_sub(size.width.saturating_sub(2) as usize)..])
+                        .style(style)
+                        .block(Block::default().borders(Borders::ALL)),
                     area,
                 );
             });
@@ -638,17 +607,12 @@ impl<T: Backend> UI<T> {
             }
             Action::Statusline => {
                 if let Some(library) = self.lib_weak.upgrade() {
-                    library.statusline_set(self.input(
-                        "Statusline",
-                        &library.statusline_get(),
-                        true,
-                    ))
+                    library.statusline_set(self.input("Statusline", &library.statusline_get(), true))
                 }
             }
             Action::ACC | Action::FG | Action::BG => {
                 if let Some(library) = self.lib_weak.upgrade() {
-                    let text =
-                        self.input("Hex, terminal/ansi #, space function, or none", "", true);
+                    let text = self.input("Hex, terminal/ansi #, space function, or none", "", true);
                     if !text.is_empty() {
                         match Color::try_from(text) {
                             Ok(color) => {
@@ -740,12 +704,10 @@ impl<T: Backend> UI<T> {
                 ..
             }) => {
                 if self.sortpanes.active() {
-                    *self.sortpanes.index_mut() = (self.sortpanes.index() + 1)
-                        .min(library.get_sorters().len().saturating_sub(1));
+                    *self.sortpanes.index_mut() = (self.sortpanes.index() + 1).min(library.get_sorters().len().saturating_sub(1));
                     self.draw();
                 } else {
-                    *self.filterpanes.index_mut() = (self.filterpanes.index() + 1)
-                        .min(library.filter_count().saturating_sub(1));
+                    *self.filterpanes.index_mut() = (self.filterpanes.index() + 1).min(library.filter_count().saturating_sub(1));
                     self.draw();
                 }
             }
@@ -975,18 +937,18 @@ impl<T: Backend> UI<T> {
 
                 let draws = self.draw_count;
 
-                // Ensure something is always active
-                if !self.sortpanes.active() && !self.filterpanes.active() {
-                    match q {
-                        true => *self.sortpanes.active_mut() = true,
-                        false => *self.filterpanes.active_mut() = true,
-                    }
-                }
-
                 // handle draws later
                 for action in actions {
                     if action != &Action::Draw {
                         self.action(*action)
+                    }
+                }
+
+                // Ensure one pane is always active
+                if (!self.sortpanes.active() && !self.filterpanes.active()) || (self.sortpanes.active() && self.filterpanes.active()) {
+                    match q {
+                        true => (*self.filterpanes.active_mut(), *self.sortpanes.active_mut()) = (false, true),
+                        false => (*self.filterpanes.active_mut(), *self.sortpanes.active_mut()) = (true, false),
                     }
                 }
 
