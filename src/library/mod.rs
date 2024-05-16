@@ -114,12 +114,7 @@ pub struct Theme {
 
 impl ToString for Theme {
     fn to_string(&self) -> String {
-        format!(
-            "fg: {}\nbg: {}\nacc: {}",
-            self.fg.to_string(),
-            self.bg.to_string(),
-            self.acc.to_string()
-        )
+        format!("fg: {}\nbg: {}\nacc: {}", self.fg.to_string(), self.bg.to_string(), self.acc.to_string())
     }
 }
 
@@ -138,9 +133,7 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                 Ok(msg) => match msg {
                     PlayerMessage::Request => match library.repeat_get() {
                         None => {
-                            if library.get_queue().last() == library.track_get().as_ref()
-                                && !library.shuffle_get()
-                            {
+                            if library.get_queue().last() == library.track_get().as_ref() && !library.shuffle_get() {
                                 library.bus.lock().unwrap().broadcast(LibEvt::Playback)
                             } else {
                                 library.next()
@@ -150,12 +143,8 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                         Some(true) => library.next(),
                     },
 
-                    PlayerMessage::Seekable | PlayerMessage::Clock => {
-                        library.bus.lock().unwrap().broadcast(LibEvt::Playback)
-                    }
-                    PlayerMessage::Error(e) => {
-                        library.bus.lock().unwrap().broadcast(LibEvt::Error(e))
-                    }
+                    PlayerMessage::Seekable | PlayerMessage::Clock => library.bus.lock().unwrap().broadcast(LibEvt::Playback),
+                    PlayerMessage::Error(e) => library.bus.lock().unwrap().broadcast(LibEvt::Error(e)),
                 },
                 Err(_) => break,
             }
@@ -393,8 +382,7 @@ impl Library {
 
     /// Parses tagstring from playing track and statusline
     pub fn statusline_get_format(&self) -> String {
-        self.track_get()
-            .map_or(String::from(""), |t| t.tagstring(self.statusline_get()))
+        self.track_get().map_or(String::from(""), |t| t.tagstring(self.statusline_get()))
     }
 
     pub fn theme_get(&self) -> Theme {
@@ -555,11 +543,7 @@ impl Library {
             }
 
             let itracks = self.tracks.read().unwrap();
-            let iter = if i == 0 {
-                itracks.iter()
-            } else {
-                filtered_tree[i - 1].tracks.iter()
-            };
+            let iter = if i == 0 { itracks.iter() } else { filtered_tree[i - 1].tracks.iter() };
 
             let tracks = if !f.items.is_empty() {
                 let mut tracks_f = Vec::new();
@@ -581,11 +565,7 @@ impl Library {
     }
 
     pub fn get_filter(&self, pos: usize) -> Option<Filter> {
-        self.filtered_tree
-            .read()
-            .unwrap()
-            .get(pos)
-            .map(|f| f.filter.clone())
+        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.clone())
     }
 
     pub fn set_filter(&self, index: usize, filter: Filter) {
@@ -614,11 +594,7 @@ impl Library {
     }
 
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
-        self.filtered_tree
-            .read()
-            .unwrap()
-            .get(pos)
-            .map(|f| f.filter.items.clone())
+        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.items.clone())
     }
 
     pub fn set_filter_items(&self, pos: usize, items: Vec<String>) {

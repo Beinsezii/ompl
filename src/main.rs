@@ -23,7 +23,7 @@ use regex::Regex;
 use souvlaki::{MediaControlEvent, MediaControls, MediaMetadata, MediaPlayback, PlatformConfig};
 
 mod library;
-use library::{Backend, Color, Library, Theme};
+use library::{Backend, Color, LibEvt, Library, Theme};
 
 #[cfg(feature = "tui")]
 mod tui;
@@ -123,10 +123,7 @@ fn parse_color(s: &str) -> Result<Color, String> {
 fn parse_time(s: &str) -> Result<Duration, String> {
     let string = s.trim().to_ascii_lowercase();
     // hh:mm:ss.ddd format. hh:mm optional.
-    if let Some(captures) = Regex::new(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$")
-        .unwrap()
-        .captures(&string)
-    {
+    if let Some(captures) = Regex::new(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$").unwrap().captures(&string) {
         // secs
         let mut result = Duration::from_secs_f32(captures[3].parse::<f32>().unwrap());
         let mut hm = 1;
@@ -562,24 +559,15 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 }
                                 SeekCmd::GetSecs => {
                                     if let Some((current, total)) = library.times() {
-                                        response = format!(
-                                            "{:.2} / {:.2}",
-                                            current.as_secs_f32(),
-                                            total.as_secs_f32()
-                                        )
+                                        response = format!("{:.2} / {:.2}", current.as_secs_f32(), total.as_secs_f32())
                                     }
                                 }
                                 SeekCmd::GetFloat => {
                                     if let Some((current, total)) = library.times() {
-                                        response = format!(
-                                            "{:.8}",
-                                            current.as_secs_f32() / total.as_secs_f32()
-                                        )
+                                        response = format!("{:.8}", current.as_secs_f32() / total.as_secs_f32())
                                     }
                                 }
-                                SeekCmd::Seekable => {
-                                    response = (library.seekable() == Some(true)).to_string()
-                                }
+                                SeekCmd::Seekable => response = (library.seekable() == Some(true)).to_string(),
                                 SeekCmd::To { time } => library.seek(time),
                                 SeekCmd::By { secs } => library.seek_by(secs),
                             },
@@ -611,9 +599,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                 RepeatCmd::Toggle => library.repeat_toggle(),
                             },
                             Action::Statusline(statusline_cmd) => match statusline_cmd {
-                                StatuslineCmd::Set { tagstring } => {
-                                    library.statusline_set(tagstring)
-                                }
+                                StatuslineCmd::Set { tagstring } => library.statusline_set(tagstring),
                                 StatuslineCmd::Get => response = library.statusline_get(),
                             },
                             Action::Theme(theme_cmd) => {
@@ -627,15 +613,10 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             }
                             Action::PlayFile { file } => {
                                 if file.is_file() {
-                                    library.play_track(
-                                        library::find_tracks(file, &library.types(), true)
-                                            .into_iter()
-                                            .last()
-                                            .map(|mut t| {
-                                                t.load_meta();
-                                                Arc::new(t)
-                                            }),
-                                    )
+                                    library.play_track(library::find_tracks(file, &library.types(), true).into_iter().last().map(|mut t| {
+                                        t.load_meta();
+                                        Arc::new(t)
+                                    }))
                                 }
                             }
 
@@ -667,9 +648,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                             .join("\n")
                                     }
                                 }
-                                FilterCmd::Set { index, filter } => {
-                                    library.set_filter(index, filter)
-                                }
+                                FilterCmd::Set { index, filter } => library.set_filter(index, filter),
                                 FilterCmd::SetAll { filters } => library.set_filters(filters),
                                 FilterCmd::Remove { index } => library.remove_filter(index),
                             },
@@ -682,9 +661,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         library.get_sorters().join("\n")
                                     }
                                 }
-                                SorterCmd::Set { index, tagstring } => {
-                                    library.set_sorter(index, tagstring)
-                                }
+                                SorterCmd::Set { index, tagstring } => library.set_sorter(index, tagstring),
                                 SorterCmd::SetAll { tagstrings } => library.set_sorters(tagstrings),
                                 SorterCmd::Remove { index } => library.remove_sorter(index),
                             },
@@ -701,12 +678,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         "invalid".to_string()
                                     }
                                 }
-                                PrintCmd::Track => {
-                                    response = library
-                                        .track_get()
-                                        .map(|t| format!("{}", t))
-                                        .unwrap_or("???".to_string())
-                                }
+                                PrintCmd::Track => response = library.track_get().map(|t| format!("{}", t)).unwrap_or("???".to_string()),
                                 PrintCmd::File => {
                                     response = library
                                         .track_get()
@@ -730,10 +702,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             Action::Purge => library.purge(),
                         };
                     }
-                    Err(e) => {
-                        response =
-                            format!("Could not deserialize args\n{}\nOMPL version mismatch?", e)
-                    }
+                    Err(e) => response = format!("Could not deserialize args\n{}\nOMPL version mismatch?", e),
                 };
                 // # Process # }}}
 
@@ -846,25 +815,15 @@ fn instance_main(listener: TcpListener, args: Args) {
                                         MediaControlEvent::Toggle => library.play_pause(),
                                         MediaControlEvent::Next => library.next(),
                                         MediaControlEvent::Previous => library.previous(),
-                                        MediaControlEvent::SetVolume(n) => {
-                                            library.volume_set(n as f32)
-                                        }
+                                        MediaControlEvent::SetVolume(n) => library.volume_set(n as f32),
                                         MediaControlEvent::SetPosition(p) => library.seek(p.0),
                                         MediaControlEvent::Seek(d) => match d {
-                                            souvlaki::SeekDirection::Forward => {
-                                                library.seek_by(5.0)
-                                            }
-                                            souvlaki::SeekDirection::Backward => {
-                                                library.seek_by(-5.0)
-                                            }
+                                            souvlaki::SeekDirection::Forward => library.seek_by(5.0),
+                                            souvlaki::SeekDirection::Backward => library.seek_by(-5.0),
                                         },
                                         MediaControlEvent::SeekBy(d, n) => match d {
-                                            souvlaki::SeekDirection::Forward => {
-                                                library.seek_by(n.as_secs_f32())
-                                            }
-                                            souvlaki::SeekDirection::Backward => {
-                                                library.seek_by(-n.as_secs_f32())
-                                            }
+                                            souvlaki::SeekDirection::Forward => library.seek_by(n.as_secs_f32()),
+                                            souvlaki::SeekDirection::Backward => library.seek_by(-n.as_secs_f32()),
                                         },
                                         _ => (),
                                     }
@@ -883,21 +842,9 @@ fn instance_main(listener: TcpListener, args: Args) {
                                         };
                                         controls
                                             .set_metadata(MediaMetadata {
-                                                title: library
-                                                    .track_get()
-                                                    .map(|t| t.tags().get("title").cloned())
-                                                    .flatten()
-                                                    .as_deref(),
-                                                artist: library
-                                                    .track_get()
-                                                    .map(|t| t.tags().get("artist").cloned())
-                                                    .flatten()
-                                                    .as_deref(),
-                                                album: library
-                                                    .track_get()
-                                                    .map(|t| t.tags().get("album").cloned())
-                                                    .flatten()
-                                                    .as_deref(),
+                                                title: library.track_get().map(|t| t.tags().get("title").cloned()).flatten().as_deref(),
+                                                artist: library.track_get().map(|t| t.tags().get("artist").cloned()).flatten().as_deref(),
+                                                album: library.track_get().map(|t| t.tags().get("album").cloned()).flatten().as_deref(),
                                                 duration: tot,
                                                 cover_url: None,
                                             })
@@ -927,17 +874,23 @@ fn instance_main(listener: TcpListener, args: Args) {
             // ## souvlaki ## }}}
 
             l2!("Main server started");
-            #[cfg(feature = "tui")]
-            if daemon {
+            if daemon || cfg!(not(feature = "tui")) {
+                let mut recv = library.get_receiver();
+                drop(library);
+                loop {
+                    match recv.recv() {
+                        Ok(LibEvt::Error(e)) => eprintln!("{}", e),
+                        Ok(_) => (),
+                        Err(_e) => break,
+                    }
+                }
                 jh.join().unwrap();
             } else {
+                #[cfg(feature = "tui")]
                 if tui::tui(library) {
                     jh.join().unwrap();
                 }
             }
-
-            #[cfg(not(feature = "tui"))]
-            jh.join().unwrap();
         }
         _ => unreachable!("Instance_Main called without Main Subcommand!\n{:?}", args),
     }

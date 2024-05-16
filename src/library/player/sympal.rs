@@ -463,11 +463,45 @@ impl Player for Backend {
                     .expect("SYMPAL Probe result return ERR")
                     .format;
 
-                let audio_tracks = fr.tracks();
-
-                let mut decoder = symphonia::default::get_codecs()
-                    .make(&audio_tracks[0].codec_params, &Default::default())
-                    .expect("SYMAPL Decoder return ERR");
+                let mut decoder = if let Some(decoder) = fr
+                    .default_track()
+                    .map(|t| symphonia::default::get_codecs().make(&t.codec_params, &Default::default()).ok())
+                    .flatten()
+                    .filter(|d| d.codec_params().channels.is_some())
+                {
+                    decoder
+                } else {
+                    let mut tracks = fr.tracks().into_iter();
+                    loop {
+                        match tracks.next() {
+                            Some(track) => match symphonia::default::get_codecs().make(&track.codec_params, &Default::default()) {
+                                Ok(decoder) => {
+                                    if decoder.codec_params().channels.is_some() {
+                                        break decoder;
+                                    } else {
+                                        continue;
+                                    }
+                                }
+                                Err(_e) => continue,
+                            },
+                            None => {
+                                self.err(format!(
+                                    "SYMPAL could not decode any tracks\nFile: {}{}",
+                                    track.path().file_name().unwrap().to_string_lossy(),
+                                    fr.tracks().into_iter().fold(String::new(), |acc, t| {
+                                        acc + "\n"
+                                            + &format!(
+                                                "Track: {}\n  Channels: {:?}\n  Rate: {:?}\n  Format: {:?}",
+                                                t.id, t.codec_params.channels, t.codec_params.sample_rate, t.codec_params.sample_format,
+                                            )
+                                    })
+                                ));
+                                std::mem::swap(guard, &mut None);
+                                return None;
+                            }
+                        }
+                    }
+                };
 
                 let rate = decoder.codec_params().sample_rate.expect("SYMPAL Decoder has no sample rate");
                 self.rate.store(rate, Ordering::Relaxed);
