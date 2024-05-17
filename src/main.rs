@@ -13,7 +13,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use regex::Regex;
 
@@ -37,14 +37,14 @@ static LOG: (AtomicU8, AtomicBool, Mutex<Vec<(u8, String)>>) = (AtomicU8::new(0)
 /// If $v <= LOG_LEVEL print values
 #[macro_export]
 macro_rules! log {
-    ($v:expr, $($info:expr),*) => {
+    ($v:expr, $($fmt_args:tt)*) => {
         if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
             if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
-                $(println!("{}", $info))*
+                println!($($fmt_args)*)
             }
         // Store if paused
         } else {
-            $(LOG.2.lock().unwrap().push(($v, format!("{} ", $info))))*
+            LOG.2.lock().unwrap().push(($v, format!($($fmt_args)*)))
         }
     };
 }
@@ -64,7 +64,7 @@ macro_rules! log_resume {
         LOG.1.store(true, std::sync::atomic::Ordering::Relaxed);
         let mut queue = LOG.2.lock().unwrap();
         for (n, s) in queue.drain(..) {
-            log!(n, s)
+            log!(n, "{}", s)
         }
         queue.shrink_to_fit();
     };
@@ -73,17 +73,17 @@ macro_rules! log_resume {
 /// Level 1
 #[macro_export]
 macro_rules! info {
-    ($($info:expr),*) => {log!(1, $($info)*)}
+    ($($fmt_args:tt)*) => {log!(1, $($fmt_args)*)}
 }
 /// Level 2
 #[macro_export]
 macro_rules! bench {
-    ($($info:expr),*) => {log!(2, $($info)*)}
+    ($($fmt_args:tt)*) => {log!(2, $($fmt_args)*)}
 }
 /// Level 3
 #[macro_export]
 macro_rules! debug {
-    ($($info:expr),*) => {log!(3, $($info)*)}
+    ($($fmt_args:tt)*) => {log!(3, $($fmt_args)*)}
 }
 
 // ### LOGGING ### }}}
@@ -783,15 +783,13 @@ fn instance_main(listener: TcpListener, args: Args) {
             library.theme_set(Theme { fg, bg, acc });
             library.set_filters(filters);
             library.set_sorters(sorters);
-            let now = Instant::now();
             for path in library_paths {
                 library.append_library(path)
             }
-            bench!(format!("Tracks loaded in {:?}", Instant::now() - now));
 
             let server_library = library.clone();
             let jh = thread::spawn(move || server(listener, server_library));
-            debug!(format!("Listening on port {}", args.port));
+            debug!("Listening on port {}", args.port);
 
             // ## souvlaki ## {{{
             #[cfg(feature = "media-controls")]

@@ -1,18 +1,14 @@
 #![warn(missing_docs)]
 use std::path::Path;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex, RwLock,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use bus::{Bus, BusReader};
 use lexical_sort::natural_lexical_cmp;
 use rand::random;
-
-use bus::{Bus, BusReader};
-use std::sync::mpsc::sync_channel;
-use std::sync::mpsc::Receiver;
 
 mod player;
 mod track;
@@ -20,7 +16,7 @@ mod track;
 pub use player::{Backend, Player};
 pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, Track};
 
-use crate::{bench, debug, log, LOG};
+use crate::{bench, debug, info, log, LOG};
 
 use self::player::PlayerMessage;
 
@@ -32,6 +28,7 @@ pub struct Filter {
     pub items: Vec<String>,
 }
 
+/// A Filter and its post-filtering tracks
 #[derive(Clone, Debug, PartialEq)]
 pub struct FilteredTracks {
     pub filter: Filter,
@@ -42,6 +39,7 @@ pub struct FilteredTracks {
 
 // ## THEME ## {{{
 
+/// A theme color represented as 8bit sRGB or one of 16 terminal colors
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum Color {
     RGB([u8; 3]),
@@ -106,6 +104,7 @@ impl ToString for Color {
     }
 }
 
+/// 3-tone theme
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Theme {
     pub fg: Color,
@@ -178,10 +177,16 @@ pub struct Library {
     player: Box<dyn Player>,
     filtered_tree: RwLock<Vec<FilteredTracks>>,
     sorters: RwLock<Vec<String>>,
+    /// Broadcaster for all receivers of library events
     bus: Mutex<Bus<LibEvt>>,
     shuffle: AtomicBool,
+    /// None - No loop
+    /// Some(false) - track loop
+    /// Some(true) - full loop
     repeat: RwLock<Option<bool>>,
+    /// Scan hidden files during append
     hidden: AtomicBool,
+    /// Single line status for library
     statusline: RwLock<String>,
     theme: RwLock<Theme>,
 }
@@ -189,8 +194,6 @@ pub struct Library {
 impl Library {
     // # new # {{{
     pub fn new(backend: Backend) -> Arc<Self> {
-        let lib_now = Instant::now();
-
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
         let (next_s, next_r) = sync_channel(1);
@@ -221,12 +224,11 @@ impl Library {
             .spawn(move || player_message_server(result_c, next_r))
             .unwrap();
 
-        bench!(format!("Library built in {:?}", Instant::now() - lib_now));
-
         result
     }
     // # new # }}}
 
+    /// Receiver for all library events
     pub fn get_receiver(&self) -> BusReader<LibEvt> {
         self.bus.lock().unwrap().add_rx()
     }
@@ -245,26 +247,32 @@ impl Library {
         self.player.stop();
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
+    /// Toggle play/pause. Typical media key control
     pub fn play_pause(&self) {
         self.player.toggle();
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
+    /// 0.0 -> 1.0
     pub fn volume_get(&self) -> f32 {
         self.player.volume_get()
     }
+    /// 0.0 -> 1.0
     pub fn volume_set(&self, volume: f32) {
         self.player.volume_set(volume);
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
+    /// -1.0 -> 1.0
     pub fn volume_add(&self, amount: f32) {
         self.player.volume_add(amount);
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
+    /// Currently playing/loaded track
     pub fn track_get(&self) -> Option<Arc<Track>> {
         self.player.track_get()
     }
 
+    /// Set the currently loaded track and start playback
     pub fn play_track(&self, track: Option<Arc<Track>>) {
         // Check for moved tracks first.
         // Player could handle this but easier if library does
@@ -301,22 +309,28 @@ impl Library {
         self.player.stopped()
     }
 
+    /// Whether the player is ready to seek.
+    /// `None` means the player does not support seeking.
     pub fn seekable(&self) -> Option<bool> {
         self.player.seekable()
     }
 
+    /// Track position, Track duration
     pub fn times(&self) -> Option<(Duration, Duration)> {
         self.player.times()
     }
 
+    /// Seek to this exact time
     pub fn seek(&self, time: Duration) {
         self.player.seek(time)
     }
 
+    /// Seek by +-n seconds
     pub fn seek_by(&self, secs: f32) {
         self.player.seek_by(secs)
     }
 
+    /// Generate a waveform preview of the current track
     pub fn waveform(&self, count: usize) -> Option<Vec<f32>> {
         self.player.waveform(count)
     }
@@ -364,18 +378,22 @@ impl Library {
         self.bus.lock().unwrap().broadcast(LibEvt::Playback);
     }
 
+    /// Whether append() scans hidden files
     pub fn hidden_get(&self) -> bool {
         self.hidden.load(Ordering::Relaxed)
     }
 
+    /// Whether append() scans hidden files
     pub fn hidden_set(&self, include_hidden: bool) {
         self.hidden.store(include_hidden, Ordering::Relaxed)
     }
 
+    /// Tagstring for library status
     pub fn statusline_get(&self) -> String {
         self.statusline.read().unwrap().to_string()
     }
 
+    /// Tagstring for library status
     pub fn statusline_set<T: ToString>(&self, statusline: T) {
         *self.statusline.write().unwrap() = statusline.to_string();
         self.bus.lock().unwrap().broadcast(LibEvt::Theme);
@@ -399,6 +417,7 @@ impl Library {
 
     // ## Track Controls ## {{{
 
+    /// Get a random track from the filtered queue
     pub fn get_random(&self) -> Option<Arc<Track>> {
         debug!("Getting random track...");
         let tracks = self.get_queue();
@@ -414,6 +433,7 @@ impl Library {
         }
     }
 
+    /// Get the next track from the filtered queue. Does not respect `repeat`
     pub fn get_sequential(&self, reverse: bool) -> Option<Arc<Track>> {
         let mut tracks = self.get_queue();
         if reverse {
@@ -434,6 +454,7 @@ impl Library {
         tracks.get(i).cloned()
     }
 
+    /// Play the next track, either shuffled or sequential
     pub fn next(&self) {
         if self.shuffle_get() {
             self.play_track(self.get_random())
@@ -442,6 +463,8 @@ impl Library {
         };
     }
 
+    /// If shuffle, pop the previous track from history and play it
+    /// Else get the prior sequential track
     pub fn previous(&self) {
         if self.shuffle_get() {
             let track = self.history.lock().unwrap().pop();
@@ -457,13 +480,19 @@ impl Library {
 
     // ## Library Paths Control ## {{{
 
+    /// Get compatible file extensions for the player
     pub fn types(&self) -> Vec<String> {
         self.player.types()
     }
 
+    /// Scan path for compatible file extensions and load tracks into library
     pub fn append_library<T: AsRef<Path>>(&self, path: T) {
-        let mut new_tracks: Vec<Track> = find_tracks(path, &self.player.types(), self.hidden_get());
+        let begin = Instant::now();
 
+        let mut new_tracks: Vec<Track> = find_tracks(path, &self.player.types(), self.hidden_get());
+        let mut count = new_tracks.len();
+
+        let now = Instant::now();
         thread::scope(|scope| {
             // 50 is a completely arbitrary value that seems to perform well enough
             // Basically tradeoff between thread spawn overhead and IO calls.
@@ -473,13 +502,29 @@ impl Library {
             }
         });
 
-        let mut tracks = self.tracks.write().unwrap();
-        new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| {
-            if !tracks.contains(&t) {
-                tracks.push(t)
+        bench!("Probed meta for {} tracks in {:?}", count, Instant::now() - now);
+        let now = Instant::now();
+
+        {
+            let mut tracks = self.tracks.write().unwrap();
+
+            new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| tracks.push(t));
+            let len = tracks.len();
+
+            // pushed vals in front
+            tracks.reverse();
+            // Stable sort should prioritize new tracks due to reverse()
+            tracks.sort_by(|a, b| a.path().cmp(b.path()));
+            // Therefore the dedupe will use the newly probed tracks
+            tracks.dedup_by(|a, b| a.path() == b.path());
+
+            if len > tracks.len() {
+                info!("Removed {} duplicate tracks during append", len - tracks.len());
+                count -= len - tracks.len()
             }
-        });
-        drop(tracks);
+        }
+
+        bench!("Loaded {} tracks into library in {:?}", count, Instant::now() - now);
 
         self.sort();
 
@@ -490,8 +535,11 @@ impl Library {
                 self.get_sequential(false)
             });
         }
+
+        bench!("Finished appending {} tracks in total {:?}", count, Instant::now() - begin)
     }
 
+    /// Drop all tracks from the library
     pub fn purge(&self) {
         *self.tracks.write().unwrap() = Vec::new();
         self.force_build_filters();
@@ -509,14 +557,17 @@ impl Library {
         self.set_filters(filters);
     }
 
+    /// Amount of filters
     pub fn filter_count(&self) -> usize {
         self.filtered_tree.read().unwrap().len()
     }
 
+    /// All FilteredTracks. Cloned
     pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
         self.filtered_tree.read().unwrap().clone()
     }
 
+    /// All Filters. Cloned
     pub fn get_filters(&self) -> Vec<Filter> {
         self.filtered_tree
             .read()
@@ -526,6 +577,7 @@ impl Library {
             .collect::<Vec<Filter>>()
     }
 
+    /// Replace all Filters, rebuilding the FilteredTracks
     pub fn set_filters(&self, filters: Vec<Filter>) {
         debug!("Updating filters...");
         let now = Instant::now();
@@ -562,13 +614,15 @@ impl Library {
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
         self.bus.lock().unwrap().broadcast(LibEvt::Update);
-        bench!(format!("Filters updated in {:?}", Instant::now() - now));
+        bench!("Filters updated in {:?}", Instant::now() - now);
     }
 
+    /// Get clone of Nth Filter
     pub fn get_filter(&self, pos: usize) -> Option<Filter> {
         self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.clone())
     }
 
+    /// Set Nth Filter and rebuild FilteredTracks
     pub fn set_filter(&self, index: usize, filter: Filter) {
         let mut filters = self.get_filters();
         if let Some(fm) = filters.get_mut(index) {
@@ -579,6 +633,7 @@ impl Library {
         self.set_filters(filters)
     }
 
+    /// Delete Nth filter and rebuild FilteredTracks
     pub fn remove_filter(&self, pos: usize) {
         let mut filters = self.get_filters();
         if pos < filters.len() {
@@ -587,6 +642,7 @@ impl Library {
         self.set_filters(filters);
     }
 
+    /// Insert filter to position and rebuild FilteredTracks
     pub fn insert_filter(&self, filter: Filter, pos: usize) {
         let mut filters = self.get_filters();
         let len = filters.len();
@@ -594,10 +650,12 @@ impl Library {
         self.set_filters(filters);
     }
 
+    /// Get clone of Nth FilteredTracks items
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
         self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.items.clone())
     }
 
+    /// Set Nth FilteredTracks items and rebuild FilteredTracks
     pub fn set_filter_items(&self, pos: usize, items: Vec<String>) {
         let mut filters = self.get_filters();
         if let Some(f) = filters.get_mut(pos) {
@@ -628,7 +686,9 @@ impl Library {
 
     // ## Sorters Control ## {{{
 
+    /// Sort unfiltered tracks based on sorter tagstrings
     fn sort(&self) {
+        let now = Instant::now();
         self.tracks.write().unwrap().sort_by(|a, b| {
             let mut result = std::cmp::Ordering::Equal;
             for ts in self.sorters.read().unwrap().iter() {
@@ -636,26 +696,32 @@ impl Library {
             }
             result
         });
+        bench!("Sorted {} tracks in {:?}", self.tracks.read().unwrap().len(), Instant::now() - now);
         self.force_build_filters()
     }
 
+    /// Amount of sorter tagstrings
     pub fn sort_count(&self) -> usize {
         self.sorters.read().unwrap().len()
     }
 
+    /// Get clone of sorter tagstrings
     pub fn get_sorters(&self) -> Vec<String> {
         self.sorters.read().unwrap().clone()
     }
 
+    /// Set all sorter tagstrings and re-sort library
     pub fn set_sorters(&self, tagstrings: Vec<String>) {
         *self.sorters.write().unwrap() = tagstrings;
         self.sort();
     }
 
+    /// Get Nth sorter tagstring
     pub fn get_sorter(&self, index: usize) -> Option<String> {
         self.sorters.read().unwrap().get(index).cloned()
     }
 
+    /// Set Nth sorter tagstring and re-sort library
     pub fn set_sorter(&self, index: usize, tagstring: String) {
         let mut tagstrings = self.sorters.write().unwrap();
         if let Some(ts) = tagstrings.get_mut(index) {
@@ -667,6 +733,7 @@ impl Library {
         self.sort();
     }
 
+    /// Remove Nth sorter tagstring and re-sort library
     pub fn remove_sorter(&self, index: usize) {
         let mut sorters = self.sorters.write().unwrap();
         if index < sorters.len() {
@@ -676,6 +743,7 @@ impl Library {
         self.sort()
     }
 
+    /// Add sorter tagstring to position and re-sort library
     pub fn insert_sorter(&self, tagstring: String, pos: usize) {
         {
             let mut sts = self.sorters.write().unwrap();
@@ -689,11 +757,12 @@ impl Library {
 
     // ## Tracklist Control ## {{{
 
+    /// Get cloned references to all tracks
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
         self.tracks.read().unwrap().clone()
     }
 
-    /// Will get from last non-empty FilteredTracks
+    /// Get cloned references to last non-empty FilteredTracks
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
         let mut ptr: &Vec<Arc<Track>> = &self.tracks.read().unwrap();
         let tree = self.filtered_tree.read().unwrap();
@@ -710,12 +779,6 @@ impl Library {
     pub fn get_taglist<T: AsRef<str>>(&self, tagstring: T) -> Vec<String> {
         get_taglist(tagstring, &self.get_queue())
     }
-
-    // /// Sorts *and* dedupes. Will NOT map 1:1 with get_queue_sorter() if there are multiple tracks
-    // /// with the same tag value.
-    // pub fn get_taglist_sort<T: AsRef<str>>(&self, tagstring: T) -> Vec<String> {
-    //     get_taglist_sort(tagstring, &self.get_queue())
-    // }
 
     // ## Tracklist Control ## }}}
 }

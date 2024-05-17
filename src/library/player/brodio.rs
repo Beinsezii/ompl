@@ -77,7 +77,7 @@ impl Player for Backend {
             track: RwLock::new(None),
         };
 
-        bench!(format!("Backend built in {:?}", Instant::now() - now));
+        bench!("Backend built in {:?}", Instant::now() - now);
 
         player
     }

@@ -2,7 +2,7 @@
 
 use super::{Player, PlayerMessage};
 use crate::library::Track;
-use crate::{bench, debug, log, LOG};
+use crate::{bench, debug, info, log, LOG};
 
 use std::{
     fs::File,
@@ -135,13 +135,13 @@ impl Backend {
             self.stop();
             return None;
         };
-        debug!(format!(
+        info!(
             "Symapl selected config {}b {}x {}hz for device {}",
             config.sample_format(),
             config.channels(),
             config.sample_rate().0,
             device.name().unwrap_or(String::from("NONE"))
-        ));
+        );
         // self.device_format.store(config.sample_format(), Ordering::SeqCst);
         self.device_rate.store(config.sample_rate().0, Ordering::SeqCst);
         self.device_channels.store(config.channels().into(), Ordering::SeqCst);
@@ -548,7 +548,7 @@ impl Player for Backend {
                                 return;
                             }
                         }
-                        bench!(format!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis()));
+                        bench!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis());
                         if let Some(samples) = samples.upgrade() {
                             last.store(true, Ordering::Relaxed);
                             samples.write().unwrap().shrink_to_fit();

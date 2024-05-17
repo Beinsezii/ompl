@@ -346,10 +346,10 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
                     .unwrap_or(false)
             }
         })
-        .map(|e| Track::new(e.path()))
+        .filter_map(|e| Track::new(e.path()))
         .collect();
 
-    bench!(format!("Found {} tracks in {:?}", tracks.len(), Instant::now() - now));
+    bench!("Found {} tracks in {:?}", tracks.len(), Instant::now() - now);
     tracks
 }
 
@@ -377,12 +377,12 @@ pub struct Track {
 }
 
 impl Track {
-    pub fn new<T: Into<PathBuf>>(path: T) -> Self {
-        Self {
-            path: path.into(),
+    pub fn new<T: AsRef<Path>>(path: T) -> Option<Self> {
+        path.as_ref().canonicalize().ok().map(|path| Self {
+            path,
             tags: Tags::new(),
             gain: 1.0,
-        }
+        })
     }
 
     // # load_meta # {{{
