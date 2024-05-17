@@ -8,7 +8,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::library::{Color, Filter, LibEvt, Library};
-use crate::{l2, log, parse_time, LOG_LEVEL, LOG_ORD};
+use crate::{debug, log, log_pause, log_resume, parse_time, LOG};
 
 #[cfg(feature = "clipboard")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -984,8 +984,8 @@ impl<T: Backend> UI<T> {
 // ### tui ### {{{
 pub fn tui(library: Arc<Library>) -> bool {
     let mut libevt_r = library.get_receiver();
-    l2!("Entering interactive terminal...");
-    let log_level = LOG_LEVEL.swap(0, LOG_ORD); // TODO: better solution?
+    debug!("Entering interactive terminal...");
+    log_pause!();
 
     terminal::enable_raw_mode().unwrap();
     let mut stdo = io::stdout();
@@ -1085,7 +1085,7 @@ pub fn tui(library: Arc<Library>) -> bool {
 
     // lets you read panic messages
     // yes this is the dumbest solution
-    if log_level > 1 {
+    if LOG.0.load(Ordering::Relaxed) > 2 {
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
 
@@ -1101,7 +1101,7 @@ pub fn tui(library: Arc<Library>) -> bool {
     stdo.flush().unwrap();
     terminal::disable_raw_mode().unwrap();
 
-    LOG_LEVEL.store(log_level, LOG_ORD);
+    log_resume!();
     join.load(Ordering::Relaxed)
 }
 // ### tui ### }}}

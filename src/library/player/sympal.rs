@@ -2,7 +2,7 @@
 
 use super::{Player, PlayerMessage};
 use crate::library::Track;
-use crate::{l1, l2, log, LOG_LEVEL};
+use crate::{bench, debug, log, LOG};
 
 use std::{
     fs::File,
@@ -64,7 +64,7 @@ impl Backend {
         let rate = self.rate.load(Ordering::Relaxed);
         let channels = self.channels.load(Ordering::Relaxed) as u16;
 
-        l2!("Sympal play acquire device");
+        debug!("Sympal play acquire device");
         let device = if let Some(device) = if let Some(host) = requested_id.map(|id| cpal::host_from_id(id).ok()).flatten() {
             if host.default_output_device().is_some() {
                 host.default_output_device()
@@ -85,7 +85,7 @@ impl Backend {
         let relax_rate = 0b010u8;
         let _relax_channels = 0b100u8;
 
-        l2!("Sympal play acquire config");
+        debug!("Sympal play acquire config");
         let config = if let Ok(mut configs) = device.supported_output_configs() {
             loop {
                 if let Some(c) = configs.next() {
@@ -135,7 +135,7 @@ impl Backend {
             self.stop();
             return None;
         };
-        l2!(format!(
+        debug!(format!(
             "Symapl selected config {}b {}x {}hz for device {}",
             config.sample_format(),
             config.channels(),
@@ -222,7 +222,7 @@ impl Player for Backend {
             return;
         };
 
-        l2!("Sympal play await stream");
+        debug!("Sympal play await stream");
         while self.streaming.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(1))
         }
@@ -245,7 +245,7 @@ impl Player for Backend {
         let device_rate = self.device_rate.load(Ordering::SeqCst);
         let device_format: SampleFormat = unsafe { std::mem::transmute(self.device_format.load(Ordering::SeqCst)) };
 
-        l2!("Sympal play spawn stream");
+        debug!("Sympal play spawn stream");
         thread::Builder::new()
             .name(String::from("SYMPAL Audio Stream"))
             .spawn(move || {
@@ -350,7 +350,7 @@ impl Player for Backend {
                 streaming.store(false, Ordering::Relaxed);
             })
             .unwrap();
-        l2!("Sympal play end");
+        debug!("Sympal play end");
     }
     // }}}
 
@@ -548,7 +548,7 @@ impl Player for Backend {
                                 return;
                             }
                         }
-                        l1!(format!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis()));
+                        bench!(format!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis()));
                         if let Some(samples) = samples.upgrade() {
                             last.store(true, Ordering::Relaxed);
                             samples.write().unwrap().shrink_to_fit();

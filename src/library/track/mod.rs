@@ -1,4 +1,4 @@
-use crate::{l1, l2, log, LOG_LEVEL};
+use crate::{bench, debug, log, LOG};
 use std::collections::HashMap;
 use std::fs::File;
 use std::ops::Deref;
@@ -316,7 +316,7 @@ const ID3_GENRES: &[&'static str] = &[
 // ## FNs ## {{{
 
 pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bool) -> Vec<Track> {
-    l2!("Finding tracks...");
+    debug!("Finding tracks...");
     let now = Instant::now();
 
     let tracks: Vec<Track> = WalkDir::new(path)
@@ -352,7 +352,7 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
         .map(|e| Track::new(e.path()))
         .collect();
 
-    l1!(format!(
+    bench!(format!(
         "Found {} tracks in {:?}",
         tracks.len(),
         Instant::now() - now

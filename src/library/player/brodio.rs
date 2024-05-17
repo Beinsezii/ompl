@@ -9,34 +9,34 @@ use std::time::{Duration, Instant};
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
 use super::{Player, PlayerMessage};
-use crate::{l1, l2, library::Track, log, LOG_LEVEL};
+use crate::{bench, debug, library::Track, log, LOG};
 
 // ### BG TASKS ### {{{
 
 fn track_ender(sink: Arc<RwLock<Option<Sink>>>, signal_next: SyncSender<PlayerMessage>) {
-    l2!("Track Ender start");
+    debug!("Track Ender start");
     loop {
         if let Some(sink) = &*sink.read().unwrap() {
             if sink.empty() {
                 if let Err(_) = signal_next.send(PlayerMessage::Request) {
                     break;
                 } else {
-                    l2!("Next track!");
+                    debug!("Next track!");
                 }
             }
         }
 
         thread::sleep(Duration::from_millis(50));
     }
-    l2!("Track Ender end");
+    debug!("Track Ender end");
 }
 
 fn stream(han_ch_s: SyncSender<OutputStreamHandle>, stm_ex_r: Receiver<()>) {
-    l2!("Stream start");
+    debug!("Stream start");
     let (_stream, handle) = OutputStream::try_default().unwrap();
     han_ch_s.send(handle).unwrap();
     stm_ex_r.recv().unwrap();
-    l2!("Stream end");
+    debug!("Stream end");
 }
 
 // ### BG TASKS ### }}}
@@ -57,7 +57,7 @@ impl Drop for Backend {
 
 impl Player for Backend {
     fn new(sig_end: SyncSender<PlayerMessage>) -> Self {
-        l2!("Constructing Backend...");
+        debug!("Constructing Backend...");
         let now = Instant::now();
 
         let sink = Arc::new(RwLock::new(None));
@@ -76,7 +76,7 @@ impl Player for Backend {
             track: RwLock::new(None),
         };
 
-        l1!(format!("Backend built in {:?}", Instant::now() - now));
+        bench!(format!("Backend built in {:?}", Instant::now() - now));
 
         player
     }
@@ -93,12 +93,7 @@ impl Player for Backend {
     }
 
     fn types(&self) -> Vec<String> {
-        vec![
-            String::from(".mp3"),
-            String::from(".flac"),
-            String::from(".ogg"),
-            String::from(".wav"),
-        ]
+        vec![String::from(".mp3"), String::from(".flac"), String::from(".ogg"), String::from(".wav")]
     }
 
     fn track_get(&self) -> Option<Arc<Track>> {
@@ -119,30 +114,21 @@ impl Player for Backend {
     fn volume_set(&self, volume: f32) {
         let volume = 0.0f32.max(1.0f32.min(volume.powi(3)));
         if let Some(sink) = &*self.sink.read().unwrap() {
-            sink.set_volume(
-                volume
-                    * self
-                        .track
-                        .read()
-                        .unwrap()
-                        .as_ref()
-                        .map(|t| t.gain())
-                        .unwrap_or(1.0),
-            )
+            sink.set_volume(volume * self.track.read().unwrap().as_ref().map(|t| t.gain()).unwrap_or(1.0))
         }
         *self.volume_retained.write().unwrap() = volume;
     }
 
     fn pause(&self) {
-        l2!("Pausing...");
+        debug!("Pausing...");
         if let Some(sink) = &*self.sink.read().unwrap() {
             sink.pause()
         }
-        l2!("Paused");
+        debug!("Paused");
     }
 
     fn play(&self) {
-        l2!("Starting playback...");
+        debug!("Starting playback...");
         if let Some(sink) = &*self.sink.read().unwrap() {
             if sink.is_paused() && !sink.empty() {
                 sink.play();
@@ -179,11 +165,11 @@ impl Player for Backend {
                 Err(e) => panic!("{}", e),
             };
         }
-        l2!("Playing");
+        debug!("Playing");
     }
 
     fn stop(&self) {
-        l2!("Hard Stopping...");
+        debug!("Hard Stopping...");
         if let Some(tx) = &*self.stm_ex_s.read().unwrap() {
             tx.send(()).unwrap();
         } else {
@@ -192,7 +178,7 @@ impl Player for Backend {
         *self.sink.write().unwrap() = None;
         *self.stream_handle.write().unwrap() = None;
         *self.stm_ex_s.write().unwrap() = None;
-        l2!("Hard Stopped");
+        debug!("Hard Stopped");
     }
 
     fn playing(&self) -> bool {

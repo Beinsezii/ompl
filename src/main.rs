@@ -10,10 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::{
-    atomic::{AtomicU8, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, AtomicU8};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -34,32 +32,58 @@ const PORT: &str = "18346";
 // ### LOGGING ### {{{
 
 /// Easy logging across modules
-static LOG_LEVEL: AtomicU8 = AtomicU8::new(0);
-const LOG_ORD: Ordering = Ordering::Relaxed;
+static LOG: (AtomicU8, AtomicBool, Mutex<Vec<(u8, String)>>) = (AtomicU8::new(0), AtomicBool::new(true), Mutex::new(Vec::new()));
 
 /// If $v <= LOG_LEVEL print values
 #[macro_export]
 macro_rules! log {
     ($v:expr, $($info:expr),*) => {
-        // ???
-        if LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) >= $v {
-            $(
-                print!("{} ", $info);
-                )*
-            println!();
+        if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
+            if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
+                $(println!("{}", $info))*
+            }
+        // Store if paused
+        } else {
+            $(LOG.2.lock().unwrap().push(($v, format!("{} ", $info))))*
         }
     };
 }
 
-/// Benchmarking
+/// Pause log and queue further entries
 #[macro_export]
-macro_rules! l1 {
+macro_rules! log_pause {
+    () => {
+        LOG.1.store(false, std::sync::atomic::Ordering::Relaxed)
+    };
+}
+
+/// Resume log and print queued entries
+#[macro_export]
+macro_rules! log_resume {
+    () => {
+        LOG.1.store(true, std::sync::atomic::Ordering::Relaxed);
+        let mut queue = LOG.2.lock().unwrap();
+        for (n, s) in queue.drain(..) {
+            log!(n, s)
+        }
+        queue.shrink_to_fit();
+    };
+}
+
+/// Level 1
+#[macro_export]
+macro_rules! info {
     ($($info:expr),*) => {log!(1, $($info)*)}
 }
-/// Walkthrough
+/// Level 2
 #[macro_export]
-macro_rules! l2 {
+macro_rules! bench {
     ($($info:expr),*) => {log!(2, $($info)*)}
+}
+/// Level 3
+#[macro_export]
+macro_rules! debug {
+    ($($info:expr),*) => {log!(3, $($info)*)}
 }
 
 // ### LOGGING ### }}}
@@ -499,7 +523,7 @@ struct Args {
 
 fn server(listener: TcpListener, library: Arc<Library>) {
     for stream in listener.incoming() {
-        l2!("Found client");
+        debug!("Found client");
         match stream {
             Ok(mut s) => {
                 // # Get Data # {{{
@@ -525,7 +549,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                 // # Get Data # }}}
 
                 // # Process # {{{
-                l2!("Processing command...");
+                debug!("Processing command...");
                 match bincode::deserialize::<Args>(&data) {
                     Ok(args) => {
                         match args.action.clone() {
@@ -713,9 +737,9 @@ fn server(listener: TcpListener, library: Arc<Library>) {
             }
             Err(e) => panic!("Listener panic: {}", e),
         }
-        l2!("End client connection");
+        debug!("End client connection");
     }
-    l2!("Server exiting");
+    debug!("Server exiting");
 }
 
 fn instance_main(listener: TcpListener, args: Args) {
@@ -741,9 +765,9 @@ fn instance_main(listener: TcpListener, args: Args) {
             acc,
             backend,
         } => {
-            LOG_LEVEL.store(verbosity, LOG_ORD);
+            LOG.0.store(verbosity, std::sync::atomic::Ordering::Relaxed);
 
-            l2!("Starting main...");
+            debug!("Starting main...");
             let library = Library::new(backend);
             library.hidden_set(hidden);
             library.volume_set(volume);
@@ -763,16 +787,16 @@ fn instance_main(listener: TcpListener, args: Args) {
             for path in library_paths {
                 library.append_library(path)
             }
-            l1!(format!("Tracks loaded in {:?}", Instant::now() - now));
+            bench!(format!("Tracks loaded in {:?}", Instant::now() - now));
 
             let server_library = library.clone();
             let jh = thread::spawn(move || server(listener, server_library));
-            l2!(format!("Listening on port {}", args.port));
+            debug!(format!("Listening on port {}", args.port));
 
             // ## souvlaki ## {{{
             #[cfg(feature = "media-controls")]
             if !no_media {
-                l2!("Initializing media controls...");
+                debug!("Initializing media controls...");
                 let mut libevt_r = library.get_receiver();
 
                 #[cfg(not(target_os = "windows"))]
@@ -873,7 +897,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             }
             // ## souvlaki ## }}}
 
-            l2!("Main server started");
+            debug!("Main server started");
             if daemon || cfg!(not(feature = "tui")) {
                 let mut recv = library.get_receiver();
                 drop(library);

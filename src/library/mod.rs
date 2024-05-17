@@ -19,7 +19,7 @@ mod track;
 pub use player::{Backend, Player};
 pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, Track};
 
-use crate::{l1, l2, log, LOG_LEVEL};
+use crate::{bench, debug, log, LOG};
 
 use self::player::PlayerMessage;
 
@@ -123,7 +123,7 @@ impl ToString for Theme {
 // ### FNs ### {{{
 
 fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>) {
-    l2!("PMS Start");
+    debug!("PMS Start");
     let library_weak = Arc::downgrade(&library);
     drop(library);
     loop {
@@ -152,7 +152,7 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
             break;
         }
     }
-    l2!("PMS End");
+    debug!("PMS End");
 }
 
 // ### FNs ### }}}
@@ -220,7 +220,7 @@ impl Library {
             .spawn(move || player_message_server(result_c, next_r))
             .unwrap();
 
-        l1!(format!("Library built in {:?}", Instant::now() - lib_now));
+        bench!(format!("Library built in {:?}", Instant::now() - lib_now));
 
         result
     }
@@ -399,7 +399,7 @@ impl Library {
     // ## Track Controls ## {{{
 
     pub fn get_random(&self) -> Option<Arc<Track>> {
-        l2!("Getting random track...");
+        debug!("Getting random track...");
         let tracks = self.get_queue();
         match tracks.len() {
             0 => None,
@@ -526,7 +526,7 @@ impl Library {
     }
 
     pub fn set_filters(&self, filters: Vec<Filter>) {
-        l2!("Updating filters...");
+        debug!("Updating filters...");
         let now = Instant::now();
         let mut cache = true;
         let mut filtered_tree = Vec::<FilteredTracks>::new();
@@ -561,7 +561,7 @@ impl Library {
 
         *self.filtered_tree.write().unwrap() = filtered_tree;
         self.bus.lock().unwrap().broadcast(LibEvt::Update);
-        l1!(format!("Filters updated in {:?}", Instant::now() - now));
+        bench!(format!("Filters updated in {:?}", Instant::now() - now));
     }
 
     pub fn get_filter(&self, pos: usize) -> Option<Filter> {
