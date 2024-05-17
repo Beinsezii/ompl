@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use std::cmp::min;
 use std::io;
 use std::io::Write;

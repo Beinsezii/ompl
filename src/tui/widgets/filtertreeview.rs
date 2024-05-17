@@ -1,6 +1,6 @@
-use super::{
-    Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet,
-};
+#![warn(missing_docs)]
+
+use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::{get_taglist_sort, Library};
 
 use std::sync::{Arc, Weak};
@@ -187,8 +187,7 @@ impl ContainedWidget for FilterTreeView {
             items.push((ft.tag, tl_tags));
         }
 
-        self.pane_array
-            .draw_from(frame, stylesheet, items, highlights)
+        self.pane_array.draw_from(frame, stylesheet, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}
@@ -231,12 +230,8 @@ impl Clickable for FilterTreeView {
                 // RDrag is only sent when a new val is pushed to drag_vals so
                 // hacky as it is this works fine while pane_array remains
                 // oblivious to the actual contents. Bit heavy though...
-                if highlights[self.pane_array.index]
-                    .contains(&taglists[self.pane_array.index][self.pane_array.drag_vals[0]])
-                    != highlights[self.pane_array.index].contains(
-                        &taglists[self.pane_array.index]
-                            [*self.pane_array.drag_vals.last().unwrap()],
-                    )
+                if highlights[self.pane_array.index].contains(&taglists[self.pane_array.index][self.pane_array.drag_vals[0]])
+                    != highlights[self.pane_array.index].contains(&taglists[self.pane_array.index][*self.pane_array.drag_vals.last().unwrap()])
                 {
                     self.toggle_current()
                 }

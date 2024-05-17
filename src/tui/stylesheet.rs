@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use crate::library::Theme;
 use tui::style::{Color, Modifier, Style};
 
@@ -53,17 +55,11 @@ impl From<Theme> for StyleSheet {
         Self {
             base: Style::default().fg(fg).bg(bg),
 
-            base_sel: Style::default()
-                .fg(fg)
-                .bg(bg)
-                .add_modifier(Modifier::UNDERLINED),
+            base_sel: Style::default().fg(fg).bg(bg).add_modifier(Modifier::UNDERLINED),
 
             base_hi: Style::default().fg(fg_alt).bg(bg_alt),
 
-            base_hi_sel: Style::default()
-                .fg(fg_alt)
-                .bg(bg_alt)
-                .add_modifier(Modifier::UNDERLINED),
+            base_hi_sel: Style::default().fg(fg_alt).bg(bg_alt).add_modifier(Modifier::UNDERLINED),
 
             active: Style::default().fg(acc).bg(bg),
 

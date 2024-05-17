@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::mpsc::sync_channel;

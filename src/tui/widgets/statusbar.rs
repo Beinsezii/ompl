@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use super::{Action, Clickable, ContainedWidget};
 use crate::library::Library;
 
@@ -26,11 +28,7 @@ impl StatusBar {
 }
 
 impl ContainedWidget for StatusBar {
-    fn draw<T: tui::backend::Backend>(
-        &mut self,
-        frame: &mut tui::terminal::Frame<T>,
-        stylesheet: super::StyleSheet,
-    ) {
+    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<T>, stylesheet: super::StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
@@ -52,23 +50,9 @@ impl ContainedWidget for StatusBar {
                         Some(true) => ' ',
                     }
                 )),
-                Span::styled(
-                    "><",
-                    if library.shuffle_get() {
-                        stylesheet.base_hi
-                    } else {
-                        stylesheet.base
-                    },
-                ),
+                Span::styled("><", if library.shuffle_get() { stylesheet.base_hi } else { stylesheet.base }),
                 Span::from(" :< "),
-                Span::styled(
-                    "#",
-                    if library.stopped() {
-                        stylesheet.base_hi
-                    } else {
-                        stylesheet.base
-                    },
-                ),
+                Span::styled("#", if library.stopped() { stylesheet.base_hi } else { stylesheet.base }),
                 Span::from(format!(
                     " {} >: | {}{}",
                     if library.playing() { "::" } else { "/>" },
@@ -103,10 +87,7 @@ impl Clickable for StatusBar {
         };
 
         if let MouseEventKind::Down(button) = event.kind {
-            if self
-                .area
-                .intersects(Rect::new(event.column, event.row, 1, 1))
-            {
+            if self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
                 // 123456789 123456789 123456789 1234  +123456789 123456
                 // -- 0.12 ++ | (1) >< :< # /> >: | {..} | 00:00 / 00:00
                 match button {
@@ -132,12 +113,8 @@ impl Clickable for StatusBar {
                     _ => (),
                 }
             }
-        } else if event.kind == MouseEventKind::ScrollUp || event.kind == MouseEventKind::ScrollDown
-        {
-            if self
-                .area
-                .intersects(Rect::new(event.column, event.row, 1, 1))
-            {
+        } else if event.kind == MouseEventKind::ScrollUp || event.kind == MouseEventKind::ScrollDown {
+            if self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
                 if event.column >= 1 && event.column <= 10 {
                     match event.kind {
                         MouseEventKind::ScrollDown => library.volume_add(-0.05),

@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use super::Tags;
 
 fn parse_recurse(tagstring: &str, tags: &Tags) -> String {
@@ -58,12 +60,7 @@ fn parse_recurse(tagstring: &str, tags: &Tags) -> String {
                         // means <<album>> will resolve to get("<album>")
                         // instead of get(get("album")) like the old system.
                         // probably for the best.
-                        result.push_str(
-                            &tags
-                                .get(&substring.to_ascii_lowercase())
-                                .map(|s| s.as_str())
-                                .unwrap_or("???"),
-                        );
+                        result.push_str(&tags.get(&substring.to_ascii_lowercase()).map(|s| s.as_str()).unwrap_or("???"));
                     }
                 }
                 c if starts == 0 => result.push(c),
@@ -90,13 +87,7 @@ pub fn parse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
                 _ => (),
             },
             // else just dumb check
-            None => {
-                break tags
-                    .get(&tagstring.to_ascii_lowercase())
-                    .map(|s| s.as_str())
-                    .unwrap_or("???")
-                    .to_string()
-            }
+            None => break tags.get(&tagstring.to_ascii_lowercase()).map(|s| s.as_str()).unwrap_or("???").to_string(),
         }
     }
 }
@@ -159,26 +150,17 @@ mod tagstring_tests {
 
     #[test]
     fn sub_before() {
-        assert_eq!(
-            parse("<title> is the title!", &tags()),
-            "TheTitle is the title!".to_string()
-        );
+        assert_eq!(parse("<title> is the title!", &tags()), "TheTitle is the title!".to_string());
     }
 
     #[test]
     fn sub_after() {
-        assert_eq!(
-            parse("The title is <title>", &tags()),
-            "The title is TheTitle".to_string()
-        );
+        assert_eq!(parse("The title is <title>", &tags()), "The title is TheTitle".to_string());
     }
 
     #[test]
     fn sub_inline() {
-        assert_eq!(
-            parse("This title: <title> is rad!", &tags()),
-            "This title: TheTitle is rad!".to_string()
-        );
+        assert_eq!(parse("This title: <title> is rad!", &tags()), "This title: TheTitle is rad!".to_string());
     }
 
     #[test]
@@ -197,44 +179,29 @@ mod tagstring_tests {
     #[test]
     fn mixed() {
         assert_eq!(
-            parse(
-                r#"Title: \<title\>, Album: <<album>>>, Genre: <genre>, done!"#,
-                &tags()
-            ),
+            parse(r#"Title: \<title\>, Album: <<album>>>, Genre: <genre>, done!"#, &tags()),
             r#"Title: <title>, Album: ???>, Genre: TheGenre, done!"#.to_string()
         );
     }
 
     #[test]
     fn condition_true() {
-        assert_eq!(
-            parse("Tag?<title| Title: <title>!>", &tags()),
-            "Tag? Title: TheTitle!".to_string()
-        );
+        assert_eq!(parse("Tag?<title| Title: <title>!>", &tags()), "Tag? Title: TheTitle!".to_string());
     }
 
     #[test]
     fn condition_false() {
-        assert_eq!(
-            parse("Tag?<badtag| Badtag: <badtag>!>", &tags()),
-            "Tag?".to_string()
-        );
+        assert_eq!(parse("Tag?<badtag| Badtag: <badtag>!>", &tags()), "Tag?".to_string());
     }
 
     #[test]
     fn condition_invert_true() {
-        assert_eq!(
-            parse("Tag?<!title| Title: <title>!>", &tags()),
-            "Tag?".to_string()
-        );
+        assert_eq!(parse("Tag?<!title| Title: <title>!>", &tags()), "Tag?".to_string());
     }
 
     #[test]
     fn condition_invert_false() {
-        assert_eq!(
-            parse("Tag?<!badtag| Badtag: <badtag>!>", &tags()),
-            "Tag? Badtag: ???!".to_string()
-        );
+        assert_eq!(parse("Tag?<!badtag| Badtag: <badtag>!>", &tags()), "Tag? Badtag: ???!".to_string());
     }
 
     #[test]

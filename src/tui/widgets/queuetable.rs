@@ -1,6 +1,6 @@
-use super::{
-    Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet,
-};
+#![warn(missing_docs)]
+
+use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::Library;
 
 use std::sync::{Arc, Weak};
@@ -79,10 +79,7 @@ impl QueueTable {
             tags.push("title".to_string())
         }
 
-        let items = tags
-            .iter()
-            .map(|t| library.get_taglist(t))
-            .collect::<Vec<Vec<String>>>();
+        let items = tags.iter().map(|t| library.get_taglist(t)).collect::<Vec<Vec<String>>>();
 
         for x in 0..items[0].len() {
             rows.push(items.iter().map(|i| i[x].clone()).collect::<Vec<String>>());
@@ -114,8 +111,7 @@ impl ContainedWidget for QueueTable {
             items.push(("[unsorted]".to_string(), library.get_taglist("title")))
         }
 
-        self.pane_array
-            .draw_from(frame, stylesheet, items, highlights);
+        self.pane_array.draw_from(frame, stylesheet, items, highlights);
     }
 }
 // ### impl ContainedWidget }}}
@@ -137,10 +133,7 @@ impl Scrollable for QueueTable {
 
 impl Searchable for QueueTable {
     fn get_items<'a>(&self) -> Vec<String> {
-        self.get_rows()
-            .into_iter()
-            .map(|v| v[self.index()].clone())
-            .collect::<Vec<String>>()
+        self.get_rows().into_iter().map(|v| v[self.index()].clone()).collect::<Vec<String>>()
     }
 }
 
@@ -152,9 +145,7 @@ impl Clickable for QueueTable {
         let none = super::Action::None;
         let draw = super::Action::Draw;
         match event.kind {
-            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => {
-                return none
-            }
+            MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => return none,
             _ => (),
         }
 

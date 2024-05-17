@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use super::{Clickable, ContainedWidget};
 
 use crossterm::event;
@@ -93,17 +95,9 @@ impl<T: Clone> MenuBar<T> {
 }
 
 impl<T: Clone> ContainedWidget for MenuBar<T> {
-    fn draw<B: tui::backend::Backend>(
-        &mut self,
-        frame: &mut tui::terminal::Frame<B>,
-        stylesheet: super::StyleSheet,
-    ) {
+    fn draw<B: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<B>, stylesheet: super::StyleSheet) {
         if let Some(tree) = self.nav_to_tree() {
-            let mut spans = vec![Span::from(if !self.nav.is_empty() {
-                " 0.<- | "
-            } else {
-                " "
-            })];
+            let mut spans = vec![Span::from(if !self.nav.is_empty() { " 0.<- | " } else { " " })];
             for (n, t) in tree.iter().enumerate() {
                 spans.push(Span::styled(
                     (n + 1).to_string() + ".",
@@ -117,15 +111,9 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                     spans.push(Span::from(" | "));
                 }
             }
-            frame.render_widget(
-                Paragraph::new(Spans::from(spans)).style(stylesheet.base),
-                self.area,
-            );
+            frame.render_widget(Paragraph::new(Spans::from(spans)).style(stylesheet.base), self.area);
         } else {
-            frame.render_widget(
-                Paragraph::new("MenuBar Placeholder").style(stylesheet.base),
-                self.area,
-            );
+            frame.render_widget(Paragraph::new("MenuBar Placeholder").style(stylesheet.base), self.area);
         }
     }
 }
@@ -134,10 +122,7 @@ impl<T: Clone> Clickable for MenuBar<T> {
     fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
         let mut result = super::Action::None;
         if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
-            if self
-                .area
-                .intersects(Rect::new(event.column, event.row, 1, 1))
-            {
+            if self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
                 match event.column + if !self.nav.is_empty() { 0 } else { 7 } {
                     1..=4 => {
                         self.up();

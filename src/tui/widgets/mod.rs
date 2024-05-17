@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 pub use super::stylesheet::StyleSheet;
 pub use super::Action;
 mod statusbar;
@@ -113,24 +115,12 @@ pub trait Searchable: Scrollable {
 
 pub fn scroll_by_n(n: i32, position: &mut usize, view: &mut usize, height: usize, length: usize) {
     *position = (n + *position as i32).max(0).min(length as i32 - 1) as usize;
-    *view = (n + *view as i32)
-        .max(0)
-        .min(length.saturating_sub(height) as i32) as usize;
+    *view = (n + *view as i32).max(0).min(length.saturating_sub(height) as i32) as usize;
 }
 
-pub fn scroll_by_n_lock(
-    n: i32,
-    position: &mut usize,
-    view: &mut usize,
-    height: usize,
-    length: usize,
-) {
-    *position = (n + *position as i32)
-        .max(0)
-        .min(length.saturating_sub(1) as i32) as usize;
-    *view = position
-        .saturating_sub(height / 2)
-        .min(length.saturating_sub(height));
+pub fn scroll_by_n_lock(n: i32, position: &mut usize, view: &mut usize, height: usize, length: usize) {
+    *position = (n + *position as i32).max(0).min(length.saturating_sub(1) as i32) as usize;
+    *view = position.saturating_sub(height / 2).min(length.saturating_sub(height));
 }
 
 // ### Scrollable ### }}}
@@ -177,11 +167,7 @@ impl PaneArray {
     }
 
     // # prep_event # {{{
-    pub fn prep_event(
-        &mut self,
-        event: crossterm::event::MouseEvent,
-        items: &[(usize, usize)],
-    ) -> PaneArrayEvt {
+    pub fn prep_event(&mut self, event: crossterm::event::MouseEvent, items: &[(usize, usize)]) -> PaneArrayEvt {
         let none = PaneArrayEvt::Action(Action::None);
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Up(..) => return none,
@@ -259,13 +245,11 @@ impl PaneArray {
                                 && zX < zone.width - 1
                                 && zY > 0
                                 && zY < zone.height - 1
-                                && usize::from(zY)
-                                    < items[num].1.saturating_sub(self.views[num_join]) + 1
+                                && usize::from(zY) < items[num].1.saturating_sub(self.views[num_join]) + 1
                             {
                                 match button {
                                     MouseButton::Left => {
-                                        self.positions[num_join] =
-                                            zY as usize + self.views[num_join] - 1;
+                                        self.positions[num_join] = zY as usize + self.views[num_join] - 1;
                                         return PaneArrayEvt::Click;
                                     }
                                     MouseButton::Right => {
@@ -287,8 +271,7 @@ impl PaneArray {
                                 && zX < zone.width - 1
                                 && zY > 0
                                 && zY < zone.height - 1
-                                && usize::from(zY)
-                                    < items[num].1.saturating_sub(self.views[num_join]) + 1
+                                && usize::from(zY) < items[num].1.saturating_sub(self.views[num_join]) + 1
                             {
                                 std::mem::swap(&mut drag_vals_tmp, &mut self.drag_vals);
                                 let pos = zY as usize + self.views[num_join] - 1;
@@ -409,12 +392,7 @@ impl PaneArray {
                 area,
             );
             frame.render_widget(
-                Paragraph::new(if area.width < PA_LONG.len() as u16 {
-                    PA_SHORT
-                } else {
-                    PA_LONG
-                })
-                .alignment(Alignment::Right),
+                Paragraph::new(if area.width < PA_LONG.len() as u16 { PA_SHORT } else { PA_LONG }).alignment(Alignment::Right),
                 Rect {
                     x: area.x,
                     y: area.y + area.height.saturating_sub(1),

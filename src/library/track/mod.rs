@@ -1,3 +1,5 @@
+#![warn(missing_docs)]
+
 use crate::{bench, debug, log, LOG};
 use std::collections::HashMap;
 use std::fs::File;
@@ -323,12 +325,7 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
         .follow_links(true)
         .max_depth(10)
         .into_iter()
-        .filter_entry(|e| {
-            e.file_name()
-                .to_str()
-                .map(|s| include_hidden || !s.starts_with("."))
-                .unwrap_or(false)
-        })
+        .filter_entry(|e| e.file_name().to_str().map(|s| include_hidden || !s.starts_with(".")).unwrap_or(false))
         .filter_map(|e| e.ok())
         .filter(|e| {
             if e.path().is_dir() {
@@ -352,28 +349,18 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
         .map(|e| Track::new(e.path()))
         .collect();
 
-    bench!(format!(
-        "Found {} tracks in {:?}",
-        tracks.len(),
-        Instant::now() - now
-    ));
+    bench!(format!("Found {} tracks in {:?}", tracks.len(), Instant::now() - now));
     tracks
 }
 
-pub fn get_taglist<T: AsRef<str>, U: Deref<Target = Track>>(
-    tagstring: T,
-    tracks: &Vec<U>,
-) -> Vec<String> {
+pub fn get_taglist<T: AsRef<str>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
     tracks
         .iter()
         .filter_map(|t| Some(tagstring::parse(tagstring.as_ref(), t.tags())))
         .collect::<Vec<String>>()
 }
 
-pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(
-    tagstring: T,
-    tracks: &Vec<U>,
-) -> Vec<String> {
+pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(tagstring: T, tracks: &Vec<U>) -> Vec<String> {
     let mut result = get_taglist(tagstring, tracks);
     result.sort_by(|a, b| natural_lexical_cmp(&a, &b));
     result.dedup();
@@ -409,10 +396,7 @@ impl Track {
         }
 
         if let Some(text) = self.tags.get("replaygain_track_gain") {
-            if let Ok(gain) = text[..text
-                .rfind(|c: char| c.is_numeric())
-                .unwrap_or(text.len() - 1)
-                + 1]
+            if let Ok(gain) = text[..text.rfind(|c: char| c.is_numeric()).unwrap_or(text.len() - 1) + 1]
                 .trim_start()
                 .parse::<f32>()
             {
@@ -426,8 +410,7 @@ impl Track {
         // use file stem if no title tag
         if !self.tags.contains_key("title") {
             if let Some(path_title) = self.path.file_stem().map(|os_s| os_s.to_str()).flatten() {
-                self.tags
-                    .insert("title".to_string(), path_title.to_string());
+                self.tags.insert("title".to_string(), path_title.to_string());
             }
         }
     }
@@ -509,10 +492,7 @@ impl Track {
     fn load_meta_vorbis<R: symphonia::core::formats::FormatReader>(&mut self) {
         let Ok(Ok(mut reader)): Result<Result<R, _>, _> = File::open(&self.path).map(|file| {
             symphonia::core::formats::FormatReader::try_new(
-                symphonia::core::io::MediaSourceStream::new(
-                    Box::new(file),
-                    symphonia::core::io::MediaSourceStreamOptions::default(),
-                ),
+                symphonia::core::io::MediaSourceStream::new(Box::new(file), symphonia::core::io::MediaSourceStreamOptions::default()),
                 &symphonia::core::formats::FormatOptions::default(),
             )
         }) else {
@@ -520,8 +500,7 @@ impl Track {
         };
         if let Some(meta) = reader.metadata().current() {
             for tag in meta.tags() {
-                self.tags
-                    .insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
+                self.tags.insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
             }
         }
     }
@@ -550,11 +529,7 @@ impl Track {
 
 impl std::fmt::Display for Track {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut buff = format!(
-            "{}\nGAIN: {}\n",
-            self.path.to_str().unwrap_or("Invalid Path!"),
-            self.gain()
-        );
+        let mut buff = format!("{}\nGAIN: {}\n", self.path.to_str().unwrap_or("Invalid Path!"), self.gain());
 
         let mut its = self.tags().iter().collect::<Vec<(&String, &String)>>();
         its.sort_by(|a, b| (a.0).cmp(b.0));
@@ -635,10 +610,9 @@ mod id3tests {
         // Outdated and incomplete, as id3.org is down
         // so I only have the V2.3 frames from an old OMPL version
         const DECLARED_FRAMES: &[&'static str] = &[
-            "talb", "tbpm", "tcom", "tcon", "tcop", "tdat", "tdly", "tenc", "text", "tflt", "time",
-            "tit1", "tit2", "tit3", "tkey", "tlan", "tlen", "tmed", "toal", "tofn", "toly", "tope",
-            "tory", "town", "tpe1", "tpe2", "tpe3", "tpe4", "tpos", "tpub", "trck", "trda", "trsn",
-            "trso", "tsiz", "tsrc", "tsee", "tyer",
+            "talb", "tbpm", "tcom", "tcon", "tcop", "tdat", "tdly", "tenc", "text", "tflt", "time", "tit1", "tit2", "tit3", "tkey", "tlan", "tlen",
+            "tmed", "toal", "tofn", "toly", "tope", "tory", "town", "tpe1", "tpe2", "tpe3", "tpe4", "tpos", "tpub", "trck", "trda", "trsn", "trso",
+            "tsiz", "tsrc", "tsee", "tyer",
         ];
 
         let (frames, _names) = tovecs();

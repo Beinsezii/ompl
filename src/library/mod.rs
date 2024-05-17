@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
