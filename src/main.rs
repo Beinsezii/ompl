@@ -32,19 +32,19 @@ const PORT: &str = "18346";
 // ### LOGGING ### {{{
 
 /// Easy logging across modules
-static LOG: (AtomicU8, AtomicBool, Mutex<Vec<(u8, String)>>) = (AtomicU8::new(0), AtomicBool::new(true), Mutex::new(Vec::new()));
+static LOG: (AtomicU8, AtomicBool, Mutex<Vec<String>>) = (AtomicU8::new(0), AtomicBool::new(true), Mutex::new(Vec::new()));
 
 /// If $v <= LOG_LEVEL print values
 #[macro_export]
 macro_rules! log {
     ($v:expr, $($fmt_args:tt)*) => {
-        if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
-            if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
+        if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
+            if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
                 println!($($fmt_args)*)
+            // Store if paused
+            } else {
+                LOG.2.lock().unwrap().push(format!($($fmt_args)*))
             }
-        // Store if paused
-        } else {
-            LOG.2.lock().unwrap().push(($v, format!($($fmt_args)*)))
         }
     };
 }
@@ -63,8 +63,8 @@ macro_rules! log_resume {
     () => {
         LOG.1.store(true, std::sync::atomic::Ordering::Relaxed);
         let mut queue = LOG.2.lock().unwrap();
-        for (n, s) in queue.drain(..) {
-            log!(n, "{}", s)
+        for s in queue.drain(..) {
+            println!("{}", s);
         }
         queue.shrink_to_fit();
     };
