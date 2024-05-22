@@ -90,7 +90,7 @@ macro_rules! debug {
 
 // ### PARSERS ### {{{
 
-#[rustfmt::skip] // it adds a whole lot of lines
+/// Parse "<tagstring>=a,b" => Filter {tagstring, [a, b]}
 fn parse_filter(s: &str) -> Result<library::Filter, String> {
     let mut i = s.chars();
 
@@ -104,37 +104,42 @@ fn parse_filter(s: &str) -> Result<library::Filter, String> {
 
     loop {
         match i.next() {
-            Some('\\') => if let Some(c) = i.next() {
-                    if switch { item_buff.push(c) }
-                    else { tag.push(c) };
+            Some('\\') => {
+                if let Some(c) = i.next() {
+                    if switch {
+                        item_buff.push(c)
+                    } else {
+                        tag.push(c)
+                    };
                     pos += 1
-            },
+                }
+            }
             Some('=') => match switch {
                 false => switch = true,
-                true => return Err(format!(
-                        "Inappropriate equals @ position {} of \"{}\"",
-                        pos, s
-                    ))
+                true => return Err(format!("Inappropriate equals @ position {} of \"{}\"", pos, s)),
             },
             Some(',') => match item_buff.is_empty() && switch {
                 false => {
                     items.push(item_buff);
                     item_buff = String::new();
                 }
-                true => return Err(format!(
-                        "Inappropriate comma @ position {} of \"{}\"",
-                        pos, s
-                    ))
+                true => return Err(format!("Inappropriate comma @ position {} of \"{}\"", pos, s)),
             },
-            Some(c) =>
-                if switch { item_buff.push(c) }
-                else { tag.push(c) },
+            Some(c) => {
+                if switch {
+                    item_buff.push(c)
+                } else {
+                    tag.push(c)
+                }
+            }
             None => break,
         }
         pos += 1;
     }
 
-    if !item_buff.is_empty() { items.push(item_buff) }
+    if !item_buff.is_empty() {
+        items.push(item_buff)
+    }
 
     Ok(library::Filter { tag, items })
 }
@@ -144,6 +149,7 @@ fn parse_color(s: &str) -> Result<Color, String> {
     Color::try_from(s)
 }
 
+/// Parse [hh:][mm:]ss.d format time => Duration
 fn parse_time(s: &str) -> Result<Duration, String> {
     let string = s.trim().to_ascii_lowercase();
     // hh:mm:ss.ddd format. hh:mm optional.
@@ -789,7 +795,7 @@ fn instance_main(listener: TcpListener, args: Args) {
 
             let server_library = library.clone();
             let jh = thread::spawn(move || server(listener, server_library));
-            debug!("Listening on port {}", args.port);
+            info!("Listening on port {}", args.port);
 
             // ## souvlaki ## {{{
             #[cfg(feature = "media-controls")]
