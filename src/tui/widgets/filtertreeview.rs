@@ -6,7 +6,7 @@ use crate::library::{get_taglist_sort, Library};
 use std::sync::{Arc, Weak};
 
 use crossterm::event::{MouseEvent, MouseEventKind};
-use tui::{backend::Backend, layout::Rect, terminal::Frame};
+use ratatui::{layout::Rect, terminal::Frame};
 
 // ### struct FilterTreeView {{{
 
@@ -170,7 +170,7 @@ impl Searchable for FilterTreeView {
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {
-    fn draw<T: Backend>(&mut self, frame: &mut Frame<T>, stylesheet: StyleSheet) {
+    fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,

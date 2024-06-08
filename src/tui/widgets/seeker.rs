@@ -9,7 +9,7 @@ use std::{
 };
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use tui::{
+use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::Sparkline,
 };
@@ -31,7 +31,7 @@ impl Seeker {
 }
 
 impl ContainedWidget for Seeker {
-    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::Frame<T>, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut ratatui::Frame, stylesheet: super::StyleSheet) {
         if let Some(library) = self.lib_weak.upgrade() {
             if let Some(seekable) = library.seekable() {
                 if seekable {

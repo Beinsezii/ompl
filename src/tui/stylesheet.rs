@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use crate::library::Theme;
-use tui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StyleSheet {

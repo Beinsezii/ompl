@@ -26,7 +26,7 @@ dasp = {version = "0.11", optional = true, features = ["all"]}
 souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
 crossterm = {version = "0.27", optional = true}
-tui = { version = "0.19", default-features = false, features = ['crossterm'] , optional = true}
+ratatui = {version = "0.26", optional = true}
 
 copypasta = {version = "0.10", optional=true}
 
@@ -34,7 +34,7 @@ copypasta = {version = "0.10", optional=true}
 
 [features]
 media-controls = ["dep:souvlaki"]
-tui = ["dep:tui", "dep:crossterm"]
+tui = ["dep:ratatui", "dep:crossterm"]
 clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]

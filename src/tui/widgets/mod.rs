@@ -13,7 +13,7 @@ pub use queuetable::QueueTable;
 mod seeker;
 pub use seeker::Seeker;
 
-use tui::{
+use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     terminal::Frame,
     text::Span,
@@ -49,7 +49,7 @@ pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
 
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut Frame<T>, stylesheet: StyleSheet);
+    fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet);
 }
 
 pub trait Clickable {
@@ -300,13 +300,7 @@ impl PaneArray {
     // # prep_event # }}}
 
     // # draw_from # {{{
-    pub fn draw_from<T: tui::backend::Backend>(
-        &mut self,
-        frame: &mut Frame<T>,
-        stylesheet: StyleSheet,
-        items: Vec<(String, Vec<String>)>,
-        highlights: Vec<Vec<String>>,
-    ) {
+    pub fn draw_from(&mut self, frame: &mut Frame, stylesheet: StyleSheet, items: Vec<(String, Vec<String>)>, highlights: Vec<Vec<String>>) {
         if items.len() == 0 {
             return;
         };
@@ -389,7 +383,7 @@ impl PaneArray {
                             stylesheet.base
                         }),
                 ),
-                area,
+                *area,
             );
             frame.render_widget(
                 Paragraph::new(if area.width < PA_LONG.len() as u16 { PA_SHORT } else { PA_LONG }).alignment(Alignment::Right),

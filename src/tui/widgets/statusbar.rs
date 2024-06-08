@@ -6,9 +6,9 @@ use crate::library::Library;
 use std::sync::{Arc, Weak};
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use tui::{
+use ratatui::{
     layout::Rect,
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::Paragraph,
 };
 
@@ -28,14 +28,14 @@ impl StatusBar {
 }
 
 impl ContainedWidget for StatusBar {
-    fn draw<T: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<T>, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut ratatui::terminal::Frame, stylesheet: super::StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,
         };
 
         frame.render_widget(
-            Paragraph::new(Spans::from(vec![
+            Paragraph::new(Line::from(vec![
                 Span::from(format!(
                     " -- {:.2} ++ | ({}) ",
                     library.volume_get(),

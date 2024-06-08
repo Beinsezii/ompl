@@ -21,10 +21,10 @@ use crossterm::{
     queue, terminal,
 };
 
-use tui::backend::{Backend, CrosstermBackend};
-use tui::layout::{Constraint, Direction, Layout, Rect};
-use tui::widgets::{Block, Borders, Clear, Paragraph};
-use tui::Terminal;
+use ratatui::backend::{Backend, CrosstermBackend};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::Terminal;
 
 mod stylesheet;
 use stylesheet::StyleSheet;
@@ -358,7 +358,7 @@ impl<T: Backend> UI<T> {
         self.draw_inject(|_| {});
     }
 
-    fn draw_inject<F: FnOnce(&mut tui::terminal::Frame<T>)>(&mut self, injection: F) {
+    fn draw_inject<F: FnOnce(&mut ratatui::Frame)>(&mut self, injection: F) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,

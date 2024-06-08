@@ -3,9 +3,9 @@
 use super::{Clickable, ContainedWidget};
 
 use crossterm::event;
-use tui::{
+use ratatui::{
     layout::Rect,
-    text::{Span, Spans},
+    text::{Line, Span},
     widgets::Paragraph,
 };
 
@@ -95,7 +95,7 @@ impl<T: Clone> MenuBar<T> {
 }
 
 impl<T: Clone> ContainedWidget for MenuBar<T> {
-    fn draw<B: tui::backend::Backend>(&mut self, frame: &mut tui::terminal::Frame<B>, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut ratatui::terminal::Frame, stylesheet: super::StyleSheet) {
         if let Some(tree) = self.nav_to_tree() {
             let mut spans = vec![Span::from(if !self.nav.is_empty() { " 0.<- | " } else { " " })];
             for (n, t) in tree.iter().enumerate() {
@@ -111,7 +111,7 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                     spans.push(Span::from(" | "));
                 }
             }
-            frame.render_widget(Paragraph::new(Spans::from(spans)).style(stylesheet.base), self.area);
+            frame.render_widget(Paragraph::new(Line::from(spans)).style(stylesheet.base), self.area);
         } else {
             frame.render_widget(Paragraph::new("MenuBar Placeholder").style(stylesheet.base), self.area);
         }
