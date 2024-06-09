@@ -22,7 +22,7 @@ A music player organized exactly how I like it.
     * \- Limited supported formats
   * Support for many audio formats
     * Sympal backend: everything [Symphonia supports](https://github.com/pdeljanov/Symphonia#codecs-decoders)
-      * Theoretically. Some things like .mp4 video files crash at the moment.
+      - Theoretically. Some things like .mp4 video files do not play, and I'm unsure why at the moment.
     * Rodio backend: [".mp3", ".flac", ".ogg", ".wav"]
     * All [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes (TALB, TIT2, etc) or the [human names](./src/library/track/mod.rs#L44). There's no standardization for the human names, so I tried to match what other taggers & players do.
     * Vorbis comments for FLAC/OGG
