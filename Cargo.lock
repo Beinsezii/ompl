@@ -2043,7 +2043,7 @@ dependencies = [
 
 [[package]]
 name = "ompl"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "bincode",
  "bus",

@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v0.9.0
+# OMPL - Opinionated Music Player/Library v0.9.1
 A music player organized exactly how I like it.
 
 <img src="./screenshot.png" height = 400px />
