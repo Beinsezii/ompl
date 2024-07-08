@@ -215,25 +215,24 @@ impl Player for Backend {
         let vol = self.volume.clone();
         let gain = self.track.lock().unwrap().as_ref().unwrap().gain();
 
-        let (device, config) = if let Some(tuple) = self.get_device() {
-            tuple
-        } else {
-            self.stop();
-            return;
-        };
-
         debug!("Sympal play await stream");
         while self.streaming.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(1))
         }
-
         self.join.store(false, Ordering::Relaxed);
+        while !self.first.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(1))
+        }
+
+        let Some((device, config)) = self.get_device() else {
+            self.stop();
+            return;
+        };
 
         let join_thread = self.join.clone();
         let join_data = self.join.clone();
         let streaming = self.streaming.clone();
         let pos = self.pos.clone();
-        let first = self.first.clone();
         let last = self.last.clone();
         let samples = self.samples.lock().unwrap().clone();
         let channels = self.channels.load(Ordering::Relaxed) as u32;
@@ -249,9 +248,6 @@ impl Player for Backend {
         thread::Builder::new()
             .name(String::from("SYMPAL Audio Stream"))
             .spawn(move || {
-                while !first.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(1))
-                }
                 // if play requested on last pos, reset.
                 // basically if you manage to pause it after samples[] ends,
                 // this restarts playback instead of playing nothing
