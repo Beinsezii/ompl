@@ -35,8 +35,6 @@ A music player organized exactly how I like it.
 ### Goals for 1.0
   * Code docs
   * Stability
-  * More robust Sympal backend
-  * See [TODO.md](./TODO.md) for more details
   
 ## Installation
 Manually compiled and tested binaries for Linux and Windows are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
