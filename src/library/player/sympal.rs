@@ -4,16 +4,16 @@ use super::{Player, PlayerMessage};
 use crate::library::Track;
 use crate::{bench, debug, info, log, LOG};
 
-use std::{
-    fs::File,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering},
-        mpsc::SyncSender,
-        Arc, Mutex, RwLock,
-    },
-    thread,
-    time::{Duration, Instant},
+use std::fs::File;
+use std::ops::Deref;
+use std::panic;
+use std::sync::{
+    atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering},
+    mpsc::SyncSender,
+    Arc, Mutex, RwLock,
 };
+use std::thread;
+use std::time::{Duration, Instant};
 
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
@@ -27,14 +27,39 @@ use symphonia::core::{
     probe::{Hint, QueryDescriptor},
 };
 
+fn sleep1() {
+    thread::sleep(Duration::from_millis(1))
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DecoderState {
+    Empty,
+    Decoding,
+    Complete,
+    Error,
+}
+
+impl From<u8> for DecoderState {
+    fn from(value: u8) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+impl Deref for DecoderState {
+    type Target = u8;
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::mem::transmute(self) }
+    }
+}
+
 pub struct Backend {
     track: Mutex<Option<Arc<Track>>>,
     volume: Arc<AtomicU32>,
     channel: SyncSender<PlayerMessage>,
     join: Arc<AtomicBool>,
     streaming: Arc<AtomicBool>,
-    first: Arc<AtomicBool>,
-    last: Arc<AtomicBool>,
+    decoder_state: Arc<AtomicU8>,
     // TODO: dynamic typing
     samples: Mutex<Arc<RwLock<Vec<i16>>>>,
     pos: Arc<AtomicUsize>,
@@ -161,8 +186,7 @@ impl Player for Backend {
             channel: sig,
             join: Arc::new(AtomicBool::new(true)),
             streaming: Arc::new(AtomicBool::new(false)),
-            first: Arc::new(AtomicBool::new(false)),
-            last: Arc::new(AtomicBool::new(false)),
+            decoder_state: Arc::new(AtomicU8::new(*DecoderState::Empty)),
             samples: Default::default(),
             pos: Arc::new(AtomicUsize::new(0)),
             rate: Arc::new(AtomicU32::new(0)),
@@ -210,18 +234,23 @@ impl Player for Backend {
             return;
         }
 
-        self.join.store(true, Ordering::Relaxed);
-
         let vol = self.volume.clone();
         let gain = self.track.lock().unwrap().as_ref().unwrap().gain();
 
         debug!("Sympal play await stream");
         while self.streaming.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1))
+            sleep1()
         }
         self.join.store(false, Ordering::Relaxed);
-        while !self.first.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1))
+        loop {
+            match self.decoder_state.load(Ordering::Relaxed).into() {
+                DecoderState::Decoding | DecoderState::Complete => break,
+                DecoderState::Error => {
+                    self.join.store(true, Ordering::Relaxed);
+                    return;
+                }
+                DecoderState::Empty => sleep1(),
+            }
         }
 
         let Some((device, config)) = self.get_device() else {
@@ -233,7 +262,7 @@ impl Player for Backend {
         let join_data = self.join.clone();
         let streaming = self.streaming.clone();
         let pos = self.pos.clone();
-        let last = self.last.clone();
+        let decoder_state = self.decoder_state.clone();
         let samples = self.samples.lock().unwrap().clone();
         let channels = self.channels.load(Ordering::Relaxed) as u32;
         let rate = self.rate.load(Ordering::Relaxed);
@@ -251,7 +280,7 @@ impl Player for Backend {
                 // if play requested on last pos, reset.
                 // basically if you manage to pause it after samples[] ends,
                 // this restarts playback instead of playing nothing
-                if last.load(Ordering::Relaxed) && samples.read().unwrap().len() == pos.load(Ordering::Relaxed) {
+                if decoder_state.load(Ordering::Relaxed) == *DecoderState::Complete && samples.read().unwrap().len() == pos.load(Ordering::Relaxed) {
                     pos.store(0, Ordering::Relaxed)
                 }
                 streaming.store(true, Ordering::Relaxed);
@@ -323,7 +352,7 @@ impl Player for Backend {
                             if (start_pos as f32 / (rate * channels) as f32).floor()
                                 < (cur_pos as f32 / (rate * channels) as f32).floor()
                                 // only clock if seekable
-                                && last.load(Ordering::Relaxed)
+                                && decoder_state.load(Ordering::Relaxed) == *DecoderState::Complete
                             {
                                 channel_str.send(PlayerMessage::Clock).unwrap();
                             }
@@ -341,7 +370,7 @@ impl Player for Backend {
                     .expect("Could not initialize audio stream");
                 stream.play().unwrap();
                 while !join_thread.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(1))
+                    sleep1()
                 }
                 streaming.store(false, Ordering::Relaxed);
             })
@@ -366,10 +395,10 @@ impl Player for Backend {
         self.pos.load(Ordering::Relaxed) != 0 && self.join.load(Ordering::Relaxed)
     }
     fn seekable(&self) -> Option<bool> {
-        Some(self.last.load(Ordering::Relaxed))
+        Some(self.decoder_state.load(Ordering::Relaxed) == *DecoderState::Complete)
     }
     fn times(&self) -> Option<(Duration, Duration)> {
-        match self.last.load(Ordering::Relaxed) {
+        match self.seekable().unwrap() {
             true => Some((
                 Duration::from_secs_f64(
                     (self.pos.load(Ordering::Relaxed) as f64)
@@ -386,7 +415,7 @@ impl Player for Backend {
         }
     }
     fn seek(&self, time: Duration) {
-        if self.last.load(Ordering::Relaxed) {
+        if self.seekable() == Some(true) {
             self.pos.store(
                 (time.as_secs_f32() * self.rate.load(Ordering::Relaxed) as f32) as usize * self.channels.load(Ordering::Relaxed),
                 Ordering::Release,
@@ -395,7 +424,7 @@ impl Player for Backend {
         }
     }
     fn waveform(&self, count: usize) -> Option<Vec<f32>> {
-        if self.last.load(Ordering::Relaxed) {
+        if self.seekable() == Some(true) {
             let samples = self.samples.lock().unwrap().clone();
             let read = samples.read().unwrap();
 
@@ -459,25 +488,19 @@ impl Player for Backend {
                     .expect("SYMPAL Probe result return ERR")
                     .format;
 
-                let mut decoder = if let Some(decoder) = fr
+                let decoder = if let Some(decoder) = fr
                     .default_track()
                     .map(|t| symphonia::default::get_codecs().make(&t.codec_params, &Default::default()).ok())
                     .flatten()
                     .filter(|d| d.codec_params().channels.is_some())
                 {
-                    decoder
+                    Mutex::new(decoder)
                 } else {
                     let mut tracks = fr.tracks().into_iter();
                     loop {
                         match tracks.next() {
                             Some(track) => match symphonia::default::get_codecs().make(&track.codec_params, &Default::default()) {
-                                Ok(decoder) => {
-                                    if decoder.codec_params().channels.is_some() {
-                                        break decoder;
-                                    } else {
-                                        continue;
-                                    }
-                                }
+                                Ok(decoder) => break Mutex::new(decoder),
                                 Err(_e) => continue,
                             },
                             None => {
@@ -499,62 +522,86 @@ impl Player for Backend {
                     }
                 };
 
-                let rate = decoder.codec_params().sample_rate.expect("SYMPAL Decoder has no sample rate");
-                self.rate.store(rate, Ordering::Relaxed);
-                let channels = decoder.codec_params().channels.expect("SYMPAL Decoder has no channels").count();
-                self.channels.store(channels, Ordering::Relaxed);
-
-                // allocate 2 minutes' worth of initial space
-                *self.samples.lock().unwrap() = Arc::new(RwLock::new(Vec::with_capacity(rate as usize * 120 * channels)));
-
-                let (samples, first, last) = (Arc::downgrade(&self.samples.lock().unwrap()), self.first.clone(), self.last.clone());
-
                 while self.streaming.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_millis(1))
+                    sleep1()
                 }
 
-                self.first.store(false, Ordering::Relaxed);
-                self.last.store(false, Ordering::Relaxed);
+                self.decoder_state.store(*DecoderState::Empty, Ordering::Relaxed);
                 self.pos.store(0, Ordering::Relaxed);
-                let channel_dec = self.channel.clone();
+
+                let channel = self.channel.clone();
+                let channels = self.channels.clone();
+                let decoder_state = self.decoder_state.clone();
+                let rate = self.rate.clone();
+                let samples = Arc::downgrade(&self.samples.lock().unwrap());
 
                 thread::Builder::new()
                     .name(String::from("SYMPAL Decoder"))
                     .spawn(move || {
                         let begin = Instant::now();
+                        let mut init = true;
                         while let Ok(packet) = fr.next_packet() {
                             if packet.dur() < 1 {
                                 // 0 length packets are possible I guess
                                 continue;
                             }
                             if let Some(samples) = samples.upgrade() {
-                                let ab = match decoder.decode(&packet) {
-                                    Ok(ab) => ab,
-                                    // Symphonia docs say these errs should just discard packet
-                                    Err(symphonia::core::errors::Error::DecodeError(..)) | Err(symphonia::core::errors::Error::IoError(..)) => {
-                                        continue
-                                    }
-                                    Err(e) => std::panic::panic_any(e),
-                                };
-                                let mut sb = SampleBuffer::<i16>::new(packet.dur, *ab.spec());
-                                sb.copy_interleaved_ref(ab);
-                                samples.write().unwrap().extend_from_slice(sb.samples());
-                                first.store(true, Ordering::Relaxed);
+                                let hook = panic::take_hook();
+                                panic::set_hook(Box::new(|_| {}));
+                                let packet_decode_result = panic::catch_unwind(|| {
+                                    decoder
+                                        .lock()
+                                        .unwrap()
+                                        .decode(&packet)
+                                        .inspect_err(|e| {
+                                            channel
+                                                .send(PlayerMessage::Error(format!("Symphonia could not decode packet:\n{}", e)))
+                                                .unwrap()
+                                        })
+                                        .ok()
+                                        .map(|ab| {
+                                            if init {
+                                                let new_rate = ab.spec().rate;
+                                                let new_channels = ab.spec().channels.count();
+                                                rate.store(new_rate, Ordering::Relaxed);
+                                                channels.store(new_channels, Ordering::Relaxed);
+
+                                                // allocate 2 minutes' worth of initial space
+                                                *samples.write().unwrap() = Vec::with_capacity(new_rate as usize * 120 * new_channels);
+                                            }
+                                            let mut sb = SampleBuffer::<i16>::new(packet.dur, *ab.spec());
+                                            sb.copy_interleaved_ref(ab);
+                                            samples.write().unwrap().extend_from_slice(sb.samples());
+                                            decoder_state.store(*DecoderState::Decoding, Ordering::Relaxed)
+                                        })
+                                })
+                                .inspect_err(|_e| {
+                                    channel
+                                        .send(PlayerMessage::Error("Symphonia panicked while decoding track".to_string()))
+                                        .unwrap()
+                                })
+                                .ok()
+                                .flatten();
+                                panic::set_hook(hook);
+                                if packet_decode_result == None {
+                                    decoder_state.store(*DecoderState::Error, Ordering::Relaxed);
+                                    return;
+                                }
+                                init = false;
                             } else {
                                 return;
                             }
                         }
                         bench!("Track fully decoded in {}ms", (Instant::now() - begin).as_millis());
                         if let Some(samples) = samples.upgrade() {
-                            last.store(true, Ordering::Relaxed);
+                            decoder_state.store(*DecoderState::Complete, Ordering::Relaxed);
                             samples.write().unwrap().shrink_to_fit();
-                            channel_dec.send(PlayerMessage::Seekable).unwrap()
+                            channel.send(PlayerMessage::Seekable).unwrap()
                         }
                     })
                     .unwrap();
             } else {
-                self.first.store(false, Ordering::Relaxed);
-                self.last.store(false, Ordering::Relaxed);
+                self.decoder_state.store(*DecoderState::Empty, Ordering::Relaxed);
                 self.pos.store(0, Ordering::Relaxed);
             }
         }
