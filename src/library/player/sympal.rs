@@ -28,7 +28,7 @@ use symphonia::core::{
 };
 
 fn sleep1() {
-    thread::sleep(Duration::from_millis(1))
+    thread::sleep(Duration::from_nanos(1))
 }
 
 #[repr(u8)]
