@@ -795,7 +795,7 @@ fn instance_main(listener: TcpListener, args: Args) {
 
             let server_library = library.clone();
             let jh = thread::spawn(move || server(listener, server_library));
-            info!("Listening on port {}", args.port);
+            info!("OMPL server listening at {}:{}", args.host, args.port);
 
             // ## souvlaki ## {{{
             #[cfg(feature = "media-controls")]
