@@ -9,27 +9,26 @@ A music player organized exactly how I like it.
     * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings) and [Filters](https://github.com/Beinsezii/ompl#filters)
     * Pretty colors
   * Fully functional CLI that interacts either with the TUI or a daemon
-    * Identical functionality and control in both TUI and CLI/daemon
+    * Identical functionality and control in both TUI and CLI
   * Sympal backend (default)
-    * \+ Extremely efficient seeking and playback
+    * \+ Efficient seeking and playback
     * \+ Supports many formats
-    * \- Uses more RAM, particularly for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
-    * \- Less stable, partially work-in-progress for edge cases
-  * [Rodio](https://github.com/RustAudio/rodio) backend (default on Windows)
-    * \+ Very safe, should always work
-    * \+ Extremely low memory usage
+    * \- May use more memory for [extremely long tracks](https://youtu.be/fQQxhyhdg-w)
+  * [Rodio](https://github.com/RustAudio/rodio) backend
+    * \+ Possibly better platform compatibility
     * \- No seeking of any kind
     * \- Limited supported formats
   * Support for many audio formats
     * Sympal backend: everything [Symphonia supports](https://github.com/pdeljanov/Symphonia#codecs-decoders)
-      - Theoretically. Some things like .mp4 video files do not play, and I'm unsure why at the moment.
+      + Verified working on `mp3`, `m4a`, `ogg`, `flac`, `wav`
+      - Symphonia often fails to identify non-audio containers such as `mp4` and `mkv`
     * Rodio backend: [".mp3", ".flac", ".ogg", ".wav"]
     * All [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes (TALB, TIT2, etc) or the [human names](./src/library/track/mod.rs#L44). There's no standardization for the human names, so I tried to match what other taggers & players do.
     * Vorbis comments for FLAC/OGG
     * Utilizes ReplayGain (track gain only)
-  * Pure Rust where possible. Very portable
+  * Pure Rust where possible; completely portable
+  * Very fast - Handle a few thousand files effortlessly on a low power device
   * Interfaces as a media player for direct OS control
-  * Very fast - Handle a few thousand files effortlessly on a glorified tablet
   * Shouldn't crash
 
 ### Goals for 1.0
@@ -42,15 +41,13 @@ Manually compiled and tested binaries for Linux and Windows are provided on the 
 Additionally, stable release binaries are automatically compiled and uploaded for Linux, Windows, and MacOS with the [Build Latest Release Tag Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_tag.yml)
 while the latest unstable binaries are can be found in the [Build Master Release Action](https://github.com/Beinsezii/ompl/actions/workflows/build_release_master.yml)
 
-Just pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to just unpack and run anywhere.
+Simply pick the most recent (or otherwise) build of your choosing and download the artifact for your system. It'll arrive in a .zip file which you should be able to unpack and run anywhere.
 
 As of OMPL 0.9, the default features do not include `backend-rodio`. The binaries created by Actions opt-in to including it.
 
-If you already have [Rust installed](https://rustup.rs/), you can build the latest release with
+If you already have [Rust installed](https://rustup.rs/), you can install directly from source with
 
-`cargo install --git https://github.com/Beinsezii/ompl.git --tag 0.9.0`
-
-You may omit the `--tag` flag if you follow the rebel path and want the latest possibly unstable build.
+`cargo install --git https://github.com/Beinsezii/ompl.git`
 
 Additionally, the some features are gated behind cargo flags.
 These are all enabled by default, but can be disabled if a lighter binary is desired.
@@ -64,12 +61,11 @@ It's recommended you add the downloaded binary or cargo install directory to you
 
 ## Usage
 
-To start a simple example sorting by album run `ompl main Path/To/Music -f album`
+To start a simple example filtering by album and sorting by title run `ompl main Path/To/Music -f album -s title`
 
-To update the running program filters to genres "Epic" and "Game" while sorting results by album then title, run `ompl -f genre=Epic,Game -s album title`
+To change filters to the "Epic" genre with "Thomas Bergersen" and "Nick Phoenix" as the artists run `ompl filter set-all 'genre=Epic' 'artist=Thomas Bergersen,Nick Phoenix'`
 
-To start a *second* server if your ADHD brain want two songs playing at once, run `ompl main Path/To/Music --port 12345`
-Be careful to avoid commonly used port numbers. Typically this means > 1024, though I recommend at least 5 digits.
+Finally play the current track with `ompl play`
 
 To view a full list of commands run `ompl help`
 
@@ -95,14 +91,14 @@ Filters are just Tagstrings that can also have values assigned to them.
 ## F.A.Q.
 Question|Answer
 ---|---
-Can you add support for my strange and unusual use-case?|OMPL isn't designed in any way to stream Spotify/show synchronized lyrics/etc. Use [quodlibet](https://quodlibet.readthedocs.io/en/latest/) or [foobar2000](https://www.foobar2000.org/), they both have similar layouts to OMPL
+Can you add support for my strange and unusual use-case?|OMPL isn't designed in any way to stream Spotify/show synchronized lyrics/etc. Try [quodlibet](https://quodlibet.readthedocs.io/en/latest/) or [foobar2000](https://www.foobar2000.org/), they both have similar layouts to OMPL
 Can you change X functionality to be more like existing standards?|Maybe. Create an Issue with a good reason for the change, and ideally a source showing the standard implementation
-Where is the configuration file?|In your heart. Every configurable setting is exposed by the CLI, so simply create a shortcut wherever you want and load up the command line flags. If something *isn't* available through CLI in some way, create an Issue
+Where is the configuration file?|Every configurable setting is exposed by the CLI. Create a shortcut wherever you want and add the command line flags. If something *isn't* available through CLI in some way, create an Issue
 
 ## SECRET KNOWLEDGE
 * Left click on a filter's tagstring to invert the selection
 * Right click on a filter's tagstring to clear the selection
-* Right click and drag to [de]highlight many filter items
+* Right click and drag to select many items
 * The symbols on the bottom of filter/sorter panes are buttons for move<- add<- edit remove add-> move->
 * Middle click a pane to highlight it without selecting anything
 * Right click in the queue to select a track without playing it
