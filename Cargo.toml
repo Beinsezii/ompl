@@ -18,7 +18,7 @@ serde = { version = "1", features = ["derive"] }
 symphonia = { version = "0.5", features = ['all']}
 walkdir = "2"
 
-rodio = { version = "0.16", optional = true } # 0.17 panics when source ends
+rodio = { version = "0.19", optional = true }
 
 cpal = {version = "0.15", optional = true}
 dasp = {version = "0.11", optional = true, features = ["interpolate", "interpolate-linear", "signal"]}
