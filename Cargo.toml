@@ -13,7 +13,7 @@ bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }
 lexical-sort = "0.3"
 rand = "0.8"
-regex = "1"
+regex = {package = "regex-lite", version = "0.1"}
 serde = { version = "1", features = ["derive"] }
 symphonia = { version = "0.5", features = ['all']}
 walkdir = "2"
@@ -21,12 +21,12 @@ walkdir = "2"
 rodio = { version = "0.16", optional = true } # 0.17 panics when source ends
 
 cpal = {version = "0.15", optional = true}
-dasp = {version = "0.11", optional = true, features = ["all"]}
+dasp = {version = "0.11", optional = true, features = ["interpolate", "interpolate-linear", "signal"]}
 
 souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
-crossterm = {version = "0.27", optional = true}
-ratatui = {version = "0.27", optional = true}
+crossterm = {version = "0.27", optional = true, default-features = false}
+ratatui = {version = "0.27", optional = true, default-features = false, features = ['crossterm']}
 
 copypasta = {version = "0.10", optional=true}
 
