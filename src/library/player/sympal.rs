@@ -441,7 +441,7 @@ impl Player for Backend {
                     result.push(
                         chunk[padding..res_base * res_adapt + padding]
                             .iter()
-                            .map(|n| n.abs() as f32 / i16::MAX as f32)
+                            .map(|n| (*n as f32).abs() / i16::MAX as f32)
                             .sum::<f32>()
                             / res_adapt as f32,
                         // maybe this should be base & adapt?
