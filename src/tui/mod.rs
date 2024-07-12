@@ -482,27 +482,32 @@ impl<T: Backend> UI<T> {
     fn input(&mut self, query: &str, prefill: &str, header: bool) -> String {
         let mut result = String::from(prefill);
 
+        let Some(library) = self.lib_weak.upgrade() else { return result };
+        let header_height: u16 = if library.seekable().is_some() { 4 } else { 2 };
+        const BOX_HEIGHT: u16 = 3;
+        // +5 -> borders(2), pad(1), ": "(2)
+        const BOX_PAD: u16 = 5;
+        let filterpanes_height = self.filterpanes.area().height;
+
         let submit = 'outer: loop {
             let style = self.stylesheet.active;
-            let active = self.sortpanes.active();
+            let sortpanes_active = self.sortpanes.active();
             self.draw_inject(|f| {
                 let size = f.size();
                 let area = Rect {
                     x: 0,
                     y: if header {
-                        2.min(size.height.saturating_sub(3))
-                    } else if active {
-                        size.height.saturating_sub(3)
+                        header_height.saturating_sub(BOX_HEIGHT).min(size.height.saturating_sub(BOX_HEIGHT))
+                    } else if sortpanes_active {
+                        size.height.saturating_sub(BOX_HEIGHT)
                     } else {
-                        // -5 -> headers(2), height(3)
-                        size.height.saturating_sub(5) / 2
+                        (filterpanes_height + header_height).saturating_sub(BOX_HEIGHT)
                     },
-                    height: 3.min(size.height),
-                    // +5 -> borders(2), pad(1), ": "(2)
+                    height: BOX_HEIGHT.min(size.height),
                     width: if header {
-                        (size.width / 4).max((result.len() + query.len()) as u16 + 5).min(size.width)
+                        (size.width / 4).max((result.len() + query.len()) as u16 + BOX_PAD).min(size.width)
                     } else {
-                        ((result.len() + query.len()) as u16 + 5).min(size.width)
+                        ((result.len() + query.len()) as u16 + BOX_PAD).min(size.width)
                     },
                 };
                 f.render_widget(Clear, area);
