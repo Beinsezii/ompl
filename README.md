@@ -1,4 +1,4 @@
-# OMPL - Opinionated Music Player/Library v0.9.1
+# OMPL - Opinionated Music Player/Library v0.9.2
 <img src="./screenshot.png" height = 400px />
 
 ## Features
