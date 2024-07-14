@@ -376,12 +376,14 @@ impl<T: Backend> UI<T> {
                     .constraints(vec![
                         Constraint::Length(1),
                         Constraint::Length(1),
-                        Constraint::Length(if let Some(_) = library.seekable() { 2 } else { 0 }),
+                        Constraint::Length(if library.seekable().is_some() { 2 } else { 0 }),
                         Constraint::Length(if self.debug { 1 } else { 0 }),
                         Constraint::Length(if library.filter_count() == 0 {
                             0
                         } else {
-                            size.height.saturating_sub(2 + if self.debug { 1 } else { 1 }) / 2
+                            size.height
+                                .saturating_sub(if library.seekable().is_some() { 4 } else { 2 } + if self.debug { 1 } else { 0 })
+                                / 2
                         }),
                         Constraint::Min(1),
                     ])
@@ -483,17 +485,17 @@ impl<T: Backend> UI<T> {
         let mut result = String::from(prefill);
 
         let Some(library) = self.lib_weak.upgrade() else { return result };
-        let header_height: u16 = if library.seekable().is_some() { 4 } else { 2 };
+        let header_height: u16 = if library.seekable().is_some() { 4 } else { 2 } + if self.debug { 1 } else { 0 };
         const BOX_HEIGHT: u16 = 3;
         // +5 -> borders(2), pad(1), ": "(2)
         const BOX_PAD: u16 = 5;
-        let filterpanes_height = self.filterpanes.area().height;
 
         let submit = 'outer: loop {
             let style = self.stylesheet.active;
             let sortpanes_active = self.sortpanes.active();
             self.draw_inject(|f| {
                 let size = f.size();
+                let filterpanes_height = size.height.saturating_sub(header_height) / 2;
                 let area = Rect {
                     x: 0,
                     y: if header {
@@ -501,7 +503,7 @@ impl<T: Backend> UI<T> {
                     } else if sortpanes_active {
                         size.height.saturating_sub(BOX_HEIGHT)
                     } else {
-                        (filterpanes_height + header_height).saturating_sub(BOX_HEIGHT)
+                        (filterpanes_height + header_height).min(size.height).saturating_sub(BOX_HEIGHT)
                     },
                     height: BOX_HEIGHT.min(size.height),
                     width: if header {
