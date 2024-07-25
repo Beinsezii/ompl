@@ -46,26 +46,12 @@ impl FilterTreeView {
         &mut self.pane_array.index
     }
 
-    pub fn positions(&self) -> &[usize] {
-        &self.pane_array.positions
-    }
-    pub fn positions_mut(&mut self) -> &mut Vec<usize> {
-        &mut self.pane_array.positions
-    }
-
-    pub fn views(&self) -> &[usize] {
-        &self.pane_array.views
-    }
-    pub fn views_mut(&mut self) -> &mut Vec<usize> {
-        &mut self.pane_array.views
-    }
-
     pub fn toggle_current(&mut self) {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
             if let Some(mut fi) = library.get_filter_items(self.index()) {
                 let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                    .get(self.positions()[self.index()] as usize)
+                    .get(self.pane_array.positions[self.index()] as usize)
                     .cloned();
 
                 if let Some(item) = item {
@@ -84,7 +70,7 @@ impl FilterTreeView {
         if let Some(library) = self.lib_weak.upgrade() {
             let (tags, data) = library.get_filter_tree_display();
             let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                .get(self.positions()[self.index()])
+                .get(self.pane_array.positions[self.index()])
                 .cloned();
             if let Some(item) = item {
                 library.set_filter_items(self.index(), vec![item]);
@@ -113,23 +99,6 @@ impl FilterTreeView {
                 );
             }
         }
-    }
-
-    /// Used when a filter is removed to save positions
-    pub fn remove(&mut self) {
-        if self.index() < self.positions().len() {
-            let i = self.index();
-            self.positions_mut().remove(i);
-            self.views_mut().remove(i);
-        }
-    }
-
-    /// Used when a filter is to create new positions
-    pub fn insert(&mut self, before: bool) {
-        let pos = self.index() + if before { 0 } else { 1 };
-        let (poslen, viewlen) = (self.positions().len(), self.views().len());
-        self.positions_mut().insert(pos.min(poslen), 0);
-        self.views_mut().insert(pos.min(viewlen), 0);
     }
 }
 

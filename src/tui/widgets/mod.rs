@@ -1,5 +1,7 @@
 #![warn(missing_docs)]
 
+use std::cmp::Ordering;
+
 pub use super::stylesheet::StyleSheet;
 pub use super::Action;
 mod statusbar;
@@ -130,6 +132,7 @@ pub fn scroll_by_n_lock(n: i32, position: &mut usize, view: &mut usize, height: 
 #[derive(Clone, Debug)]
 pub struct PaneArray {
     joined: bool,
+    shown_items: Vec<String>,
     pub area: Rect,
     pub active: bool,
     pub index: usize,
@@ -157,6 +160,7 @@ impl PaneArray {
     pub fn new(joined: bool, count: usize) -> Self {
         Self {
             joined,
+            shown_items: Vec::new(),
             area: Rect::default(),
             active: false,
             index: 0,
@@ -301,12 +305,37 @@ impl PaneArray {
 
     // # draw_from # {{{
     pub fn draw_from(&mut self, frame: &mut Frame, stylesheet: StyleSheet, items: Vec<(String, Vec<String>)>, highlights: Vec<Vec<String>>) {
+        // clamp index
+        self.index = self.index.min(items.len().saturating_sub(1));
+
+        // Find updated items and views
+        if !self.joined && self.shown_items.iter().cmp(items.iter().map(|i| &i.0)) != Ordering::Equal {
+            let new_items: Vec<String> = items.iter().map(|i| i.0.clone()).collect();
+            let mut positions = vec![0; new_items.len()];
+            let mut views = vec![0; new_items.len()];
+
+            // In case of duplicates
+            let mut matches = Vec::new();
+
+            for (item, (position, view)) in self.shown_items.iter().zip(self.positions.iter().zip(self.views.iter())) {
+                if let Some(i) = new_items
+                    .iter()
+                    .enumerate()
+                    .find_map(|(n, ni)| (ni == item && !matches.contains(&n)).then_some(n))
+                {
+                    matches.push(i);
+                    (positions[i], views[i]) = (*position, *view);
+                }
+            }
+
+            self.shown_items = new_items;
+            self.positions = positions;
+            self.views = views;
+        }
+
         if items.len() == 0 {
             return;
         };
-
-        // clamp index
-        self.index = self.index.min(items.len().saturating_sub(1));
 
         for (num, (area, item)) in Layout::default()
             .direction(Direction::Horizontal)

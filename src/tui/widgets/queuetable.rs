@@ -51,19 +51,6 @@ impl QueueTable {
     pub fn position(&self) -> usize {
         self.pane_array.positions[0]
     }
-    #[allow(unused)]
-    pub fn position_mut(&mut self) -> &mut usize {
-        &mut self.pane_array.positions[0]
-    }
-
-    #[allow(unused)]
-    pub fn view(&self) -> usize {
-        self.pane_array.views[0]
-    }
-    #[allow(unused)]
-    pub fn view_mut(&mut self) -> &mut usize {
-        &mut self.pane_array.views[0]
-    }
 
     fn get_rows(&self) -> Vec<Vec<String>> {
         let mut rows = Vec::<Vec<String>>::new();

@@ -26,7 +26,7 @@ use library::{Backend, Color, LibEvt, Library, Theme};
 #[cfg(feature = "tui")]
 mod tui;
 
-const ID: &str = "OMPL SERVER 0.9.0";
+const ID: &str = "OMPL SERVER 0.10.0";
 const PORT: &str = "18346";
 
 // ### LOGGING ### {{{
@@ -216,16 +216,8 @@ pub enum FilterCmd {
         ///
         index: Option<usize>,
     },
-    /// Set INDEX filter layer to FILTER
+    /// Replace all filters with FILTERS
     Set {
-        ///
-        index: usize,
-        ///
-        #[arg(value_parser=parse_filter)]
-        filter: library::Filter,
-    },
-    /// Replace all Filter layers with provided list of filters
-    SetAll {
         ///
         #[arg(num_args(1..), value_parser=parse_filter)]
         filters: Vec<library::Filter>,
@@ -234,6 +226,22 @@ pub enum FilterCmd {
     Remove {
         ///
         index: usize,
+    },
+    /// Insert FILTER at INDEX
+    Insert {
+        ///
+        index: usize,
+        ///
+        #[arg(value_parser=parse_filter)]
+        filter: library::Filter,
+    },
+    /// Replace INDEX filter with FILTER
+    Replace {
+        ///
+        index: usize,
+        ///
+        #[arg(value_parser=parse_filter)]
+        filter: library::Filter,
     },
 }
 
@@ -245,16 +253,8 @@ pub enum SorterCmd {
         ///
         index: Option<usize>,
     },
-    /// Set INDEX Sorter layer to TAGSTRING
+    /// Replace all sorters TAGSTRINGS
     Set {
-        ///
-        index: usize,
-        ///
-        tagstring: String,
-    },
-
-    /// Replace all Sorter layers with provided list of tagstrings
-    SetAll {
         ///
         #[arg(num_args(1..))]
         tagstrings: Vec<String>,
@@ -263,6 +263,20 @@ pub enum SorterCmd {
     Remove {
         ///
         index: usize,
+    },
+    /// Insert TAGSTRING sorter into INDEX
+    Insert {
+        ///
+        index: usize,
+        ///
+        tagstring: String,
+    },
+    /// Replace INDEX sorter with TAGSTRING
+    Replace {
+        ///
+        index: usize,
+        ///
+        tagstring: String,
     },
 }
 
@@ -678,9 +692,10 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                             .join("\n")
                                     }
                                 }
-                                FilterCmd::Set { index, filter } => library.set_filter(index, filter),
-                                FilterCmd::SetAll { filters } => library.set_filters(filters),
+                                FilterCmd::Set { filters } => library.set_filters(filters),
                                 FilterCmd::Remove { index } => library.remove_filter(index),
+                                FilterCmd::Insert { index, filter } => library.insert_filter(filter, index),
+                                FilterCmd::Replace { index, filter } => library.set_filter(index, filter),
                             },
 
                             Action::Sorter(cmd) => match cmd {
@@ -691,9 +706,10 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                         library.get_sorters().join("\n")
                                     }
                                 }
-                                SorterCmd::Set { index, tagstring } => library.set_sorter(index, tagstring),
-                                SorterCmd::SetAll { tagstrings } => library.set_sorters(tagstrings),
+                                SorterCmd::Set { tagstrings } => library.set_sorters(tagstrings),
                                 SorterCmd::Remove { index } => library.remove_sorter(index),
+                                SorterCmd::Insert { index, tagstring } => library.insert_sorter(tagstring, index),
+                                SorterCmd::Replace { index, tagstring } => library.set_sorter(index, tagstring),
                             },
 
                             Action::Print(print_cmd) => match print_cmd {

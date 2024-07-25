@@ -636,8 +636,8 @@ impl Library {
     /// Delete Nth filter and rebuild FilteredTracks
     pub fn remove_filter(&self, pos: usize) {
         let mut filters = self.get_filters();
-        if pos < filters.len() {
-            filters.remove(pos);
+        if !filters.is_empty() {
+            filters.remove(pos.min(filters.len().saturating_sub(1)));
         }
         self.set_filters(filters);
     }
@@ -735,12 +735,11 @@ impl Library {
 
     /// Remove Nth sorter tagstring and re-sort library
     pub fn remove_sorter(&self, index: usize) {
-        let mut sorters = self.sorters.write().unwrap();
-        if index < sorters.len() {
-            sorters.remove(index);
+        let mut sorters = self.get_sorters();
+        if !sorters.is_empty() {
+            sorters.remove(index.min(sorters.len().saturating_sub(1)));
         }
-        drop(sorters);
-        self.sort()
+        self.set_sorters(sorters)
     }
 
     /// Add sorter tagstring to position and re-sort library

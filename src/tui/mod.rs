@@ -233,7 +233,6 @@ impl<T: Backend> UI<T> {
         } else {
             let tag = self.input("Filter", "", false).trim().to_string();
             if !tag.is_empty() {
-                self.filterpanes.insert(before);
                 let pos = self.filterpanes.index() + if before { 0 } else { 1 };
                 library.insert_filter(Filter { tag, items: Vec::new() }, pos);
                 *self.filterpanes.index_mut() = min(pos, library.filter_count().saturating_sub(1));
@@ -253,7 +252,6 @@ impl<T: Backend> UI<T> {
         if self.sortpanes.active() {
             library.remove_sorter(self.sortpanes.index());
         } else {
-            self.filterpanes.remove();
             library.remove_filter(self.filterpanes.index());
             if library.filter_count() == 0 {
                 *self.sortpanes.active_mut() = true;
@@ -1055,7 +1053,7 @@ pub fn tui(library: Arc<Library>) -> bool {
                 match libevt_r.recv() {
                     Ok(action) => match uiw_libevt.upgrade() {
                         Some(ui) => match action {
-                            LibEvt::Playback => ui.lock().unwrap().draw(),
+                            LibEvt::Playback | LibEvt::Update => ui.lock().unwrap().draw(),
                             LibEvt::Theme => {
                                 if let Ok(mut uiw) = ui.lock() {
                                     if let Some(libw) = libweak_evt.upgrade() {
@@ -1063,16 +1061,6 @@ pub fn tui(library: Arc<Library>) -> bool {
                                         uiw.draw()
                                     }
                                 }
-                            }
-                            LibEvt::Update => {
-                                let mut uiw = ui.lock().unwrap();
-                                let i = uiw.filterpanes.index();
-                                for x in 0..libweak_evt.upgrade().unwrap().filter_count() {
-                                    *uiw.filterpanes.index_mut() = x;
-                                    uiw.filterpanes.scroll_by_n(0);
-                                }
-                                *uiw.filterpanes.index_mut() = i;
-                                uiw.draw();
                             }
                             LibEvt::Error(message) => {
                                 let mut uiw = ui.lock().unwrap();
