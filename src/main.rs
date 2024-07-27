@@ -858,7 +858,7 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
                         .with_decorations(false)
                         .with_visible(false)
                         .with_title("OMPL Media Control Window")
-                        .build(&winit::event_loop::EventLoop::new()?)?
+                        .build(&*winit::event_loop::EventLoop::new()?)?
                         .raw_window_handle()
                     {
                         RawWindowHandle::Win32(han) => Some(han.hwnd),
