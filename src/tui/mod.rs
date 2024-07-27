@@ -606,7 +606,7 @@ impl<T: Backend> UI<T> {
                         if text.len() > 0 {
                             match parse_time(&text) {
                                 Ok(time) => library.seek(time),
-                                Err(s) => self.message("", &s),
+                                Err(s) => self.message("Could not parse time", &s.to_string()),
                             }
                         }
                     }
@@ -990,7 +990,7 @@ impl<T: Backend> UI<T> {
 
 // ### tui ### {{{
 pub fn tui(library: Arc<Library>) -> bool {
-    let mut libevt_r = library.get_receiver();
+    let mut libevt_r = library.get_receiver().unwrap();
     debug!("Entering interactive terminal...");
     log_pause!();
 

@@ -7,6 +7,7 @@
 
 use clap::{ArgAction, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -29,6 +30,14 @@ mod tui;
 const ID: &str = "OMPL SERVER 0.10.0";
 const PORT: &str = "18346";
 
+/// petty 100
+#[macro_export]
+macro_rules! try_block {
+    ($enclosed:block) => {
+        || -> Result<(), Box<dyn Error>> { $enclosed }()
+    };
+}
+
 // ### LOGGING ### {{{
 
 /// Easy logging across modules
@@ -38,12 +47,13 @@ static LOG: (AtomicU8, AtomicBool, Mutex<Vec<String>>) = (AtomicU8::new(0), Atom
 #[macro_export]
 macro_rules! log {
     ($v:expr, $($fmt_args:tt)*) => {
+        #[allow(unused_comparisons)]
         if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
             if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
                 println!($($fmt_args)*)
             // Store if paused
-            } else {
-                LOG.2.lock().unwrap().push(format!($($fmt_args)*))
+            } else if let Ok(mut backlog) = LOG.2.lock() {
+                backlog.push(format!($($fmt_args)*))
             }
         }
     };
@@ -62,14 +72,20 @@ macro_rules! log_pause {
 macro_rules! log_resume {
     () => {
         LOG.1.store(true, std::sync::atomic::Ordering::Relaxed);
-        let mut queue = LOG.2.lock().unwrap();
-        for s in queue.drain(..) {
-            println!("{}", s);
+        if let Ok(mut backlog) = LOG.2.lock() {
+            for s in backlog.drain(..) {
+                println!("{}", s);
+            }
+            backlog.shrink_to_fit();
         }
-        queue.shrink_to_fit();
     };
 }
 
+/// Level 0
+#[macro_export]
+macro_rules! error {
+    ($($fmt_args:tt)*) => {log!(0, $($fmt_args)*)}
+}
 /// Level 1
 #[macro_export]
 macro_rules! info {
@@ -150,25 +166,25 @@ fn parse_color(s: &str) -> Result<Color, String> {
 }
 
 /// Parse [hh:][mm:]ss.d format time => Duration
-fn parse_time(s: &str) -> Result<Duration, String> {
+fn parse_time(s: &str) -> Result<Duration, Box<dyn Error + Send + Sync>> {
     let string = s.trim().to_ascii_lowercase();
     // hh:mm:ss.ddd format. hh:mm optional.
-    if let Some(captures) = Regex::new(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$").unwrap().captures(&string) {
+    if let Some(captures) = Regex::new(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$")?.captures(&string) {
         // secs
-        let mut result = Duration::from_secs_f32(captures[3].parse::<f32>().unwrap());
+        let mut result = Duration::from_secs_f32(captures[3].parse::<f32>()?);
         let mut hm = 1;
         // mins
         if let Some(m) = captures.get(2) {
-            result += Duration::from_secs(m.as_str().parse::<u64>().unwrap() * 60);
+            result += Duration::from_secs(m.as_str().parse::<u64>()? * 60);
             hm = 60
         }
         // hours
         if let Some(m) = captures.get(1) {
-            result += Duration::from_secs(m.as_str().parse::<u64>().unwrap() * 60 * hm);
+            result += Duration::from_secs(m.as_str().parse::<u64>()? * 60 * hm);
         }
         return Ok(result);
     }
-    Err(format!("Could not parse {} as time signature", string))
+    Err(format!("Could not parse {} as time signature", string).into())
 }
 
 // ### PARSERS ### }}}
@@ -764,7 +780,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
     debug!("Server exiting");
 }
 
-fn instance_main(listener: TcpListener, args: Args) {
+fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>> {
     // is there a way to extract the structured data?
     // so I can just yoink the main struct and do
     // main.hidden main.volume etc?
@@ -790,7 +806,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             LOG.0.store(verbosity, std::sync::atomic::Ordering::Relaxed);
 
             debug!("Starting main...");
-            let library = Library::new(backend);
+            let library = Library::new(backend)?;
             library.hidden_set(hidden);
             library.volume_set(volume);
             library.shuffle_set(!noshuffle);
@@ -817,7 +833,7 @@ fn instance_main(listener: TcpListener, args: Args) {
             #[cfg(feature = "media-controls")]
             if !no_media {
                 debug!("Initializing media controls...");
-                let mut libevt_r = library.get_receiver();
+                let mut libevt_r = library.get_receiver()?;
 
                 #[cfg(not(target_os = "windows"))]
                 let hwnd = None;
@@ -832,50 +848,53 @@ fn instance_main(listener: TcpListener, args: Args) {
                         .with_decorations(false)
                         .with_visible(false)
                         .with_title("OMPL Media Control Window")
-                        .build(&winit::event_loop::EventLoop::new().unwrap())
-                        .unwrap()
+                        .build(&winit::event_loop::EventLoop::new()?)?
                         .raw_window_handle()
                     {
                         RawWindowHandle::Win32(han) => Some(han.hwnd),
-                        _ => panic!("Unknown window handle type!"),
+                        _ => return Err("Unknown window handle type!".into()),
                     }
                 };
 
-                match MediaControls::new(PlatformConfig {
+                let mut controls = MediaControls::new(PlatformConfig {
                     // <https://dbus.freedesktop.org/doc/dbus-specification.html#message-protocol-names-bus>
                     dbus_name: &format!("ompl.port{}", args.port),
                     display_name: "OMPL",
                     hwnd,
-                }) {
-                    Ok(mut controls) => {
-                        let ctrl_libr_wk = Arc::downgrade(&library);
-                        controls
-                            .attach(move |event: MediaControlEvent| {
-                                if let Some(library) = ctrl_libr_wk.upgrade() {
-                                    match event {
-                                        MediaControlEvent::Play => library.play(),
-                                        MediaControlEvent::Stop => library.stop(),
-                                        MediaControlEvent::Pause => library.pause(),
-                                        MediaControlEvent::Toggle => library.play_pause(),
-                                        MediaControlEvent::Next => library.next(),
-                                        MediaControlEvent::Previous => library.previous(),
-                                        MediaControlEvent::SetVolume(n) => library.volume_set(n as f32),
-                                        MediaControlEvent::SetPosition(p) => library.seek(p.0),
-                                        MediaControlEvent::Seek(d) => match d {
-                                            souvlaki::SeekDirection::Forward => library.seek_by(5.0),
-                                            souvlaki::SeekDirection::Backward => library.seek_by(-5.0),
-                                        },
-                                        MediaControlEvent::SeekBy(d, n) => match d {
-                                            souvlaki::SeekDirection::Forward => library.seek_by(n.as_secs_f32()),
-                                            souvlaki::SeekDirection::Backward => library.seek_by(-n.as_secs_f32()),
-                                        },
-                                        _ => (),
-                                    }
-                                }
-                            })
-                            .unwrap();
-                        let meta_libr_wk = Arc::downgrade(&library);
-                        thread::spawn(move || loop {
+                })
+                .map_err(|e| format!("{:?}", e))?;
+
+                let ctrl_libr_wk = Arc::downgrade(&library);
+                controls
+                    .attach(move |event: MediaControlEvent| {
+                        if let Some(library) = ctrl_libr_wk.upgrade() {
+                            match event {
+                                MediaControlEvent::Play => library.play(),
+                                MediaControlEvent::Stop => library.stop(),
+                                MediaControlEvent::Pause => library.pause(),
+                                MediaControlEvent::Toggle => library.play_pause(),
+                                MediaControlEvent::Next => library.next(),
+                                MediaControlEvent::Previous => library.previous(),
+                                MediaControlEvent::SetVolume(n) => library.volume_set(n as f32),
+                                MediaControlEvent::SetPosition(p) => library.seek(p.0),
+                                MediaControlEvent::Seek(d) => match d {
+                                    souvlaki::SeekDirection::Forward => library.seek_by(5.0),
+                                    souvlaki::SeekDirection::Backward => library.seek_by(-5.0),
+                                },
+                                MediaControlEvent::SeekBy(d, n) => match d {
+                                    souvlaki::SeekDirection::Forward => library.seek_by(n.as_secs_f32()),
+                                    souvlaki::SeekDirection::Backward => library.seek_by(-n.as_secs_f32()),
+                                },
+                                _ => (),
+                            }
+                        }
+                    })
+                    .map_err(|e| format!("{:?}", e))?;
+
+                let meta_libr_wk = Arc::downgrade(&library);
+                thread::spawn(move || {
+                    let result = try_block!({
+                        loop {
                             match libevt_r.recv() {
                                 Ok(_) => {
                                     if let Some(library) = meta_libr_wk.upgrade() {
@@ -892,7 +911,7 @@ fn instance_main(listener: TcpListener, args: Args) {
                                                 duration: tot,
                                                 cover_url: None,
                                             })
-                                            .unwrap();
+                                            .map_err(|e| format!("{:?}", e))?;
                                         controls
                                             .set_playback(if library.playing() {
                                                 MediaPlayback::Playing { progress: pos }
@@ -901,25 +920,27 @@ fn instance_main(listener: TcpListener, args: Args) {
                                             } else {
                                                 MediaPlayback::Stopped
                                             })
-                                            .unwrap();
+                                            .map_err(|e| format!("{:?}", e))?;
                                         #[cfg(target_os = "linux")]
-                                        controls.set_volume(library.volume_get() as f64).unwrap();
+                                        controls.set_volume(library.volume_get() as f64).map_err(|e| format!("{:?}", e))?;
                                     } else {
-                                        break;
+                                        break Ok(());
                                     }
                                 }
-                                Err(_) => break,
+                                Err(_) => break Ok(()),
                             }
-                        });
+                        }
+                    });
+                    if let Err(e) = result {
+                        error!("{}", e);
                     }
-                    Err(e) => println!("Media control failure: {:?}", e),
-                }
+                });
             }
             // ## souvlaki ## }}}
 
             debug!("Main server started");
             if daemon || cfg!(not(feature = "tui")) {
-                let mut recv = library.get_receiver();
+                let mut recv = library.get_receiver()?;
                 drop(library);
                 loop {
                     match recv.recv() {
@@ -928,45 +949,48 @@ fn instance_main(listener: TcpListener, args: Args) {
                         Err(_e) => break,
                     }
                 }
-                jh.join().unwrap();
+                jh.join().map_err(|e| format!("{:?}", e))?;
             } else {
                 #[cfg(feature = "tui")]
                 if tui::tui(library) {
-                    jh.join().unwrap();
+                    jh.join().map_err(|e| format!("{:?}", e))?;
                 }
             }
         }
         _ => unreachable!("Instance_Main called without Main Subcommand!\n{:?}", args),
     }
+
+    Ok(())
 }
 
 // ### SERVER ### }}}
 
 // ### CLIENT ### {{{
 
-fn instance_sub(mut stream: TcpStream, args: Args) {
+fn instance_sub(mut stream: TcpStream, args: Args) -> Result<(), Box<dyn Error>> {
     // confirmation ID
-    let mut confirmation = vec![0u8; ID.bytes().count()];
-    stream.read_exact(&mut confirmation).unwrap();
-    assert!(String::from_utf8(confirmation).unwrap() == ID);
-
-    let data = match bincode::serialize(&args) {
-        Ok(d) => d,
-        Err(e) => panic!("Could not serialize args\n{}", e),
+    let mut confirmation_bytes = vec![0u8; ID.bytes().count()];
+    stream.read_exact(&mut confirmation_bytes)?;
+    let confirmation: String = String::from_utf8(confirmation_bytes)?;
+    if confirmation != ID {
+        return Err(format!("OMPL sub ID '{}' did not match confirmation '{}'", ID, confirmation).into());
     };
 
+    let data = bincode::serialize(&args)?;
+
     // exchange size
-    stream.write_all(&data.len().to_be_bytes()).unwrap();
+    stream.write_all(&data.len().to_be_bytes())?;
 
     // exchange args
-    stream.write_all(&data).unwrap();
+    stream.write_all(&data)?;
 
     // finalize response
     let mut response = String::new();
-    stream.read_to_string(&mut response).unwrap();
+    stream.read_to_string(&mut response)?;
     if !response.is_empty() {
         println!("{}", response);
     }
+    Ok(())
 }
 
 // ### CLIENT ### }}}
@@ -977,16 +1001,24 @@ fn main() {
 
     match args.action {
         Action::Main { .. } => match TcpListener::bind(SocketAddrV4::new(args.host, args.port)) {
-            Ok(listener) => instance_main(listener, args),
-            Err(_) => panic!(
+            Ok(listener) => {
+                if let Err(e) = instance_main(listener, args) {
+                    eprintln!("\nOMPL main instance failed:\n    {}\n", e)
+                }
+            }
+            Err(_) => eprintln!(
                 "\n\nCouldn't bind server socket to port {}.\n\
                     Try another port, or perhaps an instance is already running?\n\n",
                 args.port
             ),
         },
         _ => match TcpStream::connect(SocketAddrV4::new(args.host, args.port)) {
-            Ok(stream) => instance_sub(stream, args),
-            Err(_) => panic!(
+            Ok(stream) => {
+                if let Err(e) = instance_sub(stream, args) {
+                    eprintln!("\nOMPL sub instance failed:\n    {}\n", e)
+                }
+            }
+            Err(_) => eprintln!(
                 "\n\nCouldn't connect client socket to port {}.\n\
                         Are you sure there's an OMPL server running here?\n\n",
                 args.port

@@ -2,7 +2,7 @@
 
 use super::{Player, PlayerMessage};
 use crate::library::Track;
-use crate::{bench, debug, info, log, LOG};
+use crate::{bench, debug, info, log, try_block, LOG};
 
 use std::error::Error;
 use std::fs::File;
@@ -35,13 +35,6 @@ macro_rules! wait_on {
         while $cond {
             sleep1()
         }
-    };
-}
-
-// I'm this petty
-macro_rules! try_block {
-    ($enclosed:block) => {
-        || -> Result<(), Box<dyn Error>> { $enclosed }()
     };
 }
 

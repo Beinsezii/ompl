@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+use std::error::Error;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
@@ -134,7 +135,7 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                     PlayerMessage::Request => match library.repeat_get() {
                         None => {
                             if library.get_queue().last() == library.track_get().as_ref() && !library.shuffle_get() {
-                                library.bus.lock().unwrap().broadcast(LibEvt::Playback)
+                                library.broadcast(LibEvt::Playback)
                             } else {
                                 library.next()
                             }
@@ -143,8 +144,8 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
                         Some(true) => library.next(),
                     },
 
-                    PlayerMessage::Seekable | PlayerMessage::Clock => library.bus.lock().unwrap().broadcast(LibEvt::Playback),
-                    PlayerMessage::Error(e) => library.bus.lock().unwrap().broadcast(LibEvt::Error(e)),
+                    PlayerMessage::Seekable | PlayerMessage::Clock => library.broadcast(LibEvt::Playback),
+                    PlayerMessage::Error(e) => library.broadcast(LibEvt::Error(e)),
                 },
                 Err(_) => break,
             }
@@ -193,7 +194,7 @@ pub struct Library {
 
 impl Library {
     // # new # {{{
-    pub fn new(backend: Backend) -> Arc<Self> {
+    pub fn new(backend: Backend) -> Result<Arc<Self>, Box<dyn Error>> {
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
         let (next_s, next_r) = sync_channel(1);
@@ -221,36 +222,41 @@ impl Library {
 
         thread::Builder::new()
             .name(String::from("LIBRARY Player Message Server"))
-            .spawn(move || player_message_server(result_c, next_r))
-            .unwrap();
+            .spawn(move || player_message_server(result_c, next_r))?;
 
-        result
+        Ok(result)
     }
     // # new # }}}
 
+    fn broadcast(&self, message: LibEvt) {
+        if let Ok(mut bus) = self.bus.lock() {
+            bus.broadcast(message)
+        }
+    }
+
     /// Receiver for all library events
-    pub fn get_receiver(&self) -> BusReader<LibEvt> {
-        self.bus.lock().unwrap().add_rx()
+    pub fn get_receiver(&self) -> Result<BusReader<LibEvt>, Box<dyn Error>> {
+        Ok(self.bus.lock().map_err(|e| e.to_string())?.add_rx())
     }
 
     // ## Player forwards ## {{{
 
     pub fn play(&self) {
         self.player.play();
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
     pub fn pause(&self) {
         self.player.pause();
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
     pub fn stop(&self) {
         self.player.stop();
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
     /// Toggle play/pause. Typical media key control
     pub fn play_pause(&self) {
         self.player.toggle();
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
     /// 0.0 -> 1.0
     pub fn volume_get(&self) -> f32 {
@@ -259,12 +265,12 @@ impl Library {
     /// 0.0 -> 1.0
     pub fn volume_set(&self, volume: f32) {
         self.player.volume_set(volume);
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
     /// -1.0 -> 1.0
     pub fn volume_add(&self, amount: f32) {
         self.player.volume_add(amount);
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
 
     /// Currently playing/loaded track
@@ -278,25 +284,27 @@ impl Library {
         // Player could handle this but easier if library does
         if let Some(track) = track.as_ref() {
             if !track.path().exists() {
-                self.bus.lock().unwrap().broadcast(LibEvt::Error(format!(
+                self.broadcast(LibEvt::Error(format!(
                     "Track no longer found at {}\nRemoving from library",
-                    track.path().to_str().unwrap()
+                    track.path().to_str().unwrap_or("???")
                 )));
 
-                let mut tracks = self.tracks.write().unwrap();
-                if let Some(id) = tracks.iter().position(|t| t == track) {
-                    tracks.remove(id);
+                if let Ok(mut tracks) = self.tracks.write() {
+                    if let Some(id) = tracks.iter().position(|t| t == track) {
+                        tracks.remove(id);
+                    }
+                    self.force_build_filters();
+                    self.next();
                 }
-                drop(tracks);
-                self.force_build_filters();
-                self.next();
                 return;
             }
         }
         if let Some(track) = self.player.play_track(track) {
-            self.history.lock().unwrap().push(track)
+            if let Ok(mut history) = self.history.lock() {
+                history.push(track)
+            }
         }
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
 
     pub fn playing(&self) -> bool {
@@ -345,7 +353,7 @@ impl Library {
 
     pub fn shuffle_set(&self, shuffle: bool) {
         self.shuffle.store(shuffle, Ordering::Relaxed);
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
 
     pub fn shuffle_toggle(&self) {
@@ -356,26 +364,28 @@ impl Library {
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_get(&self) -> Option<bool> {
-        *self.repeat.read().unwrap()
+        *self.repeat.read().as_deref().unwrap_or(&Some(true))
     }
 
     /// None - No loop
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_set(&self, repeat: Option<bool>) {
-        *self.repeat.write().unwrap() = repeat;
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        if let Ok(mut guard) = self.repeat.write() {
+            *guard = repeat;
+            self.broadcast(LibEvt::Playback);
+        }
     }
 
     /// Advances None -> Some(false) -> Some(true)
     pub fn repeat_toggle(&self) {
-        let mut guard = self.repeat.write().unwrap();
+        let Ok(mut guard) = self.repeat.write() else { return };
         *guard = match *guard {
             None => Some(false),
             Some(false) => Some(true),
             Some(true) => None,
         };
-        self.bus.lock().unwrap().broadcast(LibEvt::Playback);
+        self.broadcast(LibEvt::Playback);
     }
 
     /// Whether append() scans hidden files
@@ -390,13 +400,15 @@ impl Library {
 
     /// Tagstring for library status
     pub fn statusline_get(&self) -> String {
-        self.statusline.read().unwrap().to_string()
+        self.statusline.read().as_deref().unwrap_or(&String::from("???")).clone()
     }
 
     /// Tagstring for library status
     pub fn statusline_set<T: ToString>(&self, statusline: T) {
-        *self.statusline.write().unwrap() = statusline.to_string();
-        self.bus.lock().unwrap().broadcast(LibEvt::Theme);
+        if let Ok(mut guard) = self.statusline.write() {
+            *guard = statusline.to_string();
+            self.broadcast(LibEvt::Theme);
+        }
     }
 
     /// Parses tagstring from playing track and statusline
@@ -405,12 +417,14 @@ impl Library {
     }
 
     pub fn theme_get(&self) -> Theme {
-        *self.theme.read().unwrap()
+        *self.theme.read().expect("Library theme was not readable")
     }
 
     pub fn theme_set(&self, theme: Theme) {
-        *self.theme.write().unwrap() = theme;
-        self.bus.lock().unwrap().broadcast(LibEvt::Theme);
+        if let Ok(mut guard) = self.theme.write() {
+            *guard = theme;
+            self.broadcast(LibEvt::Theme);
+        }
     }
 
     // ## Other Settings ## }}}
@@ -467,10 +481,14 @@ impl Library {
     /// Else get the prior sequential track
     pub fn previous(&self) {
         if self.shuffle_get() {
-            let track = self.history.lock().unwrap().pop();
+            let Ok(mut guard) = self.history.lock() else { return };
+            let track = guard.pop();
+            drop(guard);
             self.play_track(track);
             // remove twice cause it gets re-added.
-            self.history.lock().unwrap().pop();
+            if let Ok(mut history) = self.history.lock() {
+                history.pop();
+            }
         } else {
             self.play_track(self.get_sequential(true))
         }
@@ -505,9 +523,7 @@ impl Library {
         bench!("Probed meta for {} tracks in {:?}", count, Instant::now() - now);
         let now = Instant::now();
 
-        {
-            let mut tracks = self.tracks.write().unwrap();
-
+        if let Ok(mut tracks) = self.tracks.write() {
             new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| tracks.push(t));
             let len = tracks.len();
 
@@ -541,9 +557,11 @@ impl Library {
 
     /// Drop all tracks from the library
     pub fn purge(&self) {
-        *self.tracks.write().unwrap() = Vec::new();
+        if let Ok(mut tracks) = self.tracks.write() {
+            *tracks = Vec::new();
+        }
         self.force_build_filters();
-        self.bus.lock().unwrap().broadcast(LibEvt::Update);
+        self.broadcast(LibEvt::Update);
     }
 
     // ## Library Paths Control ## }}}
@@ -553,25 +571,28 @@ impl Library {
     /// rebuilds whole filter tree without caching
     fn force_build_filters(&self) {
         let filters = self.get_filters();
-        *self.filtered_tree.write().unwrap() = vec![];
+        if let Ok(mut ft) = self.filtered_tree.write() {
+            *ft = Vec::new();
+        }
         self.set_filters(filters);
     }
 
     /// Amount of filters
     pub fn filter_count(&self) -> usize {
-        self.filtered_tree.read().unwrap().len()
+        self.filtered_tree.read().map(|v| v.len()).unwrap_or(0)
     }
 
     /// All FilteredTracks. Cloned
     pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
-        self.filtered_tree.read().unwrap().clone()
+        self.filtered_tree.read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// All Filters. Cloned
     pub fn get_filters(&self) -> Vec<Filter> {
         self.filtered_tree
             .read()
-            .unwrap()
+            .as_deref()
+            .unwrap_or(&Vec::new())
             .iter()
             .map(|ft| ft.filter.clone())
             .collect::<Vec<Filter>>()
@@ -586,7 +607,7 @@ impl Library {
 
         for (i, f) in filters.into_iter().enumerate() {
             // if filters continuously match existing, don't rebuild.
-            if let Some(ft) = self.filtered_tree.read().unwrap().get(i) {
+            if let Some(ft) = self.filtered_tree.read().as_ref().ok().map(|v| v.get(i)).flatten() {
                 if ft.filter == f && cache {
                     filtered_tree.push(ft.clone());
                     continue;
@@ -595,7 +616,7 @@ impl Library {
                 }
             }
 
-            let itracks = self.tracks.read().unwrap();
+            let Ok(itracks) = self.tracks.read() else { break };
             let iter = if i == 0 { itracks.iter() } else { filtered_tree[i - 1].tracks.iter() };
 
             let tracks = if !f.items.is_empty() {
@@ -612,14 +633,16 @@ impl Library {
             filtered_tree.push(FilteredTracks { filter: f, tracks })
         }
 
-        *self.filtered_tree.write().unwrap() = filtered_tree;
-        self.bus.lock().unwrap().broadcast(LibEvt::Update);
-        bench!("Filters updated in {:?}", Instant::now() - now);
+        if let Ok(mut ft) = self.filtered_tree.write() {
+            *ft = filtered_tree;
+            self.broadcast(LibEvt::Update);
+        };
+        bench!("Filters updated in {:?}", Instant::now() - now)
     }
 
     /// Get clone of Nth Filter
     pub fn get_filter(&self, pos: usize) -> Option<Filter> {
-        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.clone())
+        self.filtered_tree.read().ok().map(|v| v.get(pos).map(|f| f.filter.clone())).flatten()
     }
 
     /// Set Nth Filter and rebuild FilteredTracks
@@ -652,7 +675,11 @@ impl Library {
 
     /// Get clone of Nth FilteredTracks items
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
-        self.filtered_tree.read().unwrap().get(pos).map(|f| f.filter.items.clone())
+        self.filtered_tree
+            .read()
+            .ok()
+            .map(|v| v.get(pos).map(|f| f.filter.items.clone()))
+            .flatten()
     }
 
     /// Set Nth FilteredTracks items and rebuild FilteredTracks
@@ -689,47 +716,51 @@ impl Library {
     /// Sort unfiltered tracks based on sorter tagstrings
     fn sort(&self) {
         let now = Instant::now();
-        self.tracks.write().unwrap().sort_by(|a, b| {
-            let mut result = std::cmp::Ordering::Equal;
-            for ts in self.sorters.read().unwrap().iter() {
-                result = result.then(natural_lexical_cmp(&a.tagstring(ts), &b.tagstring(ts)))
-            }
-            result
-        });
-        bench!("Sorted {} tracks in {:?}", self.tracks.read().unwrap().len(), Instant::now() - now);
+        if let Ok(mut tracks) = self.tracks.write() {
+            tracks.sort_by(|a, b| {
+                let mut result = std::cmp::Ordering::Equal;
+                for ts in self.sorters.read().as_deref().unwrap_or(&Vec::new()).iter() {
+                    result = result.then(natural_lexical_cmp(&a.tagstring(ts), &b.tagstring(ts)))
+                }
+                result
+            });
+            bench!("Sorted {} tracks in {:?}", tracks.len(), now.elapsed());
+        }
         self.force_build_filters()
     }
 
     /// Amount of sorter tagstrings
     pub fn sort_count(&self) -> usize {
-        self.sorters.read().unwrap().len()
+        self.sorters.read().map(|v| v.len()).unwrap_or(0)
     }
 
     /// Get clone of sorter tagstrings
     pub fn get_sorters(&self) -> Vec<String> {
-        self.sorters.read().unwrap().clone()
+        self.sorters.read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// Set all sorter tagstrings and re-sort library
     pub fn set_sorters(&self, tagstrings: Vec<String>) {
-        *self.sorters.write().unwrap() = tagstrings;
+        if let Ok(mut sorters) = self.sorters.write() {
+            *sorters = tagstrings
+        }
         self.sort();
     }
 
     /// Get Nth sorter tagstring
     pub fn get_sorter(&self, index: usize) -> Option<String> {
-        self.sorters.read().unwrap().get(index).cloned()
+        self.sorters.read().ok().map(|v| v.get(index).cloned()).flatten()
     }
 
     /// Set Nth sorter tagstring and re-sort library
     pub fn set_sorter(&self, index: usize, tagstring: String) {
-        let mut tagstrings = self.sorters.write().unwrap();
-        if let Some(ts) = tagstrings.get_mut(index) {
-            *ts = tagstring
-        } else {
-            tagstrings.push(tagstring)
+        if let Ok(mut tagstrings) = self.sorters.write() {
+            if let Some(ts) = tagstrings.get_mut(index) {
+                *ts = tagstring
+            } else {
+                tagstrings.push(tagstring)
+            }
         }
-        drop(tagstrings);
         self.sort();
     }
 
@@ -744,8 +775,7 @@ impl Library {
 
     /// Add sorter tagstring to position and re-sort library
     pub fn insert_sorter(&self, tagstring: String, pos: usize) {
-        {
-            let mut sts = self.sorters.write().unwrap();
+        if let Ok(mut sts) = self.sorters.write() {
             let len = sts.len();
             sts.insert(pos.min(len), tagstring);
         }
@@ -758,13 +788,17 @@ impl Library {
 
     /// Get cloned references to all tracks
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
-        self.tracks.read().unwrap().clone()
+        self.tracks.read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// Get cloned references to last non-empty FilteredTracks
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
-        let mut ptr: &Vec<Arc<Track>> = &self.tracks.read().unwrap();
-        let tree = self.filtered_tree.read().unwrap();
+        let Ok(tguard) = self.tracks.read() else {
+            return Vec::new();
+        };
+        let mut ptr: &Vec<Arc<Track>> = &tguard;
+        let Ok(fguard) = self.filtered_tree.read() else { return Vec::new() };
+        let tree = &fguard;
         for ft in tree.iter().rev() {
             if !ft.tracks.is_empty() {
                 ptr = &ft.tracks;
