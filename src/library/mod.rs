@@ -17,7 +17,7 @@ mod track;
 pub use player::{Backend, Player};
 pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, Track};
 
-use crate::{bench, debug, info, log, LOG};
+use crate::logging::*;
 
 use self::player::PlayerMessage;
 

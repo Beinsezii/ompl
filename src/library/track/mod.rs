@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 
-use crate::{bench, debug, log, LOG};
+use crate::logging::*;
 use std::collections::HashMap;
 use std::fs::File;
 use std::ops::Deref;

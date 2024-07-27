@@ -11,8 +11,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU8};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -27,6 +26,83 @@ use library::{Backend, Color, LibEvt, Library, Theme};
 #[cfg(feature = "tui")]
 mod tui;
 
+/// Logging macros
+pub mod logging {
+    // {{{
+
+    use std::sync::{
+        atomic::{AtomicBool, AtomicU8},
+        Mutex,
+    };
+
+    /// Verbosity level of log to print/queue
+    pub static LOG_LEVEL: AtomicU8 = AtomicU8::new(0);
+    /// Print log if true else save for later
+    pub static PRINT_LOG: AtomicBool = AtomicBool::new(true);
+    /// The backlog of logs to print when resumed
+    pub static BACKLOG: Mutex<Vec<(u8, String)>> = Mutex::new(Vec::new());
+
+    /// If $v <= LOG_LEVEL print values
+    macro_rules! log {
+        ($v:expr, $($fmt_args:tt)*) => {
+            #[allow(unused_comparisons)]
+            if LOG_LEVEL.load(std::sync::atomic::Ordering::Relaxed) >= $v {
+                if PRINT_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    println!($($fmt_args)*)
+                // Store if paused
+                } else if let Ok(mut backlog) = BACKLOG.lock() {
+                    backlog.push(($v, format!($($fmt_args)*)))
+                }
+            }
+        };
+    }
+
+    /// Pause log and queue further entries
+    macro_rules! log_pause {
+        () => {
+            PRINT_LOG.store(false, std::sync::atomic::Ordering::Relaxed)
+        };
+    }
+
+    /// Resume log and print queued entries
+    macro_rules! log_resume {
+        () => {
+            PRINT_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+            if let Ok(mut backlog) = BACKLOG.lock() {
+                for (n, s) in backlog.drain(..) {
+                    if n == 0 {
+                        eprintln!("{}", s);
+                    } else {
+                        println!("{}", s);
+                    }
+                }
+                backlog.shrink_to_fit();
+            }
+        };
+    }
+
+    /// Level 0
+    macro_rules! error {
+        ($($fmt_args:tt)*) => {log!(0, $($fmt_args)*)}
+    }
+    /// Level 1
+    macro_rules! info {
+        ($($fmt_args:tt)*) => {log!(1, $($fmt_args)*)}
+    }
+    /// Level 2
+    macro_rules! bench {
+        ($($fmt_args:tt)*) => {log!(2, $($fmt_args)*)}
+    }
+    /// Level 3
+    macro_rules! debug {
+        ($($fmt_args:tt)*) => {log!(3, $($fmt_args)*)}
+    }
+
+    pub(crate) use {bench, debug, error, info, log, log_pause, log_resume};
+} // }}}
+
+use logging::*;
+
 const ID: &str = "OMPL SERVER 0.10.0";
 const PORT: &str = "18346";
 
@@ -37,72 +113,6 @@ macro_rules! try_block {
         || -> Result<(), Box<dyn Error>> { $enclosed }()
     };
 }
-
-// ### LOGGING ### {{{
-
-/// Easy logging across modules
-static LOG: (AtomicU8, AtomicBool, Mutex<Vec<String>>) = (AtomicU8::new(0), AtomicBool::new(true), Mutex::new(Vec::new()));
-
-/// If $v <= LOG_LEVEL print values
-#[macro_export]
-macro_rules! log {
-    ($v:expr, $($fmt_args:tt)*) => {
-        #[allow(unused_comparisons)]
-        if LOG.0.load(std::sync::atomic::Ordering::Relaxed) >= $v {
-            if LOG.1.load(std::sync::atomic::Ordering::Relaxed) {
-                println!($($fmt_args)*)
-            // Store if paused
-            } else if let Ok(mut backlog) = LOG.2.lock() {
-                backlog.push(format!($($fmt_args)*))
-            }
-        }
-    };
-}
-
-/// Pause log and queue further entries
-#[macro_export]
-macro_rules! log_pause {
-    () => {
-        LOG.1.store(false, std::sync::atomic::Ordering::Relaxed)
-    };
-}
-
-/// Resume log and print queued entries
-#[macro_export]
-macro_rules! log_resume {
-    () => {
-        LOG.1.store(true, std::sync::atomic::Ordering::Relaxed);
-        if let Ok(mut backlog) = LOG.2.lock() {
-            for s in backlog.drain(..) {
-                println!("{}", s);
-            }
-            backlog.shrink_to_fit();
-        }
-    };
-}
-
-/// Level 0
-#[macro_export]
-macro_rules! error {
-    ($($fmt_args:tt)*) => {log!(0, $($fmt_args)*)}
-}
-/// Level 1
-#[macro_export]
-macro_rules! info {
-    ($($fmt_args:tt)*) => {log!(1, $($fmt_args)*)}
-}
-/// Level 2
-#[macro_export]
-macro_rules! bench {
-    ($($fmt_args:tt)*) => {log!(2, $($fmt_args)*)}
-}
-/// Level 3
-#[macro_export]
-macro_rules! debug {
-    ($($fmt_args:tt)*) => {log!(3, $($fmt_args)*)}
-}
-
-// ### LOGGING ### }}}
 
 // ### PARSERS ### {{{
 
@@ -803,7 +813,7 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
             acc,
             backend,
         } => {
-            LOG.0.store(verbosity, std::sync::atomic::Ordering::Relaxed);
+            LOG_LEVEL.store(verbosity, std::sync::atomic::Ordering::Relaxed);
 
             debug!("Starting main...");
             let library = Library::new(backend)?;

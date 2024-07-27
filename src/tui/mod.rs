@@ -10,7 +10,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::library::{Color, Filter, LibEvt, Library};
-use crate::{debug, log, log_pause, log_resume, parse_time, LOG};
+use crate::logging::*;
+use crate::parse_time;
 
 #[cfg(feature = "clipboard")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -1082,7 +1083,7 @@ pub fn tui(library: Arc<Library>) -> bool {
 
     // lets you read panic messages
     // yes this is the dumbest solution
-    if LOG.0.load(Ordering::Relaxed) > 2 {
+    if LOG_LEVEL.load(Ordering::Relaxed) > 3 {
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
 
