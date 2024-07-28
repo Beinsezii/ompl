@@ -27,15 +27,21 @@ use symphonia::core::{
     probe::{Hint, QueryDescriptor},
 };
 
-fn sleep1() {
-    thread::sleep(Duration::from_nanos(1))
-}
-
 macro_rules! wait_on {
-    ($cond:expr) => {
-        while $cond {
-            sleep1()
+    ($cond:expr, $id:literal, $ok:expr) => {{
+        let combo_breaker = Instant::now();
+        loop {
+            if $cond {
+                break Ok($ok);
+            } else if combo_breaker.elapsed() > Duration::from_secs(5) {
+                break Err(concat!("Sympal timed out while waiting on ", $id, "!"));
+            } else {
+                thread::sleep(Duration::from_nanos(1))
+            }
         }
+    }};
+    ($cond:expr, $id:literal) => {
+        wait_on!($cond, $id, ())
     };
 }
 
@@ -182,18 +188,19 @@ impl Backend {
         }
 
         debug!("Sympal play await stream");
-        wait_on!(self.streaming.load(Ordering::Relaxed));
+        wait_on!(!self.streaming.load(Ordering::Relaxed), "play streaming guard")?;
         self.join_stream.store(false, Ordering::Relaxed);
-        loop {
+        wait_on!(
             match self.decoder_state.load(Ordering::Relaxed).into() {
-                DecoderState::Decoding | DecoderState::Complete => break,
                 DecoderState::Error => {
                     self.join_stream.store(true, Ordering::Relaxed);
                     return Ok(());
                 }
-                DecoderState::Empty | DecoderState::Init => sleep1(),
-            }
-        }
+                DecoderState::Decoding | DecoderState::Complete => true,
+                DecoderState::Empty | DecoderState::Init => false,
+            },
+            "play decoder guard"
+        )?;
 
         let vol = self.volume.clone();
         let (device, config) = self.get_device()?;
@@ -313,7 +320,11 @@ impl Backend {
                     join_thread.store(true, Ordering::Relaxed);
                     return;
                 };
-                wait_on!(!join_thread.load(Ordering::Relaxed));
+                // not using wait_on! because its only purpose is
+                // to keep the stream object in scope until its done
+                while !join_thread.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_nanos(1))
+                }
                 streaming.store(false, Ordering::Relaxed);
             }
         })?;
@@ -386,11 +397,14 @@ impl Backend {
                 }
             };
 
-            wait_on!(self.streaming.load(Ordering::Relaxed));
-            wait_on!(match self.decoder_state.load(Ordering::Relaxed).into() {
-                DecoderState::Decoding | DecoderState::Init => true,
-                _ => false,
-            });
+            wait_on!(!self.streaming.load(Ordering::Relaxed), "track streaming guard")?;
+            wait_on!(
+                match self.decoder_state.load(Ordering::Relaxed).into() {
+                    DecoderState::Decoding | DecoderState::Init => false,
+                    _ => true,
+                },
+                "track decoder guard"
+            )?;
 
             self.decoder_state.store(*DecoderState::Empty, Ordering::Relaxed);
             self.join_decode.store(false, Ordering::Relaxed);
