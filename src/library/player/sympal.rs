@@ -460,7 +460,7 @@ impl Backend {
                         sb.copy_interleaved_ref(ab);
                         samples.write()?.append(&mut sb.samples_mut().to_vec());
                     }
-                    bench!("Track fully decoded in {}ms", begin.elapsed().as_millis());
+                    bench!("Track fully decoded in {:?}", begin.elapsed());
                     decoder_state.store(*DecoderState::Complete, Ordering::Relaxed);
                     samples.write()?.shrink_to_fit();
                     channel.send(PlayerMessage::Seekable)?;

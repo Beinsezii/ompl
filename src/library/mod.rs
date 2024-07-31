@@ -520,7 +520,7 @@ impl Library {
             }
         });
 
-        bench!("Probed meta for {} tracks in {:?}", count, Instant::now() - now);
+        bench!("Probed meta for {} tracks in {:?}", count, now.elapsed());
         let now = Instant::now();
 
         if let Ok(mut tracks) = self.tracks.write() {
@@ -540,7 +540,7 @@ impl Library {
             }
         }
 
-        bench!("Loaded {} tracks into library in {:?}", count, Instant::now() - now);
+        bench!("Loaded {} tracks into library in {:?}", count, now.elapsed());
 
         self.sort();
 
@@ -552,7 +552,7 @@ impl Library {
             });
         }
 
-        bench!("Finished appending {} tracks in total {:?}", count, Instant::now() - begin)
+        bench!("Finished appending {} tracks in total {:?}", count, begin.elapsed())
     }
 
     /// Drop all tracks from the library
@@ -637,7 +637,7 @@ impl Library {
             *ft = filtered_tree;
             self.broadcast(LibEvt::Update);
         };
-        bench!("Filters updated in {:?}", Instant::now() - now)
+        bench!("Filters updated in {:?}", now.elapsed())
     }
 
     /// Get clone of Nth Filter

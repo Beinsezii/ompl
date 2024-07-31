@@ -349,7 +349,7 @@ pub fn find_tracks<T: AsRef<Path>>(path: T, types: &[String], include_hidden: bo
         .filter_map(|e| Track::new(e.path()))
         .collect();
 
-    bench!("Found {} tracks in {:?}", tracks.len(), Instant::now() - now);
+    bench!("Found {} tracks in {:?}", tracks.len(), now.elapsed());
     tracks
 }
 

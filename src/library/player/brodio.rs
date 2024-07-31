@@ -5,7 +5,7 @@ use std::sync::mpsc::sync_channel;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 
@@ -60,8 +60,6 @@ impl Drop for Backend {
 impl Player for Backend {
     fn new(sig_end: SyncSender<PlayerMessage>) -> Self {
         debug!("Constructing Backend...");
-        let now = Instant::now();
-
         let sink = Arc::new(RwLock::new(None));
 
         let thread_sink = sink.clone();
@@ -77,8 +75,6 @@ impl Player for Backend {
             sink,
             track: RwLock::new(None),
         };
-
-        bench!("Backend built in {:?}", Instant::now() - now);
 
         player
     }
