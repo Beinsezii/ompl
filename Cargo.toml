@@ -18,17 +18,25 @@ serde = { version = "1", features = ["derive"] }
 symphonia = { version = "0.5", features = ['all']}
 walkdir = "2"
 
+# backend-rodio
 rodio = { version = "0.19", optional = true }
 
+# backend-sympal
 cpal = {version = "0.15", optional = true}
 dasp = {version = "0.11", optional = true, features = ["interpolate", "interpolate-linear", "signal"]}
 
+# media-controls
 souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
+# tui
 crossterm = {version = "0.27", optional = true, default-features = false}
 ratatui = {version = "0.27", optional = true, default-features = false, features = ['crossterm']}
 
+# clipboard
 copypasta = {version = "0.10", optional=true}
+
+# album-art
+image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"], optional=true}
 
 
 
@@ -39,8 +47,9 @@ clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]
 jack = ["cpal/jack"]
+album-art = ["dep:image"]
 
-default = ["media-controls", "tui", "clipboard", "backend-sympal"]
+default = ["media-controls", "tui", "clipboard", "backend-sympal", "album-art"]
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.5"

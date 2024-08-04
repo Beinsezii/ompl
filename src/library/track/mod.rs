@@ -373,14 +373,17 @@ pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(tagstring: T, t
 pub struct Track {
     path: PathBuf,
     tags: Tags,
+    art: Option<Vec<Vec<u8>>>,
     gain: f32,
 }
 
 impl Track {
+    const ART_MAX: u32 = 32;
     pub fn new<T: AsRef<Path>>(path: T) -> Option<Self> {
         path.as_ref().canonicalize().ok().map(|path| Self {
             path,
             tags: Tags::new(),
+            art: None,
             gain: 1.0,
         })
     }
@@ -481,6 +484,27 @@ impl Track {
                     self.tags.insert(key, val);
                 }
             }
+
+            if let Some(visual) = meta.visuals().get(0) {
+                let buff: &[u8] = &visual.data;
+                if let Ok(format) = image::guess_format(buff) {
+                    if let Ok(mut img) = image::load(std::io::Cursor::new(buff), format) {
+                        if img.width() > Self::ART_MAX || img.height() > Self::ART_MAX {
+                            img = img.resize(Self::ART_MAX, Self::ART_MAX, image::imageops::FilterType::Nearest);
+                        }
+                        let row = img.width() * 4;
+                        let mut bytes = img.into_rgba8().into_vec();
+                        let mut byte_slices = Vec::new();
+                        while bytes.len() > row as usize {
+                            byte_slices.push(bytes.split_off(bytes.len() - row as usize));
+                            bytes.shrink_to_fit();
+                        }
+                        assert_eq!(bytes.len(), row as usize);
+                        byte_slices.push(bytes);
+                        self.art = Some(byte_slices);
+                    }
+                }
+            };
         }
     }
     // # probe_meta # }}}
