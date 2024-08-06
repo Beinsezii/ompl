@@ -390,7 +390,9 @@ impl<T: Backend> UI<T> {
                 .split(action_area) else {
                     return;
                 };
-                let [filterpanes_area, sortpanes_area] = *Layout::vertical([Constraint::Ratio(1, 2), Constraint::Min(1)]).split(body) else {
+                let [filterpanes_area, sortpanes_area] =
+                    *Layout::vertical([Constraint::Ratio(1.min(library.filter_count() as u32), 2), Constraint::Min(1)]).split(body)
+                else {
                     return;
                 };
 
