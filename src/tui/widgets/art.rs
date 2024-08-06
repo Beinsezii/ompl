@@ -1,7 +1,6 @@
 use super::ContainedWidget;
 
 use crate::library::Library;
-use crate::logging::*;
 
 use std::sync::Weak;
 
@@ -21,8 +20,6 @@ impl ContainedWidget for Art {
         assert_eq!(self.area.width, self.area.height * 2);
         let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
         if let Some(thumbnail) = library.thumbnail(w, h) {
-            debug!("THUMB SIZE {}x{}", thumbnail[0].len(), thumbnail.len());
-
             let lines: Vec<Line> = thumbnail
                 .chunks(2)
                 .map(|rows| {
@@ -45,8 +42,6 @@ impl ContainedWidget for Art {
                         .into()
                 })
                 .collect();
-
-            debug!("ART SPANS {}x{}", lines[0].spans.len(), lines.len() * 2);
 
             frame.render_widget(Paragraph::new(lines), self.area)
         } else {

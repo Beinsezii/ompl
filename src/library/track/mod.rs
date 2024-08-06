@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataLog;
+use symphonia::core::meta::MetadataRevision;
 use symphonia::core::probe::Hint;
 
 use lexical_sort::natural_lexical_cmp;
@@ -386,14 +386,72 @@ impl Track {
         })
     }
 
+    /// Reads the current metadata revision
+    fn read_metadata(&self) -> Option<MetadataRevision> {
+        // {{{
+        let Ok(file) = File::open(&self.path) else { return None };
+        let Ok(mut probed) = symphonia::default::get_probe().format(
+            Hint::new().with_extension(
+                self.path()
+                    .extension()
+                    .map(|s| s.to_str())
+                    .flatten()
+                    .expect("HINT EXTENSION FAIL - should be unreachable"),
+            ),
+            MediaSourceStream::new(Box::new(file), Default::default()),
+            &Default::default(),
+            &Default::default(),
+        ) else {
+            return None;
+        };
+        probed
+            .metadata
+            .get()
+            .map(|m| m.current().cloned())
+            .flatten()
+            // Vorbis comments aren't found until the FormatReader is initialized
+            .or_else(|| probed.format.metadata().current().cloned())
+        // }}}
+    }
+
     /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
     pub fn load_meta(&mut self) {
         // {{{
-        match self.path.extension().map(|e| e.to_str()).flatten() {
-            Some("mp3") | Some("wav") => self.probe_meta(true),
-            Some("flac") => self.load_meta_vorbis::<symphonia::default::formats::FlacReader>(),
-            Some("ogg") => self.load_meta_vorbis::<symphonia::default::formats::OggReader>(),
-            _ => (),
+        let Some(meta) = self.read_metadata() else {
+            return;
+        };
+
+        for tag in meta.tags() {
+            let mut val = tag.value.to_string();
+            let mut key = tag.key.to_ascii_lowercase();
+
+            // convert id3v1 genres
+            if key == "tcon" {
+                val = val
+                    .trim()
+                    .trim_start_matches('(')
+                    .trim_end_matches(')')
+                    .parse::<usize>()
+                    .ok()
+                    .map(|i| ID3_GENRES.get(i).map(|s| s.to_string()))
+                    .flatten()
+                    .unwrap_or(val)
+            }
+
+            // convert id3v2 keys to human readables
+            for (fromkey, tokey) in ID3_TAGS {
+                if fromkey == &key {
+                    self.tags.insert(tokey.to_string(), val.clone());
+                    break;
+                }
+            }
+
+            // removing id3's "txxx:" leader for custom values
+            if key.starts_with("txxx:") {
+                key.replace_range(0..5, "");
+            }
+            // Additionally push all tags as they are
+            self.tags.insert(key, val);
         }
 
         if let Some(text) = self.tags.get("replaygain_track_gain") {
@@ -418,9 +476,8 @@ impl Track {
 
     pub fn read_art(&self) -> Option<Box<[Box<[[u8; 4]]>]>> {
         // {{{
-        let Some(mut log) = self.read_metadata() else { return None };
-        let meta = log.metadata();
-        let Some(visual) = meta.current().map(|m| m.visuals().get(0)).flatten() else {
+        let meta = self.read_metadata();
+        let Some(visual) = meta.as_ref().map(|m| m.visuals().get(0)).flatten() else {
             return None;
         };
         let buff: &[u8] = &visual.data;
@@ -441,116 +498,6 @@ impl Track {
             None
         }
     } //}}}
-
-    fn read_metadata(&self) -> Option<MetadataLog> {
-        let Ok(Ok(probed)) = File::open(&self.path).map(|file| {
-            symphonia::default::get_probe().format(
-                Hint::new().with_extension(
-                    self.path()
-                        .extension()
-                        .map(|s| s.to_str())
-                        .flatten()
-                        .expect("HINT EXTENSION FAIL - should be unreachable"),
-                ),
-                MediaSourceStream::new(Box::new(file), Default::default()),
-                &Default::default(),
-                &Default::default(),
-            )
-        }) else {
-            return None;
-        };
-        probed.metadata.into_inner()
-    }
-
-    // # probe_meta # {{{
-    /// id3 mode handles standard frames, like 'TCON' & 'TXXX'
-    /// non-id3 mode just dumps everything straight into the list as-is
-    ///
-    /// Or at least that's the plan, but it doesn't seem to work for vorbis comments...
-    /// No idea why not. Nothing in here on symphonia's side is id3/mp3 specific.
-    fn probe_meta(&mut self, id3: bool) {
-        let Ok(Ok(mut probed)) = File::open(&self.path).map(|file| {
-            symphonia::default::get_probe().format(
-                Hint::new().with_extension(
-                    self.path()
-                        .extension()
-                        .map(|s| s.to_str())
-                        .flatten()
-                        .expect("HINT EXTENSION FAIL - should be unreachable"),
-                ),
-                MediaSourceStream::new(Box::new(file), Default::default()),
-                &Default::default(),
-                &Default::default(),
-            )
-        }) else {
-            return;
-        };
-        let Some(metadata) = probed.metadata.get() else {
-            return;
-        };
-        if let Some(meta) = metadata.current() {
-            for tag in meta.tags() {
-                let mut val = match &tag.value {
-                    symphonia::core::meta::Value::String(s) => s.clone(),
-                    _ => continue,
-                };
-                let mut key = tag.key.to_ascii_lowercase();
-
-                if id3 {
-                    // convert id3v1 genres
-                    if key == "tcon" {
-                        val = val
-                            .trim()
-                            .trim_start_matches('(')
-                            .trim_end_matches(')')
-                            .parse::<usize>()
-                            .ok()
-                            .map(|i| ID3_GENRES.get(i).map(|s| s.to_string()))
-                            .flatten()
-                            .unwrap_or(val)
-                    }
-                    // convert id3v2 keys to human readables
-                    for (fromkey, tokey) in ID3_TAGS {
-                        if fromkey == &key {
-                            self.tags.insert(tokey.to_string(), val.clone());
-                            break;
-                        }
-                    }
-                }
-
-                // also just push everything for good measure,
-                // removing id3's "txxx" cause its dumb
-                if id3 && key.starts_with("txxx:") {
-                    key.replace_range(0..5, "");
-                    self.tags.insert(key, val);
-                } else {
-                    self.tags.insert(key, val);
-                }
-            }
-        }
-    }
-    // # probe_meta # }}}
-
-    // # vorbis comment # {{{
-    /// Coincidentally, this also doesnt work for id3 when you plug Mp3Reader into it.
-    /// The source code literally just Default::default()'s the metadata,
-    /// What the fuck, Symphonia?
-    fn load_meta_vorbis<R: symphonia::core::formats::FormatReader>(&mut self) {
-        let Ok(Ok(mut reader)): Result<Result<R, _>, _> = File::open(&self.path).map(|file| {
-            symphonia::core::formats::FormatReader::try_new(
-                symphonia::core::io::MediaSourceStream::new(Box::new(file), symphonia::core::io::MediaSourceStreamOptions::default()),
-                &symphonia::core::formats::FormatOptions::default(),
-            )
-        }) else {
-            return;
-        };
-        if let Some(meta) = reader.metadata().current() {
-            for tag in meta.tags() {
-                self.tags.insert(tag.key.to_ascii_lowercase(), tag.value.to_string());
-            }
-        }
-    }
-    // # vorbis comment # }}}
 
     // ## GET / SET ## {{{
 

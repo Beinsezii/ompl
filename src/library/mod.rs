@@ -313,11 +313,7 @@ impl Library {
             }
         }
         if let Ok(mut art) = self.art.write() {
-            let visual = track.map(|t| t.read_art()).flatten();
-            if let Some(visual) = &visual {
-                debug!("ART SIZE: {}x{}", visual[0].len(), visual.len());
-            }
-            *art = visual.map(|v| Arc::new(v));
+            *art = track.map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
         }
         if let Ok(mut thumbnail) = self.thumbnail.write() {
             *thumbnail = None;
