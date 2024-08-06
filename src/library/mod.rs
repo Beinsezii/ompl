@@ -467,12 +467,12 @@ impl Library {
         let vchunk = (art.len() / h).max(1);
         let hchunk = (art[0].len() / w).max(1);
 
-        let thumbnail: Box<[Box<[[u8; 4]]>]> = art[((vchunk % art.len()) / 2)..]
-            .chunks(vchunk)
+        let thumbnail: Box<[Box<[[u8; 4]]>]> = art[((art.len() % vchunk) / 2)..]
+            .chunks_exact(vchunk)
             .map(|vc| {
                 vc.into_iter()
                     .map(|row| {
-                        row.chunks(hchunk).map(|row_part| {
+                        row[((art[0].len() % hchunk) / 2)..].chunks_exact(hchunk).map(|row_part| {
                             row_part
                                 .into_iter()
                                 .fold([0u64; 4], |mut acc, it| {

@@ -35,7 +35,7 @@ impl ContainedWidget for Art {
                                 .bg(if let Some([r, g, b, _a]) = bgiter.next() {
                                     Color::Rgb(*r, *g, *b)
                                 } else {
-                                    Color::Black
+                                    stylesheet.base.bg.unwrap_or(Color::Black)
                                 }),
                         })
                         .collect::<Vec<Span>>()
