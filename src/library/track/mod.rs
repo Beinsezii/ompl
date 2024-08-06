@@ -3,6 +3,7 @@
 use crate::logging::*;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::Cursor;
 use std::ops::Deref;
 use std::path::Path;
 use std::path::PathBuf;
@@ -378,6 +379,9 @@ pub struct Track {
 }
 
 impl Track {
+    pub const ART_SEARCH_TAGS: &'static [&'static str] = &["title", "grouping", "album", "artist"];
+    pub const ART_SEARCH_EXTS: &'static [&'static str] = &["jpg", "png", "jpeg"];
+
     pub fn new<T: AsRef<Path>>(path: T) -> Option<Self> {
         path.as_ref().canonicalize().ok().map(|path| Self {
             path,
@@ -412,6 +416,40 @@ impl Track {
             // Vorbis comments aren't found until the FormatReader is initialized
             .or_else(|| probed.format.metadata().current().cloned())
         // }}}
+    }
+
+    #[cfg(feature = "album-art")]
+    fn find_art(&self) -> Option<image::DynamicImage> {
+        let Some(Ok(directory)) = self.path.parent().map(|p| p.read_dir()) else {
+            return None;
+        };
+
+        let tags: Vec<&String> = Self::ART_SEARCH_TAGS.iter().filter_map(|s| self.tags.get(&s.to_string())).collect();
+        for entry in directory {
+            let Ok(item) = entry else { continue };
+            let path = item.path();
+            let Some(ext) = path.extension().map(|e| e.to_str()).flatten() else {
+                continue;
+            };
+            if !Self::ART_SEARCH_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
+                continue;
+            }
+            let Some(stem) = path.file_stem().map(|e| e.to_str()).flatten().map(|s| s.to_lowercase()) else {
+                continue;
+            };
+            if tags
+                .iter()
+                .all(|t| t.to_lowercase() != stem && (t.to_string() + " cover").to_lowercase() != stem)
+                && stem.to_ascii_lowercase() != "cover"
+            {
+                continue;
+            }
+
+            if let Ok(img) = image::open(item.path()) {
+                return Some(img);
+            }
+        }
+        None
     }
 
     /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
@@ -476,14 +514,29 @@ impl Track {
 
     pub fn read_art(&self) -> Option<Box<[Box<[[u8; 4]]>]>> {
         // {{{
-        let meta = self.read_metadata();
-        let Some(visual) = meta.as_ref().map(|m| m.visuals().get(0)).flatten() else {
-            return None;
-        };
-        let buff: &[u8] = &visual.data;
-        let Ok(format) = image::guess_format(buff) else { return None };
-        if let Ok(img) = image::load(std::io::Cursor::new(buff), format) {
-            let (width, _height) = (img.width(), img.height());
+        #[cfg(not(feature = "album-art"))]
+        {
+            None
+        }
+        #[cfg(feature = "album-art")]
+        {
+            let meta = self.read_metadata();
+            let Some(img) = meta
+                .as_ref()
+                .map(|m| m.visuals().get(0))
+                .flatten()
+                .map(|visual| {
+                    image::guess_format(&visual.data)
+                        .ok()
+                        .map(|format| image::load(Cursor::new(&visual.data), format).ok())
+                })
+                .flatten()
+                .flatten()
+                .or_else(|| self.find_art())
+            else {
+                return None;
+            };
+            let width = img.width();
             Some(
                 img.into_rgba8()
                     .into_vec()
@@ -494,8 +547,6 @@ impl Track {
                     .map(|v| v.into())
                     .collect(),
             )
-        } else {
-            None
         }
     } //}}}
 

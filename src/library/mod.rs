@@ -238,6 +238,17 @@ impl Library {
         }
     }
 
+    fn read_art(&self) {
+        let now = Instant::now();
+        if let Ok(mut art) = self.art.write() {
+            *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
+        }
+        if let Ok(mut thumbnail) = self.thumbnail.write() {
+            *thumbnail = None;
+        }
+        bench!("Loaded artwork in {:?}", now.elapsed());
+    }
+
     /// Receiver for all library events
     pub fn get_receiver(&self) -> Result<BusReader<LibEvt>, Box<dyn Error>> {
         Ok(self.bus.lock().map_err(|e| e.to_string())?.add_rx())
@@ -307,17 +318,12 @@ impl Library {
                 return;
             }
         }
-        if let Some(track) = self.player.play_track(track.clone()) {
+        if let Some(track) = self.player.play_track(track) {
             if let Ok(mut history) = self.history.lock() {
                 history.push(track)
             }
         }
-        if let Ok(mut art) = self.art.write() {
-            *art = track.map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
-        }
-        if let Ok(mut thumbnail) = self.thumbnail.write() {
-            *thumbnail = None;
-        }
+        self.read_art();
         self.broadcast(LibEvt::Playback);
     }
 
@@ -616,6 +622,7 @@ impl Library {
             } else {
                 self.get_sequential(false)
             });
+            self.read_art();
         }
 
         bench!("Finished appending {} tracks in total {:?}", count, begin.elapsed())
