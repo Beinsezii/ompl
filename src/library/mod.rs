@@ -242,11 +242,11 @@ impl Library {
         let now = Instant::now();
         if let Ok(mut art) = self.art.write() {
             *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
+            bench!("Loaded artwork in {:?}", now.elapsed());
         }
         if let Ok(mut thumbnail) = self.thumbnail.write() {
             *thumbnail = None;
         }
-        bench!("Loaded artwork in {:?}", now.elapsed());
     }
 
     /// Receiver for all library events
