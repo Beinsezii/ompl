@@ -381,11 +381,11 @@ impl<T: Backend> UI<T> {
                 let [action_area, art_area] = *Layout::horizontal([Constraint::Min(1), Constraint::Length(ART_SIZE)]).split(header) else {
                     return;
                 };
-                let [status_bar_area, menubar_area, seeker_area, debug_area] = *Layout::vertical([
+                let [status_bar_area, menubar_area, debug_area, seeker_area] = *Layout::vertical([
                     Constraint::Length(1),
                     Constraint::Length(1),
-                    Constraint::Min(0),
                     Constraint::Length(if self.debug { 1 } else { 0 }),
+                    Constraint::Min(0),
                 ])
                 .split(action_area) else {
                     return;
