@@ -23,15 +23,15 @@ use crossterm::{
 };
 
 use ratatui::backend::{Backend, CrosstermBackend};
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Terminal;
 
 mod stylesheet;
 use stylesheet::StyleSheet;
 mod widgets;
+use widgets::{Art, FilterTreeView, MTree, MenuBar, QueueTable, Seeker, StatusBar};
 use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
-use widgets::{FilterTreeView, MTree, MenuBar, QueueTable, Seeker, StatusBar};
 
 // ### FNs ### {{{
 
@@ -363,6 +363,7 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         self.draw_count += 1;
+        const ART_SIZE: u16 = 12;
         let mut terminal = self.terminal.take();
         terminal
             .as_mut()
@@ -370,44 +371,55 @@ impl<T: Backend> UI<T> {
             .draw(|f| {
                 let time_headers = Instant::now();
                 let size = f.size();
-                let zones = Layout::default()
-                    .direction(Direction::Vertical)
-                    .constraints(vec![
-                        Constraint::Length(1),
-                        Constraint::Length(1),
-                        Constraint::Length(if library.seekable().is_some() { 2 } else { 0 }),
-                        Constraint::Length(if self.debug { 1 } else { 0 }),
-                        Constraint::Length(if library.filter_count() == 0 {
-                            0
-                        } else {
-                            size.height
-                                .saturating_sub(if library.seekable().is_some() { 4 } else { 2 } + if self.debug { 1 } else { 0 })
-                                / 2
-                        }),
-                        Constraint::Min(1),
-                    ])
-                    .split(size);
+                let [header, body] = *Layout::vertical([
+                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(ART_SIZE / 2)),
+                    Constraint::Min(1),
+                ])
+                .split(size) else {
+                    return;
+                };
+                let [action_area, art_area] = *Layout::horizontal([Constraint::Min(1), Constraint::Length(ART_SIZE)]).split(header) else {
+                    return;
+                };
+                let [status_bar_area, menubar_area, seeker_area, debug_area] = *Layout::vertical([
+                    Constraint::Length(1),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
+                    Constraint::Length(if self.debug { 1 } else { 0 }),
+                ])
+                .split(action_area) else {
+                    return;
+                };
+                let [filterpanes_area, sortpanes_area] = *Layout::vertical([Constraint::Ratio(1, 2), Constraint::Min(1)]).split(body) else {
+                    return;
+                };
 
-                self.status_bar.area = zones[0];
+                self.status_bar.area = status_bar_area;
                 self.status_bar.draw(f, self.stylesheet);
 
-                self.menubar.area = zones[1];
+                self.menubar.area = menubar_area;
                 self.menubar.draw(f, self.stylesheet);
 
                 if let Some(_) = library.seekable() {
-                    self.seeker.area = zones[2];
+                    self.seeker.area = seeker_area;
                     self.seeker.draw(f, self.stylesheet)
                 }
+
+                Art {
+                    lib_weak: Arc::downgrade(&library),
+                    area: art_area,
+                }
+                .draw(f, self.stylesheet);
 
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                *self.filterpanes.area_mut() = zones[4];
+                *self.filterpanes.area_mut() = filterpanes_area;
                 self.filterpanes.draw(f, self.stylesheet);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                *self.sortpanes.area_mut() = zones[5];
+                *self.sortpanes.area_mut() = sortpanes_area;
                 self.sortpanes.draw(f, self.stylesheet);
                 let time_queue2 = Instant::now();
 
@@ -421,7 +433,7 @@ impl<T: Backend> UI<T> {
                             (time_queue2 - time_queue).as_secs_f64() * 1000.0,
                         ))
                         .style(self.stylesheet.base),
-                        zones[3],
+                        debug_area,
                     );
                 }
 

@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use symphonia::core::io::MediaSourceStream;
+use symphonia::core::meta::MetadataLog;
 use symphonia::core::probe::Hint;
 
 use lexical_sort::natural_lexical_cmp;
@@ -373,24 +374,21 @@ pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(tagstring: T, t
 pub struct Track {
     path: PathBuf,
     tags: Tags,
-    art: Option<Vec<Vec<u8>>>,
     gain: f32,
 }
 
 impl Track {
-    const ART_MAX: u32 = 32;
     pub fn new<T: AsRef<Path>>(path: T) -> Option<Self> {
         path.as_ref().canonicalize().ok().map(|path| Self {
             path,
             tags: Tags::new(),
-            art: None,
             gain: 1.0,
         })
     }
 
-    // # load_meta # {{{
     /// Reads metadata into the struct. This doesn't happen on ::new() for performance reasons.
     pub fn load_meta(&mut self) {
+        // {{{
         match self.path.extension().map(|e| e.to_str()).flatten() {
             Some("mp3") | Some("wav") => self.probe_meta(true),
             Some("flac") => self.load_meta_vorbis::<symphonia::default::formats::FlacReader>(),
@@ -416,8 +414,53 @@ impl Track {
                 self.tags.insert("title".to_string(), path_title.to_string());
             }
         }
+    } // }}}
+
+    pub fn read_art(&self) -> Option<Box<[Box<[[u8; 4]]>]>> {
+        // {{{
+        let Some(mut log) = self.read_metadata() else { return None };
+        let meta = log.metadata();
+        let Some(visual) = meta.current().map(|m| m.visuals().get(0)).flatten() else {
+            return None;
+        };
+        let buff: &[u8] = &visual.data;
+        let Ok(format) = image::guess_format(buff) else { return None };
+        if let Ok(img) = image::load(std::io::Cursor::new(buff), format) {
+            let (width, _height) = (img.width(), img.height());
+            Some(
+                img.into_rgba8()
+                    .into_vec()
+                    .chunks_exact(4)
+                    .map(|chunk| chunk.try_into().unwrap())
+                    .collect::<Vec<[u8; 4]>>()
+                    .chunks_exact(width as usize)
+                    .map(|v| v.into())
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    } //}}}
+
+    fn read_metadata(&self) -> Option<MetadataLog> {
+        let Ok(Ok(probed)) = File::open(&self.path).map(|file| {
+            symphonia::default::get_probe().format(
+                Hint::new().with_extension(
+                    self.path()
+                        .extension()
+                        .map(|s| s.to_str())
+                        .flatten()
+                        .expect("HINT EXTENSION FAIL - should be unreachable"),
+                ),
+                MediaSourceStream::new(Box::new(file), Default::default()),
+                &Default::default(),
+                &Default::default(),
+            )
+        }) else {
+            return None;
+        };
+        probed.metadata.into_inner()
     }
-    // # load_meta # }}}
 
     // # probe_meta # {{{
     /// id3 mode handles standard frames, like 'TCON' & 'TXXX'
@@ -484,27 +527,6 @@ impl Track {
                     self.tags.insert(key, val);
                 }
             }
-
-            if let Some(visual) = meta.visuals().get(0) {
-                let buff: &[u8] = &visual.data;
-                if let Ok(format) = image::guess_format(buff) {
-                    if let Ok(mut img) = image::load(std::io::Cursor::new(buff), format) {
-                        if img.width() > Self::ART_MAX || img.height() > Self::ART_MAX {
-                            img = img.resize(Self::ART_MAX, Self::ART_MAX, image::imageops::FilterType::Nearest);
-                        }
-                        let row = img.width() * 4;
-                        let mut bytes = img.into_rgba8().into_vec();
-                        let mut byte_slices = Vec::new();
-                        while bytes.len() > row as usize {
-                            byte_slices.push(bytes.split_off(bytes.len() - row as usize));
-                            bytes.shrink_to_fit();
-                        }
-                        assert_eq!(bytes.len(), row as usize);
-                        byte_slices.push(bytes);
-                        self.art = Some(byte_slices);
-                    }
-                }
-            };
         }
     }
     // # probe_meta # }}}

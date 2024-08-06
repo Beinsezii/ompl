@@ -190,6 +190,8 @@ pub struct Library {
     /// Single line status for library
     statusline: RwLock<String>,
     theme: RwLock<Theme>,
+    art: RwLock<Option<Arc<Box<[Box<[[u8; 4]]>]>>>>,
+    thumbnail: RwLock<Option<(usize, usize, Arc<Box<[Box<[[u8; 4]]>]>>)>>,
 }
 
 impl Library {
@@ -214,6 +216,8 @@ impl Library {
                 bg: Color::None,
                 acc: Color::Term(3),
             }),
+            art: Default::default(),
+            thumbnail: Default::default(),
         });
 
         result.volume_set(0.5);
@@ -280,6 +284,10 @@ impl Library {
 
     /// Set the currently loaded track and start playback
     pub fn play_track(&self, track: Option<Arc<Track>>) {
+        if self.track_get() == track {
+            self.play();
+            return;
+        }
         // Check for moved tracks first.
         // Player could handle this but easier if library does
         if let Some(track) = track.as_ref() {
@@ -299,10 +307,20 @@ impl Library {
                 return;
             }
         }
-        if let Some(track) = self.player.play_track(track) {
+        if let Some(track) = self.player.play_track(track.clone()) {
             if let Ok(mut history) = self.history.lock() {
                 history.push(track)
             }
+        }
+        if let Ok(mut art) = self.art.write() {
+            let visual = track.map(|t| t.read_art()).flatten();
+            if let Some(visual) = &visual {
+                debug!("ART SIZE: {}x{}", visual[0].len(), visual.len());
+            }
+            *art = visual.map(|v| Arc::new(v));
+        }
+        if let Ok(mut thumbnail) = self.thumbnail.write() {
+            *thumbnail = None;
         }
         self.broadcast(LibEvt::Playback);
     }
@@ -425,6 +443,58 @@ impl Library {
             *guard = theme;
             self.broadcast(LibEvt::Theme);
         }
+    }
+
+    /// Get art for current track
+    //pub fn art(&self) -> Arc<Option<Box<[Box<[[u8; 4]]>]>>> {
+    //    self.art.read().unwrap().clone()
+    //}
+
+    /// Get thumbnail of N dimension for current track
+    pub fn thumbnail(&self, w: usize, h: usize) -> Option<Arc<Box<[Box<[[u8; 4]]>]>>> {
+        if let Ok(Some((cur_w, cur_h, thumbnail))) = self.thumbnail.read().as_deref() {
+            if *cur_w == w && *cur_h == h {
+                return Some(thumbnail.clone());
+            }
+        }
+
+        let art_reader = &self.art.read();
+        let Ok(Some(art)) = art_reader.as_deref() else { return None };
+        let Ok(mut thumbnail_writer) = self.thumbnail.write() else { return None };
+
+        let vchunk = (art.len() / h).max(1);
+        let hchunk = (art[0].len() / w).max(1);
+
+        let thumbnail: Box<[Box<[[u8; 4]]>]> = art[((vchunk % art.len()) / 2)..]
+            .chunks(vchunk)
+            .map(|vc| {
+                vc.into_iter()
+                    .map(|row| {
+                        row.chunks(hchunk).map(|row_part| {
+                            row_part
+                                .into_iter()
+                                .fold([0u64; 4], |mut acc, it| {
+                                    acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| *a += *b as u64);
+                                    acc
+                                })
+                                .map(|c| (c / hchunk as u64) as u8)
+                        })
+                    })
+                    .fold(vec![[0u64; 4]; h], |mut acc, it| {
+                        acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| {
+                            a.iter_mut().zip(b.into_iter()).for_each(|(a, b)| *a += b as u64);
+                        });
+                        acc
+                    })
+                    .into_iter()
+                    .map(|rgba| rgba.map(|c| (c / vchunk as u64) as u8))
+                    .collect()
+            })
+            .collect();
+
+        let new_thumb = Arc::new(thumbnail);
+        *thumbnail_writer = Some((w, h, new_thumb.clone()));
+        Some(new_thumb)
     }
 
     // ## Other Settings ## }}}

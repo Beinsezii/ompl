@@ -14,6 +14,8 @@ mod queuetable;
 pub use queuetable::QueueTable;
 mod seeker;
 pub use seeker::Seeker;
+mod art;
+pub use art::Art;
 
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
