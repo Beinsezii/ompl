@@ -242,8 +242,10 @@ impl Library {
     fn read_art(&self) {
         let now = Instant::now();
         if let Ok(mut art) = self.art.write() {
-            *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
-            bench!("Loaded artwork in {:?}", now.elapsed());
+            if art.is_none() {
+                *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
+                bench!("Loaded artwork in {:?}", now.elapsed());
+            }
         }
     }
 
@@ -321,6 +323,7 @@ impl Library {
                 history.push(track)
             }
         }
+        let _ = self.art.write().map(|mut a| *a = None);
         self.broadcast(LibEvt::Playback);
     }
 
@@ -622,8 +625,8 @@ impl Library {
             } else {
                 self.get_sequential(false)
             });
+            let _ = self.art.write().map(|mut a| *a = None);
         }
-
         bench!("Finished appending {} tracks in total {:?}", count, begin.elapsed())
     }
 
