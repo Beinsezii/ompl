@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 
 use std::cmp::min;
+use std::error::Error;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -83,6 +84,18 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
     }
 }
 
+fn parse_image_size(value: String) -> Result<u8, Box<dyn Error>> {
+    let uint8 = value.parse()?;
+    // 32 is already insanely big let's just make that a hard limit to reduce complexity
+    // 4b * 32 * 32 * 10,000 == 41MB thumbnails worst case so the naive caching will do just fine
+    const VALID: &'static [u8] = &[0, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
+    if VALID.contains(&uint8) {
+        Ok(uint8)
+    } else {
+        Err(format!("Image size must be one of {:?}", VALID).into())
+    }
+}
+
 // ### FNs ### }}}
 
 pub const HELP: &str = &"\
@@ -130,6 +143,7 @@ pub enum Action {
     ACC,
     FG,
     BG,
+    Art,
     Append,
     Purge,
 
@@ -154,6 +168,7 @@ struct UI<T: Backend> {
     terminal: Option<Terminal<T>>,
     debug: bool,
     draw_count: u128,
+    art_size_temp: u8,
     #[cfg(feature = "clipboard")]
     clipboard: Option<ClipboardContext>,
 }
@@ -194,6 +209,7 @@ impl<T: Backend> UI<T> {
                 (String::from("Foreground"), MTree::Action(Action::FG)),
                 (String::from("Background"), MTree::Action(Action::BG)),
                 (String::from("Accent"), MTree::Action(Action::ACC)),
+                (String::from("Art Size"), MTree::Action(Action::Art)),
                 (String::from("Debug"), MTree::Action(Action::Debug)),
             ]),
             ),
@@ -211,6 +227,7 @@ impl<T: Backend> UI<T> {
             terminal: Some(terminal),
             debug: false,
             draw_count: 0,
+            art_size_temp: 12, // TODO: move into Library
             #[cfg(feature = "clipboard")]
             clipboard: ClipboardContext::new().ok(),
         }
@@ -363,7 +380,6 @@ impl<T: Backend> UI<T> {
             None => return,
         };
         self.draw_count += 1;
-        const ART_SIZE: u16 = 12;
         let mut terminal = self.terminal.take();
         terminal
             .as_mut()
@@ -372,13 +388,14 @@ impl<T: Backend> UI<T> {
                 let time_headers = Instant::now();
                 let size = f.size();
                 let [header, body] = *Layout::vertical([
-                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(ART_SIZE / 2)),
+                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max((self.art_size_temp / 2).into())),
                     Constraint::Min(1),
                 ])
                 .split(size) else {
                     return;
                 };
-                let [action_area, art_area] = *Layout::horizontal([Constraint::Min(1), Constraint::Length(ART_SIZE)]).split(header) else {
+                let [action_area, art_area] = *Layout::horizontal([Constraint::Min(1), Constraint::Length(self.art_size_temp.into())]).split(header)
+                else {
                     return;
                 };
                 let [status_bar_area, menubar_area, debug_area, seeker_area] = *Layout::vertical([
@@ -649,6 +666,18 @@ impl<T: Backend> UI<T> {
                             }
                             Err(e) => self.message("Error reading text as color: ", &e),
                         }
+                    }
+                }
+            }
+            Action::Art => {
+                let result = self.input("Set image size. 0 or 8..10..32", self.art_size_temp.to_string().as_str(), true);
+                if !result.is_empty() {
+                    match parse_image_size(result) {
+                        Ok(uint8) => {
+                            self.art_size_temp = uint8;
+                            self.draw()
+                        }
+                        Err(e) => self.message("Error setting image size: ", &e.to_string()),
                     }
                 }
             }

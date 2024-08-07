@@ -16,6 +16,9 @@ pub struct Art {
 
 impl ContainedWidget for Art {
     fn draw(&mut self, frame: &mut ratatui::prelude::Frame, stylesheet: super::StyleSheet) {
+        if self.area.width == 0 || self.area.height == 0 {
+            return;
+        }
         let Some(library) = self.lib_weak.upgrade() else { return };
         assert_eq!(self.area.width, self.area.height * 2);
         let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
