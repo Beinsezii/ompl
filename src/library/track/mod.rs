@@ -371,6 +371,8 @@ pub fn get_taglist_sort<T: AsRef<str>, U: Deref<Target = Track>>(tagstring: T, t
 
 // ## FNs }}}
 
+pub type RawImage = Box<[Box<[[u8; 4]]>]>;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Track {
     path: PathBuf,
@@ -512,7 +514,7 @@ impl Track {
         }
     } // }}}
 
-    pub fn read_art(&self) -> Option<Box<[Box<[[u8; 4]]>]>> {
+    pub fn read_art(&self) -> Option<RawImage> {
         // {{{
         #[cfg(not(feature = "album-art"))]
         {

@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
+use std::collections::HashMap;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::{Arc, Mutex, RwLock};
@@ -14,12 +15,12 @@ use rand::random;
 mod player;
 mod track;
 
-pub use player::{Backend, Player};
-pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, Track};
-
 use crate::logging::*;
 
-use self::player::PlayerMessage;
+pub use player::{Backend, Player};
+pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, RawImage, Track};
+
+use player::PlayerMessage;
 
 // ## FILTER ## {{{
 
@@ -190,8 +191,8 @@ pub struct Library {
     /// Single line status for library
     statusline: RwLock<String>,
     theme: RwLock<Theme>,
-    art: RwLock<Option<Arc<Box<[Box<[[u8; 4]]>]>>>>,
-    thumbnail: RwLock<Option<(usize, usize, Arc<Box<[Box<[[u8; 4]]>]>>)>>,
+    art: RwLock<Option<Arc<RawImage>>>,
+    thumbnails: RwLock<HashMap<(usize, usize, PathBuf), Arc<RawImage>>>,
 }
 
 impl Library {
@@ -217,7 +218,7 @@ impl Library {
                 acc: Color::Term(3),
             }),
             art: Default::default(),
-            thumbnail: Default::default(),
+            thumbnails: Default::default(),
         });
 
         result.volume_set(0.5);
@@ -243,9 +244,6 @@ impl Library {
         if let Ok(mut art) = self.art.write() {
             *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
             bench!("Loaded artwork in {:?}", now.elapsed());
-        }
-        if let Ok(mut thumbnail) = self.thumbnail.write() {
-            *thumbnail = None;
         }
     }
 
@@ -323,7 +321,6 @@ impl Library {
                 history.push(track)
             }
         }
-        self.read_art();
         self.broadcast(LibEvt::Playback);
     }
 
@@ -448,26 +445,29 @@ impl Library {
     }
 
     /// Get art for current track
-    //pub fn art(&self) -> Arc<Option<Box<[Box<[[u8; 4]]>]>>> {
+    //pub fn art(&self) -> Arc<Option<RawImage>> {
     //    self.art.read().unwrap().clone()
     //}
 
     /// Get thumbnail of N dimension for current track
-    pub fn thumbnail(&self, w: usize, h: usize) -> Option<Arc<Box<[Box<[[u8; 4]]>]>>> {
-        if let Ok(Some((cur_w, cur_h, thumbnail))) = self.thumbnail.read().as_deref() {
-            if *cur_w == w && *cur_h == h {
-                return Some(thumbnail.clone());
-            }
+    pub fn thumbnail(&self, w: usize, h: usize) -> Option<Arc<RawImage>> {
+        let Some(track) = self.track_get() else { return None };
+        if let Ok(Some(thumbnail)) = self.thumbnails.read().as_deref().map(|hm| hm.get(&(w, h, track.path().to_owned()))) {
+            return Some(thumbnail.clone());
         }
+
+        self.read_art();
 
         let art_reader = &self.art.read();
         let Ok(Some(art)) = art_reader.as_deref() else { return None };
-        let Ok(mut thumbnail_writer) = self.thumbnail.write() else { return None };
+        let Ok(mut thumbnail_writer) = self.thumbnails.write() else {
+            return None;
+        };
 
         let vchunk = (art.len() / h).max(1);
         let hchunk = (art[0].len() / w).max(1);
 
-        let thumbnail: Box<[Box<[[u8; 4]]>]> = art[((art.len() % vchunk) / 2)..]
+        let thumbnail: RawImage = art[((art.len() % vchunk) / 2)..]
             .chunks_exact(vchunk)
             .map(|vc| {
                 vc.into_iter()
@@ -495,7 +495,7 @@ impl Library {
             .collect();
 
         let new_thumb = Arc::new(thumbnail);
-        *thumbnail_writer = Some((w, h, new_thumb.clone()));
+        thumbnail_writer.insert((w, h, track.path().to_owned()), new_thumb.clone());
         Some(new_thumb)
     }
 
@@ -622,7 +622,6 @@ impl Library {
             } else {
                 self.get_sequential(false)
             });
-            self.read_art();
         }
 
         bench!("Finished appending {} tracks in total {:?}", count, begin.elapsed())
