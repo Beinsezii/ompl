@@ -1,6 +1,7 @@
 #![warn(missing_docs)]
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
@@ -96,12 +97,12 @@ impl TryFrom<String> for Color {
     }
 }
 
-impl ToString for Color {
-    fn to_string(&self) -> String {
+impl Display for Color {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Color::None => String::from("None"),
-            Color::Term(v) => v.to_string(),
-            Color::RGB(rgb) => colcon::irgb_to_hex(*rgb),
+            Color::None => f.write_str("None"),
+            Color::Term(v) => f.write_str(&v.to_string()),
+            Color::RGB(rgb) => f.write_str(&colcon::irgb_to_hex(*rgb)),
         }
     }
 }
@@ -112,11 +113,15 @@ pub struct Theme {
     pub fg: Color,
     pub bg: Color,
     pub acc: Color,
+    pub art_size: u8,
 }
 
-impl ToString for Theme {
-    fn to_string(&self) -> String {
-        format!("fg: {}\nbg: {}\nacc: {}", self.fg.to_string(), self.bg.to_string(), self.acc.to_string())
+impl Display for Theme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "fg: {}\nbg: {}\nacc: {}\nart_size: {}",
+            self.fg, self.bg, self.acc, self.art_size
+        ))
     }
 }
 
@@ -216,6 +221,7 @@ impl Library {
                 fg: Color::None,
                 bg: Color::None,
                 acc: Color::Term(3),
+                art_size: 0,
             }),
             art: Default::default(),
             thumbnails: Default::default(),
@@ -467,22 +473,21 @@ impl Library {
             return None;
         };
 
-        let vchunk = (art.len() / h).max(1);
-        let hchunk = (art[0].len() / w).max(1);
+        let chunk_size = (art.len() / h).max(art[0].len() / w).max(1);
 
-        let thumbnail: RawImage = art[((art.len() % vchunk) / 2)..]
-            .chunks_exact(vchunk)
+        let thumbnail: RawImage = art[((art.len() % chunk_size) / 2)..]
+            .chunks_exact(chunk_size)
             .map(|vc| {
                 vc.into_iter()
                     .map(|row| {
-                        row[((art[0].len() % hchunk) / 2)..].chunks_exact(hchunk).map(|row_part| {
+                        row[((art[0].len() % chunk_size) / 2)..].chunks_exact(chunk_size).map(|row_part| {
                             row_part
                                 .into_iter()
                                 .fold([0u64; 4], |mut acc, it| {
                                     acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| *a += *b as u64);
                                     acc
                                 })
-                                .map(|c| (c / hchunk as u64) as u8)
+                                .map(|c| (c / chunk_size as u64) as u8)
                         })
                     })
                     .fold(vec![[0u64; 4]; h], |mut acc, it| {
@@ -492,7 +497,7 @@ impl Library {
                         acc
                     })
                     .into_iter()
-                    .map(|rgba| rgba.map(|c| (c / vchunk as u64) as u8))
+                    .map(|rgba| rgba.map(|c| (c / chunk_size as u64) as u8))
                     .collect()
             })
             .collect();

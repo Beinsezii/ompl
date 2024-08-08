@@ -1,7 +1,6 @@
 #![warn(missing_docs)]
 
 use std::cmp::min;
-use std::error::Error;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -10,9 +9,8 @@ use std::sync::{Arc, Mutex, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::library::{Color, Filter, LibEvt, Library};
-use crate::logging::*;
-use crate::parse_time;
+use crate::library::{Color, Filter, LibEvt, Library, Theme};
+use crate::{logging::*, parse_art_size, parse_time};
 
 #[cfg(feature = "clipboard")]
 use copypasta::{ClipboardContext, ClipboardProvider};
@@ -81,18 +79,6 @@ fn get_event(duration: Option<Duration>) -> Option<Event> {
             }
         }
         None => Some(event::read().unwrap()),
-    }
-}
-
-fn parse_image_size(value: String) -> Result<u8, Box<dyn Error>> {
-    let uint8 = value.parse()?;
-    // 32 is already insanely big let's just make that a hard limit to reduce complexity
-    // 4b * 32 * 32 * 10,000 == 41MB thumbnails worst case so the naive caching will do just fine
-    const VALID: &'static [u8] = &[0, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32];
-    if VALID.contains(&uint8) {
-        Ok(uint8)
-    } else {
-        Err(format!("Image size must be one of {:?}", VALID).into())
     }
 }
 
@@ -168,7 +154,6 @@ struct UI<T: Backend> {
     terminal: Option<Terminal<T>>,
     debug: bool,
     draw_count: u128,
-    art_size_temp: u8,
     #[cfg(feature = "clipboard")]
     clipboard: Option<ClipboardContext>,
 }
@@ -227,7 +212,6 @@ impl<T: Backend> UI<T> {
             terminal: Some(terminal),
             debug: false,
             draw_count: 0,
-            art_size_temp: 12, // TODO: move into Library
             #[cfg(feature = "clipboard")]
             clipboard: ClipboardContext::new().ok(),
         }
@@ -379,6 +363,7 @@ impl<T: Backend> UI<T> {
             Some(l) => l,
             None => return,
         };
+        let theme = library.theme_get();
         self.draw_count += 1;
         let mut terminal = self.terminal.take();
         terminal
@@ -388,13 +373,14 @@ impl<T: Backend> UI<T> {
                 let time_headers = Instant::now();
                 let size = f.size();
                 let [header, body] = *Layout::vertical([
-                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max((self.art_size_temp / 2).into())),
+                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(theme.art_size.into())),
                     Constraint::Min(1),
                 ])
                 .split(size) else {
                     return;
                 };
-                let [action_area, art_area] = *Layout::horizontal([Constraint::Min(1), Constraint::Length(self.art_size_temp.into())]).split(header)
+                let [action_area, art_area] =
+                    *Layout::horizontal([Constraint::Min(1), Constraint::Length((theme.art_size * 2).into())]).split(header)
                 else {
                     return;
                 };
@@ -670,14 +656,14 @@ impl<T: Backend> UI<T> {
                 }
             }
             Action::Art => {
-                let result = self.input("Set image size. 0 or 8..10..32", self.art_size_temp.to_string().as_str(), true);
-                if !result.is_empty() {
-                    match parse_image_size(result) {
-                        Ok(uint8) => {
-                            self.art_size_temp = uint8;
-                            self.draw()
+                if let Some(library) = self.lib_weak.upgrade() {
+                    let theme = library.theme_get();
+                    let result = self.input("Set art size 0, 4..5..16", theme.art_size.to_string().as_str(), true);
+                    if !result.is_empty() {
+                        match parse_art_size(&result) {
+                            Ok(uint8) => library.theme_set(Theme { art_size: uint8, ..theme }),
+                            Err(e) => self.message("Error setting image size: ", &e.to_string()),
                         }
-                        Err(e) => self.message("Error setting image size: ", &e.to_string()),
                     }
                 }
             }

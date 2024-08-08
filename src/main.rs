@@ -197,6 +197,19 @@ fn parse_time(s: &str) -> Result<Duration, Box<dyn Error + Send + Sync>> {
     Err(format!("Could not parse {} as time signature", string).into())
 }
 
+fn parse_art_size(s: &str) -> Result<u8, Box<dyn Error + Send + Sync>> {
+    let uint8 = s.parse()?;
+    // 32x32 is already insanely big let's just make that a hard limit to reduce complexity
+    // 4b * 32 * 32 * 10,000 == 41MB thumbnails worst case so the naive caching will do just fine
+    // If ever a GUI is added this function can just be conditionaled
+    const VALID: &'static [u8] = &[0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+    if VALID.contains(&uint8) {
+        Ok(uint8)
+    } else {
+        Err(format!("Art size must be one of {:?}", VALID).into())
+    }
+}
+
 // ### PARSERS ### }}}
 
 // ### ARGS {{{
@@ -380,6 +393,12 @@ pub enum ThemeCmd {
         ///
         accent: Color,
     },
+    /// Art size
+    Art {
+        #[arg(value_parser=parse_art_size)]
+        ///
+        art_size: u8,
+    },
 }
 
 /// see Action
@@ -471,6 +490,10 @@ pub enum Action {
         /// UI Accent color
         #[arg(long, default_value = "yellow", value_parser=parse_color)]
         acc: Color,
+
+        /// UI Art size
+        #[arg(long, default_value = "5", value_parser=parse_art_size)]
+        art_size: u8,
 
         /// Select audio streaming backend
         #[arg(long, default_value = "default")]
@@ -678,6 +701,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                                     ThemeCmd::FG { foreground } => theme.fg = foreground,
                                     ThemeCmd::BG { background } => theme.bg = background,
                                     ThemeCmd::ACC { accent } => theme.acc = accent,
+                                    ThemeCmd::Art { art_size } => theme.art_size = art_size,
                                 };
                                 library.theme_set(theme)
                             }
@@ -811,6 +835,7 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
             fg,
             bg,
             acc,
+            art_size,
             backend,
         } => {
             LOG_LEVEL.store(verbosity, std::sync::atomic::Ordering::Relaxed);
@@ -828,7 +853,7 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
                 Some(true)
             });
             library.statusline_set(statusline);
-            library.theme_set(Theme { fg, bg, acc });
+            library.theme_set(Theme { fg, bg, acc, art_size });
             library.set_filters(filters);
             library.set_sorters(sorters);
             for path in library_paths {

@@ -20,7 +20,6 @@ impl ContainedWidget for Art {
             return;
         }
         let Some(library) = self.lib_weak.upgrade() else { return };
-        assert_eq!(self.area.width, self.area.height * 2);
         let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
         if let Some(thumbnail) = library.thumbnail(w, h) {
             let lines: Vec<Line> = thumbnail
