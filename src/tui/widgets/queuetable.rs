@@ -5,8 +5,8 @@ use crate::library::Library;
 
 use std::sync::{Arc, Weak};
 
-use crossterm::event::{MouseEvent, MouseEventKind};
-use ratatui::{layout::Rect, terminal::Frame};
+use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
+use ratatui::{layout::Rect, Frame};
 
 // ### struct QueueTable {{{
 

@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     widgets::Sparkline,

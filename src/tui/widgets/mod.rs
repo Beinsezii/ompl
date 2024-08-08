@@ -17,14 +17,11 @@ pub use seeker::Seeker;
 mod art;
 pub use art::Art;
 
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    terminal::Frame,
-    text::Span,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
-};
+use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crossterm::event::{MouseButton, MouseEventKind};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::{text::Span, Frame};
 
 /// Creates constraints for a distance that meet 3 criteria:
 /// 1) Fills the whole width with no gaps
@@ -57,7 +54,7 @@ pub trait ContainedWidget {
 }
 
 pub trait Clickable {
-    fn process_event(&mut self, event: crossterm::event::MouseEvent) -> Action;
+    fn process_event(&mut self, event: MouseEvent) -> Action;
 }
 
 // ### Scrollable ### {{{
@@ -173,7 +170,7 @@ impl PaneArray {
     }
 
     // # prep_event # {{{
-    pub fn prep_event(&mut self, event: crossterm::event::MouseEvent, items: &[(usize, usize)]) -> PaneArrayEvt {
+    pub fn prep_event(&mut self, event: MouseEvent, items: &[(usize, usize)]) -> PaneArrayEvt {
         let none = PaneArrayEvt::Action(Action::None);
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Up(..) => return none,

@@ -2,7 +2,8 @@
 
 use super::{Clickable, ContainedWidget};
 
-use crossterm::event;
+use ratatui::crossterm::event;
+use ratatui::Frame;
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
@@ -95,7 +96,7 @@ impl<T: Clone> MenuBar<T> {
 }
 
 impl<T: Clone> ContainedWidget for MenuBar<T> {
-    fn draw(&mut self, frame: &mut ratatui::terminal::Frame, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut Frame, stylesheet: super::StyleSheet) {
         if let Some(tree) = self.nav_to_tree() {
             let mut spans = vec![Span::from(if !self.nav.is_empty() { " 0.<- | " } else { " " })];
             for (n, t) in tree.iter().enumerate() {

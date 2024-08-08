@@ -15,7 +15,7 @@ use crate::{logging::*, parse_art_size, parse_time};
 #[cfg(feature = "clipboard")]
 use copypasta::{ClipboardContext, ClipboardProvider};
 
-use crossterm::{
+use ratatui::crossterm::{
     cursor, event,
     event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind},
     queue, terminal,
@@ -371,7 +371,7 @@ impl<T: Backend> UI<T> {
             .unwrap()
             .draw(|f| {
                 let time_headers = Instant::now();
-                let size = f.size();
+                let size = f.area();
                 let [header, body] = *Layout::vertical([
                     Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(theme.art_size.into())),
                     Constraint::Min(1),
@@ -456,7 +456,7 @@ impl<T: Backend> UI<T> {
         loop {
             let style = self.stylesheet.active;
             self.draw_inject(|f| {
-                let size = f.size();
+                let size = f.area();
                 let mut height: u16 = 0;
                 let mut width: u16 = 0;
                 for line in message.split('\n') {
@@ -510,7 +510,7 @@ impl<T: Backend> UI<T> {
             let style = self.stylesheet.active;
             let sortpanes_active = self.sortpanes.active();
             self.draw_inject(|f| {
-                let size = f.size();
+                let size = f.area();
                 let filterpanes_height = size.height.saturating_sub(header_height) / 2;
                 let area = Rect {
                     x: 0,

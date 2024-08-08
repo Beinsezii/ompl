@@ -15,7 +15,7 @@ pub struct Art {
 }
 
 impl ContainedWidget for Art {
-    fn draw(&mut self, frame: &mut ratatui::prelude::Frame, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut ratatui::Frame, stylesheet: super::StyleSheet) {
         if self.area.width == 0 || self.area.height == 0 {
             return;
         }

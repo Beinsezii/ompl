@@ -5,11 +5,12 @@ use crate::library::Library;
 
 use std::sync::{Arc, Weak};
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
     widgets::Paragraph,
+    Frame,
 };
 
 #[derive(Clone)]
@@ -28,7 +29,7 @@ impl StatusBar {
 }
 
 impl ContainedWidget for StatusBar {
-    fn draw(&mut self, frame: &mut ratatui::terminal::Frame, stylesheet: super::StyleSheet) {
+    fn draw(&mut self, frame: &mut Frame, stylesheet: super::StyleSheet) {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
             None => return,

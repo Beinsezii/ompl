@@ -29,8 +29,8 @@ dasp = {version = "0.11", optional = true, features = ["interpolate", "interpola
 souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
 
 # tui
-crossterm = {version = "0.27", optional = true, default-features = false}
-ratatui = {version = "0.27", optional = true, default-features = false, features = ['crossterm']}
+# ratatui re-exports crossterm
+ratatui = {version = "0.28", optional = true, default-features = false, features = ['crossterm']}
 
 # clipboard
 copypasta = {version = "0.10", optional=true}
@@ -42,7 +42,7 @@ image = { version = "0.25.2", default-features = false, features = ["jpeg", "png
 
 [features]
 media-controls = ["dep:souvlaki"]
-tui = ["dep:ratatui", "dep:crossterm"]
+tui = ["dep:ratatui"]
 clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]
