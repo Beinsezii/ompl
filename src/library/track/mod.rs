@@ -426,29 +426,42 @@ impl Track {
             return None;
         };
 
-        let tags: Vec<&String> = Self::ART_SEARCH_TAGS.iter().filter_map(|s| self.tags.get(&s.to_string())).collect();
-        for entry in directory {
-            let Ok(item) = entry else { continue };
-            let path = item.path();
-            let Some(ext) = path.extension().map(|e| e.to_str()).flatten() else {
-                continue;
-            };
-            if !Self::ART_SEARCH_EXTS.contains(&ext.to_ascii_lowercase().as_str()) {
-                continue;
-            }
-            let Some(stem) = path.file_stem().map(|e| e.to_str()).flatten().map(|s| s.to_lowercase()) else {
-                continue;
-            };
-            if tags
-                .iter()
-                .all(|t| t.to_lowercase() != stem && (t.to_string() + " cover").to_lowercase() != stem)
-                && stem.to_ascii_lowercase() != "cover"
-            {
-                continue;
-            }
+        let mut fnames_lc: Vec<String> = Self::ART_SEARCH_TAGS
+            .iter()
+            .filter_map(|s| self.tags.get(&s.to_string()).map(|t| t.to_lowercase()))
+            .map(|t| [t.clone(), t + " cover"])
+            .collect::<Vec<[String; 2]>>()
+            .into_flattened();
+        fnames_lc.push("cover".to_string());
 
-            if let Ok(img) = image::open(item.path()) {
-                return Some(img);
+        // Collect all images first or else you need to walk each file multiple times for every fname
+        // because the fnames are prioritized. Eats a few ms in fat directories but what can you do?
+        let image_paths = directory
+            .filter_map(|der| {
+                der.ok().map(|de| {
+                    de.path().extension().map(|e| {
+                        e.to_str()
+                            .map(|s| (Self::ART_SEARCH_EXTS.contains(&s.to_lowercase().as_str())).then_some(de.path()))
+                    })
+                })
+            })
+            .flatten()
+            .flatten()
+            .flatten()
+            .collect::<Vec<PathBuf>>();
+
+        for fname_lc in fnames_lc {
+            for path in image_paths.iter() {
+                let Some(stem_lc) = path.file_stem().map(|e| e.to_str()).flatten().map(|s| s.to_lowercase()) else {
+                    continue;
+                };
+                if fname_lc != stem_lc {
+                    continue;
+                };
+
+                if let Ok(img) = image::open(path) {
+                    return Some(img);
+                }
             }
         }
         None
