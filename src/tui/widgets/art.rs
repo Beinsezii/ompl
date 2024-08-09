@@ -22,6 +22,7 @@ impl ContainedWidget for Art {
         let Some(library) = self.lib_weak.upgrade() else { return };
         let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
         if let Some(thumbnail) = library.thumbnail(w, h) {
+            let fill = stylesheet.base.bg.unwrap_or(Color::Black);
             let lines: Vec<Line> = thumbnail
                 .chunks(2)
                 .map(|rows| {
@@ -30,15 +31,39 @@ impl ContainedWidget for Art {
 
                     rows[0]
                         .iter()
-                        .map(|[r, g, b, _a]| Span {
-                            content: "▀".into(),
-                            style: Style::default()
-                                .fg(Color::Rgb(*r, *g, *b))
-                                .bg(if let Some([r, g, b, _a]) = bgiter.next() {
-                                    Color::Rgb(*r, *g, *b)
+                        .map(|fg| {
+                            let mut style = Style::default();
+
+                            // no alpha blending because the 16 terminal colors aren't readable
+                            let content = if let Some(bg) = bgiter.next() {
+                                if bg == fg {
+                                    // All alpha only draw space to support
+                                    // terminal emulator transparency
+                                    if fg[3] == 0 {
+                                        style = style.bg(fill);
+                                        " "
+                                    // Uniform solid only draw block to avoid
+                                    // terminal emulator transparency
+                                    } else {
+                                        style = style.fg(Color::Rgb(fg[0], fg[1], fg[2]));
+                                        "█"
+                                    }
                                 } else {
-                                    stylesheet.base.bg.unwrap_or(Color::Black)
-                                }),
+                                    style = style.fg(Color::Rgb(fg[0], fg[1], fg[2])).bg(Color::Rgb(bg[0], bg[1], bg[2]));
+                                    "▀"
+                                }
+                            } else if fg[3] == 0 {
+                                style = style.bg(fill);
+                                " "
+                            } else {
+                                style = style.fg(Color::Rgb(fg[0], fg[1], fg[2]));
+                                "▀"
+                            };
+
+                            Span {
+                                content: content.into(),
+                                style,
+                            }
                         })
                         .collect::<Vec<Span>>()
                         .into()
