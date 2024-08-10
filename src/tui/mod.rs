@@ -392,7 +392,13 @@ impl<T: Backend> UI<T> {
                     self.seeker.draw(f, seeker_area, self.stylesheet)
                 }
 
-                Art::new(library).draw(f, art_area, self.stylesheet);
+                f.render_widget(
+                    Art {
+                        library,
+                        stylesheet: self.stylesheet,
+                    },
+                    art_area,
+                );
 
                 let time_headers2 = Instant::now();
 

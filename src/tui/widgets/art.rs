@@ -1,24 +1,18 @@
-use super::ContainedWidget;
+use super::StyleSheet;
 
 use crate::library::Library;
 
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use ratatui::layout::Rect;
+use ratatui::prelude::Buffer;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
 pub struct Art {
-    lib_weak: Weak<Library>,
-}
-
-impl Art {
-    pub fn new(library: Arc<Library>) -> Self {
-        Self {
-            lib_weak: Arc::downgrade(&library),
-        }
-    }
+    pub library: Arc<Library>,
+    pub stylesheet: StyleSheet,
 }
 
 // blend alpha onto black canvas
@@ -32,15 +26,17 @@ fn alpha([r, g, b, a]: [u8; 4]) -> [u8; 3] {
     [r, g, b].map(|c| (c as f32 * a).round() as u8)
 }
 
-impl ContainedWidget for Art {
-    fn draw(&mut self, frame: &mut ratatui::Frame, area: Rect, stylesheet: super::StyleSheet) {
+impl Widget for Art {
+    fn render(self, area: Rect, buf: &mut Buffer)
+    where
+        Self: Sized,
+    {
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let Some(library) = self.lib_weak.upgrade() else { return };
         let (w, h) = (area.width as usize, area.height as usize * 2);
-        if let Some(thumbnail) = library.thumbnail(w, h) {
-            let fill = stylesheet.base.bg.unwrap_or(Color::Black);
+        if let Some(thumbnail) = self.library.thumbnail(w, h) {
+            let fill = self.stylesheet.base.bg.unwrap_or(Color::Black);
             // clip at 5% or less
             const CLIP: u8 = u8::MAX / 20;
             let lines: Vec<Line> = thumbnail
@@ -91,9 +87,9 @@ impl ContainedWidget for Art {
                 })
                 .collect();
 
-            frame.render_widget(Paragraph::new(lines), area)
+            Paragraph::new(lines).render(area, buf)
         } else {
-            frame.render_widget(Block::new().style(stylesheet.base).borders(Borders::ALL), area)
+            Block::new().style(self.stylesheet.base).borders(Borders::ALL).render(area, buf)
         }
     }
 }
