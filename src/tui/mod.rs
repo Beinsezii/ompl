@@ -29,7 +29,7 @@ use ratatui::Terminal;
 mod stylesheet;
 use stylesheet::StyleSheet;
 mod widgets;
-use widgets::{Art, FilterTreeView, MTree, MenuBar, QueueTable, Seeker, StatusBar};
+use widgets::{Art, FilterPanes, MTree, MenuBar, Seeker, SortPanes, StatusBar};
 use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
 
 // ### FNs ### {{{
@@ -148,8 +148,8 @@ struct UI<T: Backend> {
     menubar: MenuBar<Action>,
     status_bar: StatusBar,
     seeker: Seeker,
-    filterpanes: FilterTreeView,
-    sortpanes: QueueTable,
+    filterpanes: FilterPanes,
+    sortpanes: SortPanes,
     stylesheet: StyleSheet,
     terminal: Option<Terminal<T>>,
     debug: bool,
@@ -206,8 +206,8 @@ impl<T: Backend> UI<T> {
             menubar: MenuBar::new(tree),
             status_bar: StatusBar::new(&library),
             seeker: Seeker::new(&library),
-            filterpanes: FilterTreeView::new(library.clone()),
-            sortpanes: QueueTable::new(library.clone()),
+            filterpanes: FilterPanes::new(library.clone()),
+            sortpanes: SortPanes::new(library.clone()),
             stylesheet,
             terminal: Some(terminal),
             debug: false,

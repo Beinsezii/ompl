@@ -8,16 +8,16 @@ use std::sync::{Arc, Weak};
 use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, Frame};
 
-// ### struct FilterTreeView {{{
+// ### struct FilterPanes {{{
 
-pub struct FilterTreeView {
+pub struct FilterPanes {
     lib_weak: Weak<Library>,
     pane_array: PaneArray,
     recv: bus::BusReader<LibEvt>,
     pane_cache: (Vec<(String, Vec<String>)>, Vec<Vec<String>>),
 }
 
-impl FilterTreeView {
+impl FilterPanes {
     pub fn new(library: Arc<Library>) -> Self {
         let count = library.filter_count();
         Self {
@@ -94,11 +94,11 @@ impl FilterTreeView {
     }
 }
 
-// ### struct FilterTreeView }}}
+// }}}
 
 // ### impl Scrollable, Searchable ### {{{
 
-impl Scrollable for FilterTreeView {
+impl Scrollable for FilterPanes {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
         self.lib_weak.upgrade().map(|library| {
             let (tags, data) = library.get_filter_tree_display();
@@ -115,7 +115,7 @@ impl Scrollable for FilterTreeView {
     }
 }
 
-impl Searchable for FilterTreeView {
+impl Searchable for FilterPanes {
     fn get_items<'a>(&self) -> Vec<String> {
         let library = match self.lib_weak.upgrade() {
             Some(l) => l,
@@ -130,7 +130,7 @@ impl Searchable for FilterTreeView {
 // ### impl Scrollable, Searchable ### }}}
 
 // ### impl ContainedWidget ### {{{
-impl ContainedWidget for FilterTreeView {
+impl ContainedWidget for FilterPanes {
     fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
         self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
@@ -167,7 +167,7 @@ impl ContainedWidget for FilterTreeView {
 // ### impl ContainedWidget ### }}}
 
 // ### impl Clickable ### {{{
-impl Clickable for FilterTreeView {
+impl Clickable for FilterPanes {
     fn process_event(&mut self, event: MouseEvent) -> super::Action {
         let none = super::Action::None;
         let draw = super::Action::Draw;

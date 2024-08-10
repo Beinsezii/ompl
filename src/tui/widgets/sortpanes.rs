@@ -8,15 +8,15 @@ use std::sync::{Arc, Weak};
 use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
 use ratatui::{layout::Rect, Frame};
 
-// ### struct QueueTable {{{
+// ### struct SortPanes {{{
 
 #[derive(Clone)]
-pub struct QueueTable {
+pub struct SortPanes {
     lib_weak: Weak<Library>,
     pane_array: PaneArray,
 }
 
-impl QueueTable {
+impl SortPanes {
     pub fn new(library: Arc<Library>) -> Self {
         let mut pane_array = PaneArray::new(true, 1);
         pane_array.active = true;
@@ -73,10 +73,10 @@ impl QueueTable {
     }
 }
 
-// ### struct QueueTable }}}
+// }}}
 
 // ### impl ContainedWidget {{{
-impl ContainedWidget for QueueTable {
+impl ContainedWidget for SortPanes {
     fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
         self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
@@ -100,7 +100,7 @@ impl ContainedWidget for QueueTable {
 
 // ### impl Scrollable, Searchable {{{
 
-impl Scrollable for QueueTable {
+impl Scrollable for SortPanes {
     fn get_fields(&mut self) -> Option<(&mut usize, &mut usize, usize, usize)> {
         self.lib_weak.upgrade().map(|library| {
             (
@@ -113,7 +113,7 @@ impl Scrollable for QueueTable {
     }
 }
 
-impl Searchable for QueueTable {
+impl Searchable for SortPanes {
     fn get_items<'a>(&self) -> Vec<String> {
         self.get_rows().into_iter().map(|v| v[self.index()].clone()).collect::<Vec<String>>()
     }
@@ -122,7 +122,7 @@ impl Searchable for QueueTable {
 // ### impl Scrollable, Searchable }}}
 
 // ### impl Clickable {{{
-impl Clickable for QueueTable {
+impl Clickable for SortPanes {
     fn process_event(&mut self, event: MouseEvent) -> super::Action {
         let none = super::Action::None;
         let draw = super::Action::Draw;
