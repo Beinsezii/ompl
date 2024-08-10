@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
-use crate::library::{get_taglist_sort, Library};
+use crate::library::{get_taglist_sort, LibEvt, Library};
 
 use std::sync::{Arc, Weak};
 
@@ -10,10 +10,11 @@ use ratatui::{layout::Rect, Frame};
 
 // ### struct FilterTreeView {{{
 
-#[derive(Clone)]
 pub struct FilterTreeView {
     lib_weak: Weak<Library>,
     pane_array: PaneArray,
+    recv: bus::BusReader<LibEvt>,
+    pane_cache: (Vec<(String, Vec<String>)>, Vec<Vec<String>>),
 }
 
 impl FilterTreeView {
@@ -22,6 +23,8 @@ impl FilterTreeView {
         Self {
             lib_weak: Arc::downgrade(&library),
             pane_array: PaneArray::new(false, count),
+            recv: library.get_receiver().unwrap(),
+            pane_cache: Default::default(),
         }
     }
 
@@ -140,22 +143,34 @@ impl Searchable for FilterTreeView {
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {
     fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
 
-        let (filters, tracks) = library.get_filter_tree_display();
-
-        let mut items = Vec::<(String, Vec<String>)>::new();
-        let mut highlights = Vec::<Vec<String>>::new();
-
-        for (ft, tl) in filters.into_iter().zip(tracks.into_iter()) {
-            highlights.push(ft.items); // lightly confusing
-            let tl_tags = get_taglist_sort(&ft.tag, &tl);
-            items.push((ft.tag, tl_tags));
+        let mut update = false;
+        while let Ok(i) = self.recv.try_recv() {
+            // Should only need to update pane item cache
+            // If the filters are updated
+            if i == LibEvt::Update {
+                update = true
+            }
         }
 
+        // Cache parsed tagstrings for all frames
+        if update || self.pane_cache.0.is_empty() {
+            let (filters, tracks) = library.get_filter_tree_display();
+
+            let mut new_items = Vec::<(String, Vec<String>)>::new();
+            let mut new_highlights = Vec::<Vec<String>>::new();
+
+            for (filter, track_list) in filters.into_iter().zip(tracks.into_iter()) {
+                new_highlights.push(filter.items); // lightly confusing
+                let tl_tags = get_taglist_sort(&filter.tag, &track_list);
+                new_items.push((filter.tag, tl_tags));
+            }
+
+            self.pane_cache = (new_items, new_highlights);
+        }
+
+        let (items, highlights) = self.pane_cache.clone();
         self.pane_array.draw_from(frame, stylesheet, items, highlights)
     }
 }

@@ -164,7 +164,7 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
 
 // ### FNs ### }}}
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LibEvt {
     /// Simple state change.
     /// Pause/Play/Seek/etc.
