@@ -221,10 +221,7 @@ impl<T: Backend> UI<T> {
 
     // # insert # {{{
     fn insert(&mut self, before: bool) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
         if self.sortpanes.active() && library.filter_count() != 0 {
             let tag = self.input("Tagstring", "", false).trim().to_string();
             if !tag.is_empty() {
@@ -247,10 +244,7 @@ impl<T: Backend> UI<T> {
 
     // # delete # {{{
     fn delete(&mut self) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
         if self.sortpanes.active() {
             library.remove_sorter(self.sortpanes.index());
         } else {
@@ -265,10 +259,7 @@ impl<T: Backend> UI<T> {
 
     // # move_pane # {{{
     fn move_pane(&mut self, left: bool) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
 
         let s = self.sortpanes.active();
 
@@ -300,10 +291,7 @@ impl<T: Backend> UI<T> {
 
     // # edit {{{
     fn edit(&mut self) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
         let s = self.sortpanes.active();
 
         let tagstring = if s {
@@ -312,22 +300,22 @@ impl<T: Backend> UI<T> {
             library.get_filter(self.filterpanes.index()).map(|f| f.tag)
         };
 
-        if let Some(tagstring) = tagstring {
-            match self.input("Edit", &tagstring, false).trim().to_ascii_lowercase().as_str() {
-                "" => (),
-                input => {
-                    if input != &tagstring {
-                        if s {
-                            library.set_sorter(self.sortpanes.index(), input.to_string())
-                        } else {
-                            library.set_filter(
-                                self.filterpanes.index(),
-                                Filter {
-                                    tag: input.to_string(),
-                                    items: vec![],
-                                },
-                            )
-                        }
+        let Some(tagstring) = tagstring else { return };
+
+        match self.input("Edit", &tagstring, false).trim().to_ascii_lowercase().as_str() {
+            "" => (),
+            input => {
+                if input != &tagstring {
+                    if s {
+                        library.set_sorter(self.sortpanes.index(), input.to_string())
+                    } else {
+                        library.set_filter(
+                            self.filterpanes.index(),
+                            Filter {
+                                tag: input.to_string(),
+                                items: vec![],
+                            },
+                        )
                     }
                 }
             }
@@ -359,10 +347,7 @@ impl<T: Backend> UI<T> {
     }
 
     fn draw_inject<F: FnOnce(&mut ratatui::Frame)>(&mut self, injection: F) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
         let theme = library.theme_get();
         self.draw_count += 1;
         let mut terminal = self.terminal.take();
@@ -399,33 +384,24 @@ impl<T: Backend> UI<T> {
                     return;
                 };
 
-                self.status_bar.area = status_bar_area;
-                self.status_bar.draw(f, self.stylesheet);
+                self.status_bar.draw(f, status_bar_area, self.stylesheet);
 
-                self.menubar.area = menubar_area;
-                self.menubar.draw(f, self.stylesheet);
+                self.menubar.draw(f, menubar_area, self.stylesheet);
 
                 if let Some(_) = library.seekable() {
-                    self.seeker.area = seeker_area;
-                    self.seeker.draw(f, self.stylesheet)
+                    self.seeker.draw(f, seeker_area, self.stylesheet)
                 }
 
-                Art {
-                    lib_weak: Arc::downgrade(&library),
-                    area: art_area,
-                }
-                .draw(f, self.stylesheet);
+                Art::new(library).draw(f, art_area, self.stylesheet);
 
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                *self.filterpanes.area_mut() = filterpanes_area;
-                self.filterpanes.draw(f, self.stylesheet);
+                self.filterpanes.draw(f, filterpanes_area, self.stylesheet);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                *self.sortpanes.area_mut() = sortpanes_area;
-                self.sortpanes.draw(f, self.stylesheet);
+                self.sortpanes.draw(f, sortpanes_area, self.stylesheet);
                 let time_queue2 = Instant::now();
 
                 if self.debug {
@@ -692,10 +668,7 @@ impl<T: Backend> UI<T> {
 
     // ## process_event ## {{{
     fn process_event(&mut self, event: Event) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return };
         match event {
             // # Key Events # {{{
             Event::Key(KeyEvent {

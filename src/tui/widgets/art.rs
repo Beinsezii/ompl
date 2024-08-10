@@ -2,7 +2,7 @@ use super::ContainedWidget;
 
 use crate::library::Library;
 
-use std::sync::Weak;
+use std::sync::{Arc, Weak};
 
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -10,8 +10,15 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
 pub struct Art {
-    pub lib_weak: Weak<Library>,
-    pub area: Rect,
+    lib_weak: Weak<Library>,
+}
+
+impl Art {
+    pub fn new(library: Arc<Library>) -> Self {
+        Self {
+            lib_weak: Arc::downgrade(&library),
+        }
+    }
 }
 
 // blend alpha onto black canvas
@@ -26,12 +33,12 @@ fn alpha([r, g, b, a]: [u8; 4]) -> [u8; 3] {
 }
 
 impl ContainedWidget for Art {
-    fn draw(&mut self, frame: &mut ratatui::Frame, stylesheet: super::StyleSheet) {
-        if self.area.width == 0 || self.area.height == 0 {
+    fn draw(&mut self, frame: &mut ratatui::Frame, area: Rect, stylesheet: super::StyleSheet) {
+        if area.width == 0 || area.height == 0 {
             return;
         }
         let Some(library) = self.lib_weak.upgrade() else { return };
-        let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
+        let (w, h) = (area.width as usize, area.height as usize * 2);
         if let Some(thumbnail) = library.thumbnail(w, h) {
             let fill = stylesheet.base.bg.unwrap_or(Color::Black);
             // clip at 5% or less
@@ -84,9 +91,9 @@ impl ContainedWidget for Art {
                 })
                 .collect();
 
-            frame.render_widget(Paragraph::new(lines), self.area)
+            frame.render_widget(Paragraph::new(lines), area)
         } else {
-            frame.render_widget(Block::new().style(stylesheet.base).borders(Borders::ALL), self.area)
+            frame.render_widget(Block::new().style(stylesheet.base).borders(Borders::ALL), area)
         }
     }
 }

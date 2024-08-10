@@ -50,7 +50,7 @@ pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
 
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet);
+    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet);
 }
 
 pub trait Clickable {

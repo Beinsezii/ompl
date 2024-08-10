@@ -54,10 +54,7 @@ impl QueueTable {
 
     fn get_rows(&self) -> Vec<Vec<String>> {
         let mut rows = Vec::<Vec<String>>::new();
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return rows,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return rows };
 
         let mut tags = library.get_sorters();
 
@@ -80,11 +77,9 @@ impl QueueTable {
 
 // ### impl ContainedWidget {{{
 impl ContainedWidget for QueueTable {
-    fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
+        self.pane_array.area = area;
+        let Some(library) = self.lib_weak.upgrade() else { return };
 
         let mut items = Vec::<(String, Vec<String>)>::new();
         let highlights = Vec::<Vec<String>>::new();
@@ -136,10 +131,7 @@ impl Clickable for QueueTable {
             _ => (),
         }
 
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return none,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return none };
 
         let mut items = Vec::<(usize, usize)>::new();
 

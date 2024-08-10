@@ -29,11 +29,9 @@ impl StatusBar {
 }
 
 impl ContainedWidget for StatusBar {
-    fn draw(&mut self, frame: &mut Frame, stylesheet: super::StyleSheet) {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return,
-        };
+    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: super::StyleSheet) {
+        self.area = area;
+        let Some(library) = self.lib_weak.upgrade() else { return };
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
@@ -75,16 +73,15 @@ impl ContainedWidget for StatusBar {
                 )),
             ]))
             .style(stylesheet.base),
-            self.area,
+            area,
         );
     }
 }
 
 impl Clickable for StatusBar {
     fn process_event(&mut self, event: MouseEvent) -> super::Action {
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return super::Action::None,
+        let Some(library) = self.lib_weak.upgrade() else {
+            return super::Action::None;
         };
 
         if let MouseEventKind::Down(button) = event.kind {

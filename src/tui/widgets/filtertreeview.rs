@@ -28,13 +28,6 @@ impl FilterTreeView {
         }
     }
 
-    pub fn area(&self) -> Rect {
-        self.pane_array.area
-    }
-    pub fn area_mut(&mut self) -> &mut Rect {
-        &mut self.pane_array.area
-    }
-
     pub fn active(&self) -> bool {
         self.pane_array.active
     }
@@ -50,57 +43,53 @@ impl FilterTreeView {
     }
 
     pub fn toggle_current(&mut self) {
-        if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = library.get_filter_tree_display();
-            if let Some(mut fi) = library.get_filter_items(self.index()) {
-                let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                    .get(self.pane_array.positions[self.index()] as usize)
-                    .cloned();
+        let Some(library) = self.lib_weak.upgrade() else { return };
+        let (tags, data) = library.get_filter_tree_display();
+        let Some(mut fi) = library.get_filter_items(self.index()) else { return };
+        let Some(item) = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+            .get(self.pane_array.positions[self.index()] as usize)
+            .cloned()
+        else {
+            return;
+        };
 
-                if let Some(item) = item {
-                    match fi.contains(&item) {
-                        true => fi = fi.into_iter().filter(|i| *i != item).collect(),
-                        false => fi.push(item),
-                    }
-
-                    library.set_filter_items(self.index(), fi);
-                }
-            }
+        match fi.contains(&item) {
+            true => fi = fi.into_iter().filter(|i| *i != item).collect(),
+            false => fi.push(item),
         }
+
+        library.set_filter_items(self.index(), fi);
     }
 
     pub fn select_current(&mut self) {
-        if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = library.get_filter_tree_display();
-            let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                .get(self.pane_array.positions[self.index()])
-                .cloned();
-            if let Some(item) = item {
-                library.set_filter_items(self.index(), vec![item]);
-            }
+        let Some(library) = self.lib_weak.upgrade() else { return };
+        let (tags, data) = library.get_filter_tree_display();
+        let item = get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+            .get(self.pane_array.positions[self.index()])
+            .cloned();
+        if let Some(item) = item {
+            library.set_filter_items(self.index(), vec![item]);
         }
     }
 
     pub fn deselect_all(&mut self) {
-        if let Some(library) = self.lib_weak.upgrade() {
-            if library.get_filter_items(self.index()).map(|f| f.is_empty()) == Some(false) {
-                library.set_filter_items(self.index(), Vec::new());
-            }
+        let Some(library) = self.lib_weak.upgrade() else { return };
+        if library.get_filter_items(self.index()).map(|f| f.is_empty()) == Some(false) {
+            library.set_filter_items(self.index(), Vec::new());
         }
     }
 
     pub fn invert_selection(&mut self) {
-        if let Some(library) = self.lib_weak.upgrade() {
-            let (tags, data) = library.get_filter_tree_display();
-            if let Some(fi) = library.get_filter_items(self.index()) {
-                library.set_filter_items(
-                    self.index(),
-                    get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
-                        .into_iter()
-                        .filter(|i| !fi.contains(i))
-                        .collect(),
-                );
-            }
+        let Some(library) = self.lib_weak.upgrade() else { return };
+        let (tags, data) = library.get_filter_tree_display();
+        if let Some(fi) = library.get_filter_items(self.index()) {
+            library.set_filter_items(
+                self.index(),
+                get_taglist_sort(&tags[self.index()].tag, &data[self.index()])
+                    .into_iter()
+                    .filter(|i| !fi.contains(i))
+                    .collect(),
+            );
         }
     }
 }
@@ -114,7 +103,7 @@ impl Scrollable for FilterTreeView {
         self.lib_weak.upgrade().map(|library| {
             let (tags, data) = library.get_filter_tree_display();
             let i = self.index();
-            let area = self.area();
+            let area = self.pane_array.area;
             (
                 // using fns makes it think it has mutable aliasing
                 &mut self.pane_array.positions[i],
@@ -142,7 +131,8 @@ impl Searchable for FilterTreeView {
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterTreeView {
-    fn draw(&mut self, frame: &mut Frame, stylesheet: StyleSheet) {
+    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
+        self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
 
         let mut update = false;
@@ -186,10 +176,7 @@ impl Clickable for FilterTreeView {
             _ => (),
         }
 
-        let library = match self.lib_weak.upgrade() {
-            Some(l) => l,
-            None => return none,
-        };
+        let Some(library) = self.lib_weak.upgrade() else { return none };
 
         let (filters, tracks) = library.get_filter_tree_display();
 
