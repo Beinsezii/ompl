@@ -303,7 +303,7 @@ impl PaneArray {
     // # prep_event # }}}
 
     // # draw_from # {{{
-    pub fn draw_from(&mut self, frame: &mut Frame, stylesheet: StyleSheet, items: Vec<(String, Vec<String>)>, highlights: Vec<Vec<String>>) {
+    pub fn draw_from(&mut self, frame: &mut Frame, stylesheet: StyleSheet, items: &Vec<(String, Vec<String>)>, highlights: &Vec<Vec<String>>) {
         // clamp index
         self.index = self.index.min(items.len().saturating_sub(1));
 
@@ -358,7 +358,7 @@ impl PaneArray {
             frame.render_widget(
                 List::new(
                     item.1
-                        .into_iter()
+                        .iter()
                         .enumerate()
                         .map(|(n, s)| {
                             ListItem::new(s.clone()).style(if self.active && num == self.index {
@@ -391,7 +391,7 @@ impl PaneArray {
                 .block(
                     Block::default()
                         .title(Span::styled(
-                            item.0,
+                            &item.0,
                             if self.active && num == self.index {
                                 match highlights.get(num).unwrap_or(&vec![]).is_empty() {
                                     true => stylesheet.active,

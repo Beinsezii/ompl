@@ -93,7 +93,7 @@ impl ContainedWidget for QueueTable {
             items.push(("[unsorted]".to_string(), library.get_taglist("title")))
         }
 
-        self.pane_array.draw_from(frame, stylesheet, items, highlights);
+        self.pane_array.draw_from(frame, stylesheet, &items, &highlights);
     }
 }
 // ### impl ContainedWidget }}}

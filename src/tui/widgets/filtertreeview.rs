@@ -160,7 +160,7 @@ impl ContainedWidget for FilterTreeView {
             self.pane_cache = (new_items, new_highlights);
         }
 
-        let (items, highlights) = self.pane_cache.clone();
+        let (items, highlights) = &self.pane_cache;
         self.pane_array.draw_from(frame, stylesheet, items, highlights)
     }
 }
