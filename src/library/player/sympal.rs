@@ -36,7 +36,7 @@ macro_rules! wait_on {
             } else if combo_breaker.elapsed() > Duration::from_secs(5) {
                 break Err(concat!("Sympal timed out while waiting on ", $id, "!"));
             } else {
-                thread::sleep(Duration::from_nanos(1))
+                thread::sleep(Duration::from_millis(1))
             }
         }
     }};
@@ -323,7 +323,8 @@ impl Backend {
                 // not using wait_on! because its only purpose is
                 // to keep the stream object in scope until its done
                 while !join_thread.load(Ordering::Relaxed) {
-                    thread::sleep(Duration::from_nanos(1))
+                    // Millis instead of nanos because Windows will cook on the loop somehow
+                    thread::sleep(Duration::from_millis(1))
                 }
                 streaming.store(false, Ordering::Relaxed);
             }
