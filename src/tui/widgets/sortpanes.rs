@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
-use crate::library::Library;
+use crate::library::{LibEvt, Library};
 
 use std::sync::{Arc, Weak};
 
@@ -10,10 +10,11 @@ use ratatui::{layout::Rect, Frame};
 
 // ### struct SortPanes {{{
 
-#[derive(Clone)]
 pub struct SortPanes {
     lib_weak: Weak<Library>,
     pane_array: PaneArray,
+    recv: bus::BusReader<LibEvt>,
+    items_cache: Vec<(String, Vec<String>)>,
 }
 
 impl SortPanes {
@@ -23,6 +24,8 @@ impl SortPanes {
         Self {
             lib_weak: Arc::downgrade(&library),
             pane_array,
+            recv: library.get_receiver().unwrap(),
+            items_cache: Default::default(),
         }
     }
 
@@ -81,19 +84,32 @@ impl ContainedWidget for SortPanes {
         self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
 
-        let mut items = Vec::<(String, Vec<String>)>::new();
-        let highlights = Vec::<Vec<String>>::new();
-
-        for ts in library.get_sorters() {
-            let list = library.get_taglist(&ts);
-            items.push((ts, list));
+        let mut update = false;
+        while let Ok(i) = self.recv.try_recv() {
+            // Should only need to update pane item cache
+            // If the filters are updated
+            if i == LibEvt::Update {
+                update = true
+            }
         }
 
-        if items.is_empty() {
-            items.push(("[unsorted]".to_string(), library.get_taglist("title")))
+        // Cache parsed tagstrings for all frames
+        if update || self.items_cache.is_empty() {
+            let mut new_items = Vec::<(String, Vec<String>)>::new();
+
+            for ts in library.get_sorters() {
+                let list = library.get_taglist(&ts);
+                new_items.push((ts, list));
+            }
+
+            if new_items.is_empty() {
+                new_items.push(("[unsorted]".to_string(), library.get_taglist("title")))
+            }
+
+            self.items_cache = new_items
         }
 
-        self.pane_array.draw_from(frame, stylesheet, &items, &highlights);
+        self.pane_array.draw_from(frame, stylesheet, &self.items_cache, &Vec::new());
     }
 }
 // ### impl ContainedWidget }}}
