@@ -41,6 +41,7 @@ macro_rules! timed_guard {
             sleep(Duration::from_millis(1));
             n += 1
         }
+        error!(concat!($err, " lock timed out."));
         return Err(concat!($err, " lock timed out.").into());
     };
 }
