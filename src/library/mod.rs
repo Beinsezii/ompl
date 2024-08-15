@@ -5,8 +5,8 @@ use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{sync_channel, Receiver};
-use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::thread::{self, sleep};
 use std::time::{Duration, Instant};
 
 use bus::{Bus, BusReader};
@@ -22,6 +22,55 @@ pub use player::{Backend, Player};
 pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, RawImage, Track};
 
 use player::PlayerMessage;
+
+// ### Timed Lock Traits {{{
+
+macro_rules! timed_guard {
+    ($result:expr, $err:literal) => {
+        let mut n = 0;
+        loop {
+            let result = $result;
+            match result {
+                Err(std::sync::TryLockError::WouldBlock) => (),
+                _ => return Ok(result?),
+            }
+            // 2 seconds per lock should be 100x more than enough
+            if n > 2000 {
+                break;
+            }
+            sleep(Duration::from_millis(1));
+            n += 1
+        }
+        return Err(concat!($err, " lock timed out.").into());
+    };
+}
+
+trait RwLockTimeout<T> {
+    fn timed_read<'a>(&'a self) -> Result<RwLockReadGuard<'a, T>, Box<dyn Error + 'a>>;
+    fn timed_write<'a>(&'a self) -> Result<RwLockWriteGuard<'a, T>, Box<dyn Error + 'a>>;
+}
+
+impl<T> RwLockTimeout<T> for RwLock<T> {
+    fn timed_read<'a>(&'a self) -> Result<RwLockReadGuard<'a, T>, Box<dyn Error + 'a>> {
+        timed_guard!(self.try_read(), "Read");
+    }
+
+    fn timed_write<'a>(&'a self) -> Result<RwLockWriteGuard<'a, T>, Box<dyn Error + 'a>> {
+        timed_guard!(self.try_write(), "Write");
+    }
+}
+
+trait MutexTimeout<T> {
+    fn timed_lock<'a>(&'a self) -> Result<MutexGuard<'a, T>, Box<dyn Error + 'a>>;
+}
+
+impl<T> MutexTimeout<T> for Mutex<T> {
+    fn timed_lock<'a>(&'a self) -> Result<MutexGuard<'a, T>, Box<dyn Error + 'a>> {
+        timed_guard!(self.try_lock(), "Mutex");
+    }
+}
+
+// }}}
 
 // ## FILTER ## {{{
 
@@ -240,14 +289,14 @@ impl Library {
     // # new # }}}
 
     fn broadcast(&self, message: LibEvt) {
-        if let Ok(mut bus) = self.bus.lock() {
+        if let Ok(mut bus) = self.bus.timed_lock() {
             bus.broadcast(message)
         }
     }
 
     fn read_art(&self) {
         let now = Instant::now();
-        if let Ok(mut art) = self.art.write() {
+        if let Ok(mut art) = self.art.timed_write() {
             if art.is_none() {
                 *art = self.player.track_get().map(|t| t.read_art()).flatten().map(|v| Arc::new(v));
                 bench!("Loaded artwork in {:?}", now.elapsed());
@@ -257,7 +306,7 @@ impl Library {
 
     /// Receiver for all library events
     pub fn get_receiver(&self) -> Result<BusReader<LibEvt>, Box<dyn Error>> {
-        Ok(self.bus.lock().map_err(|e| e.to_string())?.add_rx())
+        Ok(self.bus.timed_lock().map_err(|e| e.to_string())?.add_rx())
     }
 
     // ## Player forwards ## {{{
@@ -310,7 +359,7 @@ impl Library {
                     track.path().to_str().unwrap_or("???")
                 )));
 
-                if let Ok(mut tracks) = self.tracks.write() {
+                if let Ok(mut tracks) = self.tracks.timed_write() {
                     if let Some(id) = tracks.iter().position(|t| t == track) {
                         tracks.remove(id);
                         drop(tracks);
@@ -326,11 +375,11 @@ impl Library {
             return;
         }
         if let Some(track) = self.player.play_track(track) {
-            if let Ok(mut history) = self.history.lock() {
+            if let Ok(mut history) = self.history.timed_lock() {
                 history.push(track)
             }
         }
-        let _ = self.art.write().map(|mut a| *a = None);
+        let _ = self.art.timed_write().map(|mut a| *a = None);
         self.broadcast(LibEvt::Playback);
     }
 
@@ -391,14 +440,14 @@ impl Library {
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_get(&self) -> Option<bool> {
-        *self.repeat.read().as_deref().unwrap_or(&Some(true))
+        *self.repeat.timed_read().as_deref().unwrap_or(&Some(true))
     }
 
     /// None - No loop
     /// Some(false) - track loop
     /// Some(true) - full loop
     pub fn repeat_set(&self, repeat: Option<bool>) {
-        if let Ok(mut guard) = self.repeat.write() {
+        if let Ok(mut guard) = self.repeat.timed_write() {
             *guard = repeat;
             self.broadcast(LibEvt::Playback);
         }
@@ -406,7 +455,7 @@ impl Library {
 
     /// Advances None -> Some(false) -> Some(true)
     pub fn repeat_toggle(&self) {
-        let Ok(mut guard) = self.repeat.write() else { return };
+        let Ok(mut guard) = self.repeat.timed_write() else { return };
         *guard = match *guard {
             None => Some(false),
             Some(false) => Some(true),
@@ -427,12 +476,12 @@ impl Library {
 
     /// Tagstring for library status
     pub fn statusline_get(&self) -> String {
-        self.statusline.read().as_deref().unwrap_or(&String::from("???")).clone()
+        self.statusline.timed_read().as_deref().unwrap_or(&String::from("???")).clone()
     }
 
     /// Tagstring for library status
     pub fn statusline_set<T: ToString>(&self, statusline: T) {
-        if let Ok(mut guard) = self.statusline.write() {
+        if let Ok(mut guard) = self.statusline.timed_write() {
             *guard = statusline.to_string();
             self.broadcast(LibEvt::Theme);
         }
@@ -444,11 +493,11 @@ impl Library {
     }
 
     pub fn theme_get(&self) -> Theme {
-        *self.theme.read().expect("Library theme was not readable")
+        *self.theme.timed_read().expect("Library theme was not readable")
     }
 
     pub fn theme_set(&self, theme: Theme) {
-        if let Ok(mut guard) = self.theme.write() {
+        if let Ok(mut guard) = self.theme.timed_write() {
             *guard = theme;
             self.broadcast(LibEvt::Theme);
         }
@@ -456,21 +505,21 @@ impl Library {
 
     /// Get art for current track
     //pub fn art(&self) -> Arc<Option<RawImage>> {
-    //    self.art.read().unwrap().clone()
+    //    self.art.timed_read().unwrap().clone()
     //}
 
     /// Get thumbnail of N dimension for current track
     pub fn thumbnail(&self, w: usize, h: usize) -> Option<Arc<RawImage>> {
         let Some(track) = self.track_get() else { return None };
-        if let Ok(Some(thumbnail)) = self.thumbnails.read().as_deref().map(|hm| hm.get(&(w, h, track.path().to_owned()))) {
+        if let Ok(Some(thumbnail)) = self.thumbnails.timed_read().as_deref().map(|hm| hm.get(&(w, h, track.path().to_owned()))) {
             return Some(thumbnail.clone());
         }
 
         self.read_art();
 
-        let art_reader = &self.art.read();
+        let art_reader = &self.art.timed_read();
         let Ok(Some(art)) = art_reader.as_deref() else { return None };
-        let Ok(mut thumbnail_writer) = self.thumbnails.write() else {
+        let Ok(mut thumbnail_writer) = self.thumbnails.timed_write() else {
             return None;
         };
 
@@ -562,12 +611,12 @@ impl Library {
     /// Else get the prior sequential track
     pub fn previous(&self) {
         if self.shuffle_get() {
-            let Ok(mut guard) = self.history.lock() else { return };
+            let Ok(mut guard) = self.history.timed_lock() else { return };
             let track = guard.pop();
             drop(guard);
             self.play_track(track);
             // remove twice cause it gets re-added.
-            if let Ok(mut history) = self.history.lock() {
+            if let Ok(mut history) = self.history.timed_lock() {
                 history.pop();
             }
         } else {
@@ -604,7 +653,7 @@ impl Library {
         bench!("Probed meta for {} tracks in {:?}", count, now.elapsed());
         let now = Instant::now();
 
-        if let Ok(mut tracks) = self.tracks.write() {
+        if let Ok(mut tracks) = self.tracks.timed_write() {
             new_tracks.into_iter().map(|t| Arc::new(t)).for_each(|t| tracks.push(t));
             let len = tracks.len();
 
@@ -631,14 +680,14 @@ impl Library {
             } else {
                 self.get_sequential(false)
             });
-            let _ = self.art.write().map(|mut a| *a = None);
+            let _ = self.art.timed_write().map(|mut a| *a = None);
         }
         bench!("Finished appending {} tracks in total {:?}", count, begin.elapsed())
     }
 
     /// Drop all tracks from the library
     pub fn purge(&self) {
-        if let Ok(mut tracks) = self.tracks.write() {
+        if let Ok(mut tracks) = self.tracks.timed_write() {
             *tracks = Vec::new();
         }
         self.force_build_filters();
@@ -652,7 +701,7 @@ impl Library {
     /// rebuilds whole filter tree without caching
     fn force_build_filters(&self) {
         let filters = self.get_filters();
-        if let Ok(mut ft) = self.filtered_tree.write() {
+        if let Ok(mut ft) = self.filtered_tree.timed_write() {
             *ft = Vec::new();
         }
         self.set_filters(filters);
@@ -660,18 +709,18 @@ impl Library {
 
     /// Amount of filters
     pub fn filter_count(&self) -> usize {
-        self.filtered_tree.read().map(|v| v.len()).unwrap_or(0)
+        self.filtered_tree.timed_read().map(|v| v.len()).unwrap_or(0)
     }
 
     /// All FilteredTracks. Cloned
     pub fn get_filter_tree(&self) -> Vec<FilteredTracks> {
-        self.filtered_tree.read().as_deref().cloned().unwrap_or(Vec::new())
+        self.filtered_tree.timed_read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// All Filters. Cloned
     pub fn get_filters(&self) -> Vec<Filter> {
         self.filtered_tree
-            .read()
+            .timed_read()
             .as_deref()
             .unwrap_or(&Vec::new())
             .iter()
@@ -688,7 +737,7 @@ impl Library {
 
         for (i, f) in filters.into_iter().enumerate() {
             // if filters continuously match existing, don't rebuild.
-            if let Some(ft) = self.filtered_tree.read().as_ref().ok().map(|v| v.get(i)).flatten() {
+            if let Some(ft) = self.filtered_tree.timed_read().as_ref().ok().map(|v| v.get(i)).flatten() {
                 if ft.filter == f && cache {
                     filtered_tree.push(ft.clone());
                     continue;
@@ -697,7 +746,7 @@ impl Library {
                 }
             }
 
-            let Ok(itracks) = self.tracks.read() else { break };
+            let Ok(itracks) = self.tracks.timed_read() else { break };
             let iter = if i == 0 { itracks.iter() } else { filtered_tree[i - 1].tracks.iter() };
 
             let tracks = if !f.items.is_empty() {
@@ -714,7 +763,7 @@ impl Library {
             filtered_tree.push(FilteredTracks { filter: f, tracks })
         }
 
-        if let Ok(mut ft) = self.filtered_tree.write() {
+        if let Ok(mut ft) = self.filtered_tree.timed_write() {
             *ft = filtered_tree;
             self.broadcast(LibEvt::Update);
         };
@@ -723,7 +772,11 @@ impl Library {
 
     /// Get clone of Nth Filter
     pub fn get_filter(&self, pos: usize) -> Option<Filter> {
-        self.filtered_tree.read().ok().map(|v| v.get(pos).map(|f| f.filter.clone())).flatten()
+        self.filtered_tree
+            .timed_read()
+            .ok()
+            .map(|v| v.get(pos).map(|f| f.filter.clone()))
+            .flatten()
     }
 
     /// Set Nth Filter and rebuild FilteredTracks
@@ -757,7 +810,7 @@ impl Library {
     /// Get clone of Nth FilteredTracks items
     pub fn get_filter_items(&self, pos: usize) -> Option<Vec<String>> {
         self.filtered_tree
-            .read()
+            .timed_read()
             .ok()
             .map(|v| v.get(pos).map(|f| f.filter.items.clone()))
             .flatten()
@@ -797,10 +850,10 @@ impl Library {
     /// Sort unfiltered tracks based on sorter tagstrings
     fn sort(&self) {
         let now = Instant::now();
-        if let Ok(mut tracks) = self.tracks.write() {
+        if let Ok(mut tracks) = self.tracks.timed_write() {
             tracks.sort_by(|a, b| {
                 let mut result = std::cmp::Ordering::Equal;
-                for ts in self.sorters.read().as_deref().unwrap_or(&Vec::new()).iter() {
+                for ts in self.sorters.timed_read().as_deref().unwrap_or(&Vec::new()).iter() {
                     result = result.then(natural_lexical_cmp(&a.tagstring(ts), &b.tagstring(ts)))
                 }
                 result
@@ -812,17 +865,17 @@ impl Library {
 
     /// Amount of sorter tagstrings
     pub fn sort_count(&self) -> usize {
-        self.sorters.read().map(|v| v.len()).unwrap_or(0)
+        self.sorters.timed_read().map(|v| v.len()).unwrap_or(0)
     }
 
     /// Get clone of sorter tagstrings
     pub fn get_sorters(&self) -> Vec<String> {
-        self.sorters.read().as_deref().cloned().unwrap_or(Vec::new())
+        self.sorters.timed_read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// Set all sorter tagstrings and re-sort library
     pub fn set_sorters(&self, tagstrings: Vec<String>) {
-        if let Ok(mut sorters) = self.sorters.write() {
+        if let Ok(mut sorters) = self.sorters.timed_write() {
             *sorters = tagstrings
         }
         self.sort();
@@ -830,12 +883,12 @@ impl Library {
 
     /// Get Nth sorter tagstring
     pub fn get_sorter(&self, index: usize) -> Option<String> {
-        self.sorters.read().ok().map(|v| v.get(index).cloned()).flatten()
+        self.sorters.timed_read().ok().map(|v| v.get(index).cloned()).flatten()
     }
 
     /// Set Nth sorter tagstring and re-sort library
     pub fn set_sorter(&self, index: usize, tagstring: String) {
-        if let Ok(mut tagstrings) = self.sorters.write() {
+        if let Ok(mut tagstrings) = self.sorters.timed_write() {
             if let Some(ts) = tagstrings.get_mut(index) {
                 *ts = tagstring
             } else {
@@ -856,7 +909,7 @@ impl Library {
 
     /// Add sorter tagstring to position and re-sort library
     pub fn insert_sorter(&self, tagstring: String, pos: usize) {
-        if let Ok(mut sts) = self.sorters.write() {
+        if let Ok(mut sts) = self.sorters.timed_write() {
             let len = sts.len();
             sts.insert(pos.min(len), tagstring);
         }
@@ -869,16 +922,18 @@ impl Library {
 
     /// Get cloned references to all tracks
     pub fn get_tracks(&self) -> Vec<Arc<Track>> {
-        self.tracks.read().as_deref().cloned().unwrap_or(Vec::new())
+        self.tracks.timed_read().as_deref().cloned().unwrap_or(Vec::new())
     }
 
     /// Get cloned references to last non-empty FilteredTracks
     pub fn get_queue(&self) -> Vec<Arc<Track>> {
-        let Ok(tguard) = self.tracks.read() else {
+        let Ok(tguard) = self.tracks.timed_read() else {
             return Vec::new();
         };
         let mut ptr: &Vec<Arc<Track>> = &tguard;
-        let Ok(fguard) = self.filtered_tree.read() else { return Vec::new() };
+        let Ok(fguard) = self.filtered_tree.timed_read() else {
+            return Vec::new();
+        };
         let tree = &fguard;
         for ft in tree.iter().rev() {
             if !ft.tracks.is_empty() {
