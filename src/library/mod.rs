@@ -301,10 +301,6 @@ impl Library {
 
     /// Set the currently loaded track and start playback
     pub fn play_track(&self, track: Option<Arc<Track>>) {
-        if self.track_get() == track {
-            self.play();
-            return;
-        }
         // Check for moved tracks first.
         // Player could handle this but easier if library does
         if let Some(track) = track.as_ref() {
@@ -317,12 +313,17 @@ impl Library {
                 if let Ok(mut tracks) = self.tracks.write() {
                     if let Some(id) = tracks.iter().position(|t| t == track) {
                         tracks.remove(id);
+                        drop(tracks);
+                        self.force_build_filters();
+                        self.next();
                     }
-                    self.force_build_filters();
-                    self.next();
                 }
                 return;
             }
+        }
+        if self.track_get() == track {
+            self.play();
+            return;
         }
         if let Some(track) = self.player.play_track(track) {
             if let Ok(mut history) = self.history.lock() {
