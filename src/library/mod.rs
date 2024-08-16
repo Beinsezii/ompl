@@ -525,13 +525,15 @@ impl Library {
         };
 
         let chunk_size = (art.len() / h).max(art[0].len() / w).max(1);
+        let ycrop = (art.len() % h) / 2;
+        let xcrop = (art[0].len() % w) / 2;
 
-        let thumbnail: RawImage = art[((art.len() % chunk_size) / 2)..]
+        let thumbnail: RawImage = art[ycrop..(art.len() - ycrop)]
             .chunks_exact(chunk_size)
             .map(|vc| {
                 vc.into_iter()
                     .map(|row| {
-                        row[((art[0].len() % chunk_size) / 2)..].chunks_exact(chunk_size).map(|row_part| {
+                        row[xcrop..(row.len() - xcrop)].chunks_exact(chunk_size).map(|row_part| {
                             row_part
                                 .into_iter()
                                 .fold([0u64; 4], |mut acc, it| {
@@ -541,7 +543,7 @@ impl Library {
                                 .map(|c| (c / chunk_size as u64) as u8)
                         })
                     })
-                    .fold(vec![[0u64; 4]; h], |mut acc, it| {
+                    .fold(vec![[0u64; 4]; w], |mut acc, it| {
                         acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| {
                             a.iter_mut().zip(b.into_iter()).for_each(|(a, b)| *a += b as u64);
                         });
