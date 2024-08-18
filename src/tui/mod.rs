@@ -152,6 +152,7 @@ struct UI<T: Backend> {
     sortpanes: SortPanes,
     stylesheet: StyleSheet,
     terminal: Option<Terminal<T>>,
+    art_inspect: bool,
     debug: bool,
     draw_count: u128,
     #[cfg(feature = "clipboard")]
@@ -201,6 +202,8 @@ impl<T: Backend> UI<T> {
 
         ]);
 
+        let debug = if LOG_LEVEL.load(Ordering::Relaxed) >= 3 { true } else { false };
+
         Self {
             lib_weak: Arc::downgrade(&library),
             menubar: MenuBar::new(tree),
@@ -210,7 +213,8 @@ impl<T: Backend> UI<T> {
             sortpanes: SortPanes::new(library.clone()),
             stylesheet,
             terminal: Some(terminal),
-            debug: false,
+            art_inspect: false,
+            debug,
             draw_count: 0,
             #[cfg(feature = "clipboard")]
             clipboard: ClipboardContext::new().ok(),
@@ -358,15 +362,25 @@ impl<T: Backend> UI<T> {
                 let time_headers = Instant::now();
                 let size = f.area();
                 let [header, body] = *Layout::vertical([
-                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(theme.art_size.into())),
+                    Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(if self.art_inspect {
+                        0
+                    } else {
+                        theme.art_size.into()
+                    })),
                     Constraint::Min(1),
                 ])
                 .split(size) else {
                     return;
                 };
-                let [action_area, art_area] =
-                    *Layout::horizontal([Constraint::Min(1), Constraint::Length((theme.art_size * 2).into())]).split(header)
-                else {
+                let [action_area, art_area] = *Layout::horizontal([
+                    Constraint::Min(1),
+                    if self.art_inspect {
+                        Constraint::Length(0)
+                    } else {
+                        Constraint::Length((theme.art_size * 2).into())
+                    },
+                ])
+                .split(header) else {
                     return;
                 };
                 let [status_bar_area, menubar_area, debug_area, seeker_area] = *Layout::vertical([
@@ -378,9 +392,16 @@ impl<T: Backend> UI<T> {
                 .split(action_area) else {
                     return;
                 };
-                let [filterpanes_area, sortpanes_area] =
-                    *Layout::vertical([Constraint::Ratio(1.min(library.filter_count() as u32), 2), Constraint::Min(1)]).split(body)
-                else {
+                let [art_area2, filterpanes_area, sortpanes_area] = *Layout::vertical([
+                    if self.art_inspect {
+                        Constraint::Length(body.height.min(body.width / 2))
+                    } else {
+                        Constraint::Length(0)
+                    },
+                    Constraint::Min(0),
+                    Constraint::Min(0),
+                ])
+                .split(body) else {
                     return;
                 };
 
@@ -397,7 +418,7 @@ impl<T: Backend> UI<T> {
                         library,
                         stylesheet: self.stylesheet,
                     },
-                    art_area,
+                    if self.art_inspect { art_area2 } else { art_area },
                 );
 
                 let time_headers2 = Instant::now();
@@ -676,6 +697,12 @@ impl<T: Backend> UI<T> {
     fn process_event(&mut self, event: Event) {
         let Some(library) = self.lib_weak.upgrade() else { return };
         match event {
+            // TODO: use different events
+            // this is a dirty temp binding so I can work out Art{} bugs
+            km!('\\') => {
+                self.art_inspect = !self.art_inspect;
+                self.draw()
+            }
             // # Key Events # {{{
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
