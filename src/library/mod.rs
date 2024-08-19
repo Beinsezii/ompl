@@ -219,7 +219,7 @@ fn integer_linspace(start: usize, end: usize, count: usize) -> Box<[usize]> {
     let range = end - start;
     let step = range / (count - 1);
     for n in 1..(count - 1) {
-        result[n] += n * step + (range % step).min(n);
+        result[n] += n * step + (range % (count - 1)).min(n);
     }
     result.into()
 }
