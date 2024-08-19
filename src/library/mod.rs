@@ -266,7 +266,7 @@ pub struct Library {
     statusline: RwLock<String>,
     theme: RwLock<Theme>,
     art: RwLock<Option<Arc<RawImage>>>,
-    thumbnails: RwLock<HashMap<(usize, usize, PathBuf), Arc<RawImage>>>,
+    thumbnails: RwLock<HashMap<(usize, usize, PathBuf), Option<Arc<RawImage>>>>,
 }
 
 impl Library {
@@ -532,14 +532,17 @@ impl Library {
     pub fn thumbnail(&self, w: usize, h: usize) -> Option<Arc<RawImage>> {
         let Some(track) = self.track_get() else { return None };
         if let Ok(Some(thumbnail)) = self.thumbnails.timed_read().as_deref().map(|hm| hm.get(&(w, h, track.path().to_owned()))) {
-            return Some(thumbnail.clone());
+            return thumbnail.clone();
         }
 
-        self.read_art();
-
-        let art_reader = &self.art.timed_read();
-        let Ok(Some(art)) = art_reader.as_deref() else { return None };
         let Ok(mut thumbnail_writer) = self.thumbnails.timed_write() else {
+            return None;
+        };
+
+        self.read_art();
+        let art_reader = &self.art.timed_read();
+        let Ok(Some(art)) = art_reader.as_deref() else {
+            thumbnail_writer.insert((w, h, track.path().to_owned()), None);
             return None;
         };
 
@@ -592,9 +595,9 @@ impl Library {
             art.len()
         );
 
-        let new_thumb = Arc::new(thumbnail);
+        let new_thumb = Some(Arc::new(thumbnail));
         thumbnail_writer.insert((w, h, track.path().to_owned()), new_thumb.clone());
-        Some(new_thumb)
+        new_thumb
     }
 
     // ## Other Settings ## }}}
