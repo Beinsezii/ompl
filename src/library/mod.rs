@@ -212,6 +212,25 @@ fn player_message_server(library: Arc<Library>, next_r: Receiver<PlayerMessage>)
     debug!("PMS End");
 }
 
+// Remainders are weighted towards the front
+fn integer_linspace(start: usize, end: usize, count: usize) -> Box<[usize]> {
+    let mut result = vec![start; count];
+    result[count - 1] = end;
+    let range = end - start;
+    let step = range / (count - 1);
+    for n in 1..(count - 1) {
+        result[n] += n * step + (range % step).min(n);
+    }
+    result.into()
+}
+
+fn split_count<'a, T>(slice: &'a [T], n: usize) -> Vec<&'a [T]> {
+    integer_linspace(0, slice.len(), (n + 1).min(slice.len()))
+        .windows(2)
+        .map(|ids| &slice[ids[0]..ids[1]])
+        .collect()
+}
+
 // ### FNs ### }}}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -524,36 +543,54 @@ impl Library {
             return None;
         };
 
-        let chunk_size = (art.len() / h).max(art[0].len() / w).max(1);
-        let ycrop = (art.len() % h) / 2;
-        let xcrop = (art[0].len() % w) / 2;
+        let aspect = art[0].len() as f64 / art.len() as f64;
+        let thumb_w = ((h as f64 * aspect).round() as usize).min(w);
+        let thumb_h = ((w as f64 / aspect).round() as usize).min(h);
 
-        let thumbnail: RawImage = art[ycrop..(art.len() - ycrop)]
-            .chunks_exact(chunk_size)
-            .map(|vc| {
-                vc.into_iter()
+        let thumbnail: RawImage = split_count(art, thumb_h)
+            .into_iter()
+            .map(|column_chunk| {
+                column_chunk
+                    .into_iter()
                     .map(|row| {
-                        row[xcrop..(row.len() - xcrop)].chunks_exact(chunk_size).map(|row_part| {
-                            row_part
+                        split_count(row, thumb_w).into_iter().map(|row_chunk| {
+                            row_chunk
                                 .into_iter()
                                 .fold([0u64; 4], |mut acc, it| {
                                     acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| *a += *b as u64);
                                     acc
                                 })
-                                .map(|c| (c / chunk_size as u64) as u8)
+                                .map(|c| c / row_chunk.len() as u64)
                         })
                     })
-                    .fold(vec![[0u64; 4]; w], |mut acc, it| {
-                        acc.iter_mut().zip(it.into_iter()).for_each(|(a, b)| {
-                            a.iter_mut().zip(b.into_iter()).for_each(|(a, b)| *a += b as u64);
-                        });
-                        acc
+                    .fold(Vec::<[u64; 4]>::new(), |acc, it| {
+                        if acc.is_empty() {
+                            it.collect()
+                        } else {
+                            acc.into_iter()
+                                .zip(it.into_iter())
+                                .map(|(mut a, b)| {
+                                    a.iter_mut().zip(b.into_iter()).for_each(|(c, d)| *c += d);
+                                    a
+                                })
+                                .collect()
+                        }
                     })
                     .into_iter()
-                    .map(|rgba| rgba.map(|c| (c / chunk_size as u64) as u8))
+                    .map(|rgba| rgba.map(|c| (c / column_chunk.len() as u64) as u8))
                     .collect()
             })
             .collect();
+
+        debug!(
+            "Generated {}x{} thumbnail for requested {}x{} of image {}x{}",
+            thumbnail[0].len(),
+            thumbnail.len(),
+            w,
+            h,
+            art[0].len(),
+            art.len()
+        );
 
         let new_thumb = Arc::new(thumbnail);
         thumbnail_writer.insert((w, h, track.path().to_owned()), new_thumb.clone());
