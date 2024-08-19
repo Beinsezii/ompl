@@ -398,7 +398,11 @@ impl<T: Backend> UI<T> {
                     } else {
                         Constraint::Length(0)
                     },
-                    Constraint::Min(0),
+                    if library.filter_count() == 0 {
+                        Constraint::Max(0)
+                    } else {
+                        Constraint::Min(0)
+                    },
                     Constraint::Min(0),
                 ])
                 .split(body) else {
