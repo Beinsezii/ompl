@@ -28,15 +28,6 @@ impl SortPanes {
             items_cache: Default::default(),
         }
     }
-
-    #[allow(unused)]
-    pub fn area(&self) -> Rect {
-        self.pane_array.area
-    }
-    pub fn area_mut(&mut self) -> &mut Rect {
-        &mut self.pane_array.area
-    }
-
     pub fn active(&self) -> bool {
         self.pane_array.active
     }
