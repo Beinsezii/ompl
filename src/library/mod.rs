@@ -730,9 +730,9 @@ impl Library {
 
     /// Drop all tracks from the library
     pub fn purge(&self) {
-        if let Ok(mut tracks) = self.tracks.timed_write() {
-            *tracks = Vec::new();
-        }
+        let _ = self.tracks.timed_write().map(|mut w| *w = Vec::new());
+        let _ = self.thumbnails.timed_write().map(|mut w| *w = HashMap::new());
+        let _ = self.art.timed_write().map(|mut w| *w = None);
         self.force_build_filters();
         self.broadcast(LibEvt::Update);
     }
