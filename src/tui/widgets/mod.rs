@@ -131,7 +131,7 @@ pub fn scroll_by_n_lock(n: i32, position: &mut usize, view: &mut usize, height: 
 #[derive(Clone, Debug)]
 pub struct PaneArray {
     joined: bool,
-    shown_items: Vec<String>,
+    current_headers: Vec<String>,
     pub area: Rect,
     pub active: bool,
     pub index: usize,
@@ -159,7 +159,7 @@ impl PaneArray {
     pub fn new(joined: bool, count: usize) -> Self {
         Self {
             joined,
-            shown_items: Vec::new(),
+            current_headers: Vec::new(),
             area: Rect::default(),
             active: false,
             index: 0,
@@ -308,16 +308,16 @@ impl PaneArray {
         self.index = self.index.min(items.len().saturating_sub(1));
 
         // Find updated items and views
-        if !self.joined && self.shown_items.iter().cmp(items.iter().map(|i| &i.0)) != Ordering::Equal {
-            let new_items: Vec<String> = items.iter().map(|i| i.0.clone()).collect();
-            let mut positions = vec![0; new_items.len()];
-            let mut views = vec![0; new_items.len()];
+        if !self.joined && self.current_headers.iter().cmp(items.iter().map(|i| &i.0)) != Ordering::Equal {
+            let new_headers: Vec<String> = items.iter().map(|i| i.0.clone()).collect();
+            let mut positions = vec![0; new_headers.len()];
+            let mut views = vec![0; new_headers.len()];
 
             // In case of duplicates
             let mut matches = Vec::new();
 
-            for (item, (position, view)) in self.shown_items.iter().zip(self.positions.iter().zip(self.views.iter())) {
-                if let Some(i) = new_items
+            for (item, (position, view)) in self.current_headers.iter().zip(self.positions.iter().zip(self.views.iter())) {
+                if let Some(i) = new_headers
                     .iter()
                     .enumerate()
                     .find_map(|(n, ni)| (ni == item && !matches.contains(&n)).then_some(n))
@@ -327,7 +327,7 @@ impl PaneArray {
                 }
             }
 
-            self.shown_items = new_items;
+            self.current_headers = new_headers;
             self.positions = positions;
             self.views = views;
         }
