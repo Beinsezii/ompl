@@ -8,13 +8,11 @@ use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Widget};
 
-#[derive(Clone)]
 pub enum MTree<T> {
     Tree(Vec<(String, MTree<T>)>),
     Action(T),
 }
 
-#[derive(Clone)]
 pub struct MenuBar<T> {
     tree: MTree<T>,
     nav: Vec<usize>,

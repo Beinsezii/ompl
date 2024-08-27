@@ -129,7 +129,6 @@ pub fn scroll_by_n_lock(n: i32, position: &mut usize, view: &mut usize, height: 
 
 // ### PaneArray ### {{
 
-#[derive(Clone, Debug)]
 pub struct PaneArray {
     joined: bool,
     current_headers: Vec<String>,
