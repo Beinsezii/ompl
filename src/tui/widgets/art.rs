@@ -1,11 +1,15 @@
-use super::StyleSheet;
+#![warn(missing_docs)]
 
-use crate::library::Library;
-use crate::logging::*;
+use super::{Action, Clickable, ContainedWidget, StyleSheet};
 
-use std::sync::Arc;
+use crate::{library::Library, logging::*};
 
-use ratatui::crossterm::style::available_color_count;
+use std::sync::{Arc, Weak};
+
+use ratatui::crossterm::{
+    event::{MouseButton, MouseEvent, MouseEventKind},
+    style::available_color_count,
+};
 use ratatui::layout::Rect;
 use ratatui::prelude::Buffer;
 use ratatui::style::{Color, Style};
@@ -13,8 +17,17 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
 pub struct Art {
-    pub library: Arc<Library>,
-    pub stylesheet: StyleSheet,
+    lib_weak: Weak<Library>,
+    pub area: Rect,
+}
+
+impl Art {
+    pub fn new(library: &Arc<Library>) -> Self {
+        Self {
+            lib_weak: Arc::downgrade(library),
+            area: Rect::default(),
+        }
+    }
 }
 
 // blend alpha onto black canvas
@@ -71,18 +84,20 @@ fn pixel2col(rgba: [u8; 4], quantize: bool) -> Color {
     }
 }
 
-impl Widget for Art {
-    fn render(self, area: Rect, buf: &mut Buffer)
+impl ContainedWidget for Art {
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet)
     where
         Self: Sized,
     {
-        if area.width == 0 || area.height == 0 {
+        self.area = area;
+        if self.area.width == 0 || self.area.height == 0 {
             return;
         }
-        let (w, h) = (area.width as usize, area.height as usize * 2);
-        if let Some(thumbnail) = self.library.thumbnail(w, h) {
+        let Some(library) = self.lib_weak.upgrade() else { return };
+        let (w, h) = (self.area.width as usize, self.area.height as usize * 2);
+        if let Some(thumbnail) = library.thumbnail(w, h) {
             let quantize = available_color_count() <= 16;
-            let fill = self.stylesheet.base.bg.unwrap_or(Color::Black);
+            let fill = stylesheet.base.bg.unwrap_or(Color::Black);
             // clip at 5% or less
             const CLIP: u8 = u8::MAX / 20;
             let lines: Vec<Line> = thumbnail
@@ -130,9 +145,19 @@ impl Widget for Art {
                 })
                 .collect();
 
-            Paragraph::new(lines).render(area, buf)
+            Paragraph::new(lines).render(self.area, buf)
         } else {
-            Block::new().style(self.stylesheet.base).borders(Borders::ALL).render(area, buf)
+            Block::new().style(stylesheet.base).borders(Borders::ALL).render(self.area, buf)
+        }
+    }
+}
+
+impl Clickable for Art {
+    fn process_event(&mut self, event: MouseEvent) -> Action {
+        if event.kind == MouseEventKind::Down(MouseButton::Left) && self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
+            Action::ArtView
+        } else {
+            Action::None
         }
     }
 }

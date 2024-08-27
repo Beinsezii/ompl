@@ -1,12 +1,13 @@
 #![warn(missing_docs)]
 
-use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
+use super::{Action, Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::{LibEvt, Library};
 
 use std::sync::{Arc, Weak};
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
-use ratatui::{layout::Rect, Frame};
+use ratatui::layout::Rect;
 
 // ### struct SortPanes {{{
 
@@ -71,7 +72,7 @@ impl SortPanes {
 
 // ### impl ContainedWidget {{{
 impl ContainedWidget for SortPanes {
-    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet) {
         self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
 
@@ -100,7 +101,7 @@ impl ContainedWidget for SortPanes {
             self.items_cache = new_items
         }
 
-        self.pane_array.draw_from(frame, stylesheet, &self.items_cache, &Vec::new());
+        self.pane_array.draw_from(buf, stylesheet, &self.items_cache, &Vec::new());
     }
 }
 // ### impl ContainedWidget }}}
@@ -130,9 +131,9 @@ impl Searchable for SortPanes {
 
 // ### impl Clickable {{{
 impl Clickable for SortPanes {
-    fn process_event(&mut self, event: MouseEvent) -> super::Action {
-        let none = super::Action::None;
-        let draw = super::Action::Draw;
+    fn process_event(&mut self, event: MouseEvent) -> Action {
+        let none = Action::None;
+        let draw = Action::Draw;
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Drag(..) | MouseEventKind::Up(..) => return none,
             _ => (),

@@ -1,12 +1,13 @@
 #![warn(missing_docs)]
 
-use super::{Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
+use super::{Action, Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
 use crate::library::{get_taglist_sort, LibEvt, Library};
 
 use std::sync::{Arc, Weak};
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{MouseEvent, MouseEventKind};
-use ratatui::{layout::Rect, Frame};
+use ratatui::layout::Rect;
 
 // ### struct FilterPanes {{{
 
@@ -131,7 +132,7 @@ impl Searchable for FilterPanes {
 
 // ### impl ContainedWidget ### {{{
 impl ContainedWidget for FilterPanes {
-    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet) {
+    fn render(&mut self, buffer: &mut Buffer, area: Rect, stylesheet: StyleSheet) {
         self.pane_array.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
 
@@ -161,16 +162,16 @@ impl ContainedWidget for FilterPanes {
         }
 
         let (items, highlights) = &self.pane_cache;
-        self.pane_array.draw_from(frame, stylesheet, items, highlights)
+        self.pane_array.draw_from(buffer, stylesheet, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}
 
 // ### impl Clickable ### {{{
 impl Clickable for FilterPanes {
-    fn process_event(&mut self, event: MouseEvent) -> super::Action {
-        let none = super::Action::None;
-        let draw = super::Action::Draw;
+    fn process_event(&mut self, event: MouseEvent) -> Action {
+        let none = Action::None;
+        let draw = Action::Draw;
         match event.kind {
             MouseEventKind::Moved | MouseEventKind::Up(..) => return none,
             _ => (),

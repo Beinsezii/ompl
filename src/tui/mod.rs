@@ -1,8 +1,7 @@
 #![warn(missing_docs)]
 
 use std::cmp::min;
-use std::io;
-use std::io::Write;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -29,8 +28,7 @@ use ratatui::Terminal;
 mod stylesheet;
 use stylesheet::StyleSheet;
 mod widgets;
-use widgets::{Art, FilterPanes, MTree, MenuBar, Seeker, SortPanes, StatusBar};
-use widgets::{Clickable, ContainedWidget, Scrollable, Searchable};
+use widgets::{Art, Clickable, ContainedWidget, FilterPanes, MTree, MenuBar, Scrollable, Searchable, Seeker, SortPanes, StatusBar};
 
 // ### FNs ### {{{
 
@@ -98,7 +96,7 @@ pub const HELP: &str = &"\
 * h/j/k/l | left/down/up/right
 * H/L | move panes
 * g/G | scroll to top/bottom
-* z | Focus playing
+* z | focus playing
 * f | select item
 * F | select only item
 * v/V | invert/clear selection
@@ -107,6 +105,7 @@ pub const HELP: &str = &"\
 * D | delete
 * / | search
 * ' | edit
+* c | toggle art view
 
 * input
   * Ctrl-y/p | copy/paste
@@ -129,7 +128,8 @@ pub enum Action {
     ACC,
     FG,
     BG,
-    Art,
+    ArtSize,
+    ArtView,
     Append,
     Purge,
 
@@ -148,6 +148,7 @@ struct UI<T: Backend> {
     menubar: MenuBar<Action>,
     status_bar: StatusBar,
     seeker: Seeker,
+    art: Art,
     filterpanes: FilterPanes,
     sortpanes: SortPanes,
     stylesheet: StyleSheet,
@@ -195,7 +196,7 @@ impl<T: Backend> UI<T> {
                 (String::from("Foreground"), MTree::Action(Action::FG)),
                 (String::from("Background"), MTree::Action(Action::BG)),
                 (String::from("Accent"), MTree::Action(Action::ACC)),
-                (String::from("Art Size"), MTree::Action(Action::Art)),
+                (String::from("Art Size"), MTree::Action(Action::ArtSize)),
                 (String::from("Debug"), MTree::Action(Action::Debug)),
             ]),
             ),
@@ -209,6 +210,7 @@ impl<T: Backend> UI<T> {
             menubar: MenuBar::new(tree),
             status_bar: StatusBar::new(&library),
             seeker: Seeker::new(&library),
+            art: Art::new(&library),
             filterpanes: FilterPanes::new(library.clone()),
             sortpanes: SortPanes::new(library.clone()),
             stylesheet,
@@ -409,30 +411,25 @@ impl<T: Backend> UI<T> {
                     return;
                 };
 
-                self.status_bar.draw(f, status_bar_area, self.stylesheet);
+                self.status_bar.render(f.buffer_mut(), status_bar_area, self.stylesheet);
 
-                self.menubar.draw(f, menubar_area, self.stylesheet);
+                self.menubar.render(f.buffer_mut(), menubar_area, self.stylesheet);
 
                 if let Some(_) = library.seekable() {
-                    self.seeker.draw(f, seeker_area, self.stylesheet)
+                    self.seeker.render(f.buffer_mut(), seeker_area, self.stylesheet)
                 }
 
-                f.render_widget(
-                    Art {
-                        library,
-                        stylesheet: self.stylesheet,
-                    },
-                    if self.art_inspect { art_area2 } else { art_area },
-                );
+                self.art
+                    .render(f.buffer_mut(), if self.art_inspect { art_area2 } else { art_area }, self.stylesheet);
 
                 let time_headers2 = Instant::now();
 
                 let time_panes = Instant::now();
-                self.filterpanes.draw(f, filterpanes_area, self.stylesheet);
+                self.filterpanes.render(f.buffer_mut(), filterpanes_area, self.stylesheet);
                 let time_panes2 = Instant::now();
 
                 let time_queue = Instant::now();
-                self.sortpanes.draw(f, sortpanes_area, self.stylesheet);
+                self.sortpanes.render(f.buffer_mut(), sortpanes_area, self.stylesheet);
                 let time_queue2 = Instant::now();
 
                 if self.debug {
@@ -508,7 +505,8 @@ impl<T: Backend> UI<T> {
         let mut result = String::from(prefill);
 
         let Some(library) = self.lib_weak.upgrade() else { return result };
-        let header_height: u16 = if library.seekable().is_some() { 4 } else { 2 } + if self.debug { 1 } else { 0 };
+        let art_size = library.theme_get().art_size;
+        let header_height: u16 = if library.seekable().is_some() { 4 } else { 2 }.max(if self.art_inspect { 0 } else { art_size.into() });
         const BOX_HEIGHT: u16 = 3;
         // +5 -> borders(2), pad(1), ": "(2)
         const BOX_PAD: u16 = 5;
@@ -518,7 +516,7 @@ impl<T: Backend> UI<T> {
             let sortpanes_active = self.sortpanes.active();
             self.draw_inject(|f| {
                 let size = f.area();
-                let filterpanes_height = size.height.saturating_sub(header_height) / 2;
+                let filterpanes_height = size.height.saturating_sub(header_height).div_ceil(2);
                 let area = Rect {
                     x: 0,
                     y: if header {
@@ -619,6 +617,10 @@ impl<T: Backend> UI<T> {
                 self.debug = !self.debug;
                 self.draw()
             }
+            Action::ArtView => {
+                self.art_inspect = !self.art_inspect;
+                self.draw()
+            }
             Action::Draw => self.draw(),
             Action::Help => self.message("Help", HELP),
             Action::None => (),
@@ -662,7 +664,7 @@ impl<T: Backend> UI<T> {
                     }
                 }
             }
-            Action::Art => {
+            Action::ArtSize => {
                 if let Some(library) = self.lib_weak.upgrade() {
                     let theme = library.theme_get();
                     let result = self.input("Set art size 0, 4..5..16", theme.art_size.to_string().as_str(), true);
@@ -701,12 +703,6 @@ impl<T: Backend> UI<T> {
     fn process_event(&mut self, event: Event) {
         let Some(library) = self.lib_weak.upgrade() else { return };
         match event {
-            // TODO: use different events
-            // this is a dirty temp binding so I can work out Art{} bugs
-            km!('\\') => {
-                self.art_inspect = !self.art_inspect;
-                self.draw()
-            }
             // # Key Events # {{{
             Event::Key(KeyEvent {
                 code: KeyCode::Tab,
@@ -915,6 +911,12 @@ impl<T: Backend> UI<T> {
             km!('>') => library.seek_by(30.0),
             km!('<') => library.seek_by(-30.0),
 
+            // c for cover I guess..?
+            km!('c') => {
+                self.art_inspect = !self.art_inspect;
+                self.draw()
+            }
+
             // yay vim macros
             km!('0')
             | Event::Key(KeyEvent {
@@ -978,6 +980,7 @@ impl<T: Backend> UI<T> {
                     self.status_bar.process_event(event),
                     self.menubar.process_event(event),
                     self.seeker.process_event(event),
+                    self.art.process_event(event),
                     self.filterpanes.process_event(event),
                     self.sortpanes.process_event(event),
                 ];
@@ -1035,7 +1038,7 @@ pub fn tui(library: Arc<Library>) -> bool {
     log_pause!();
 
     terminal::enable_raw_mode().unwrap();
-    let mut stdo = io::stdout();
+    let mut stdo = stdout();
 
     queue!(
         stdo,
@@ -1052,7 +1055,7 @@ pub fn tui(library: Arc<Library>) -> bool {
     let theme = library.theme_get();
     let ui = Arc::new(Mutex::new(UI::from_library(
         library,
-        Terminal::new(CrosstermBackend::new(io::stdout())).unwrap(),
+        Terminal::new(CrosstermBackend::new(stdout())).unwrap(),
         StyleSheet::from(theme),
     )));
     ui.lock().unwrap().draw();

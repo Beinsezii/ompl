@@ -1,14 +1,12 @@
 #![warn(missing_docs)]
 
-use super::{Clickable, ContainedWidget};
+use super::{Action, Clickable, ContainedWidget, StyleSheet};
 
-use ratatui::crossterm::event;
-use ratatui::Frame;
-use ratatui::{
-    layout::Rect,
-    text::{Line, Span},
-    widgets::Paragraph,
-};
+use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Paragraph, Widget};
 
 #[derive(Clone)]
 pub enum MTree<T> {
@@ -96,7 +94,7 @@ impl<T: Clone> MenuBar<T> {
 }
 
 impl<T: Clone> ContainedWidget for MenuBar<T> {
-    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: super::StyleSheet) {
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet) {
         self.area = area;
         if let Some(tree) = self.nav_to_tree() {
             let mut spans = vec![Span::from(if !self.nav.is_empty() { " 0.<- | " } else { " " })];
@@ -113,26 +111,26 @@ impl<T: Clone> ContainedWidget for MenuBar<T> {
                     spans.push(Span::from(" | "));
                 }
             }
-            frame.render_widget(Paragraph::new(Line::from(spans)).style(stylesheet.base), area);
+            Paragraph::new(Line::from(spans)).style(stylesheet.base).render(area, buf);
         } else {
-            frame.render_widget(Paragraph::new("MenuBar Placeholder").style(stylesheet.base), area);
+            Paragraph::new("MenuBar Placeholder").style(stylesheet.base).render(area, buf);
         }
     }
 }
 
 impl<T: Clone> Clickable for MenuBar<T> {
-    fn process_event(&mut self, event: event::MouseEvent) -> super::Action {
-        let mut result = super::Action::None;
-        if event.kind == event::MouseEventKind::Down(event::MouseButton::Left) {
+    fn process_event(&mut self, event: MouseEvent) -> Action {
+        let mut result = Action::None;
+        if event.kind == MouseEventKind::Down(MouseButton::Left) {
             if self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
                 match event.column + if !self.nav.is_empty() { 0 } else { 7 } {
                     1..=4 => {
                         self.up();
-                        result = super::Action::Draw
+                        result = Action::Draw
                     }
                     x => {
                         if let Some(tree) = self.nav_to_tree() {
-                            result = super::Action::Draw;
+                            result = Action::Draw;
                             // " 0.<- | " == 7
                             let mut base = 8;
                             for (num, (string, _)) in tree.iter().enumerate() {

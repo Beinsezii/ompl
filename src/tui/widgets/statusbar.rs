@@ -1,19 +1,16 @@
 #![warn(missing_docs)]
 
-use super::{Action, Clickable, ContainedWidget};
+use super::{Action, Clickable, ContainedWidget, StyleSheet};
 use crate::library::Library;
 
 use std::sync::{Arc, Weak};
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use ratatui::{
-    layout::Rect,
-    text::{Line, Span},
-    widgets::Paragraph,
-    Frame,
-};
+use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Paragraph, Widget};
 
-#[derive(Clone)]
 pub struct StatusBar {
     lib_weak: Weak<Library>,
     pub area: Rect,
@@ -29,59 +26,57 @@ impl StatusBar {
 }
 
 impl ContainedWidget for StatusBar {
-    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: super::StyleSheet) {
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet) {
         self.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::from(format!(
-                    " -- {:.2} ++ | ({}) ",
-                    library.volume_get(),
-                    match library.repeat_get() {
-                        None =>
-                            if library.shuffle_get() {
-                                '-'
-                            } else {
-                                'X'
-                            },
-                        Some(false) => '1',
-                        Some(true) => ' ',
-                    }
-                )),
-                Span::styled("><", if library.shuffle_get() { stylesheet.base_hi } else { stylesheet.base }),
-                Span::from(" :< "),
-                Span::styled("#", if library.stopped() { stylesheet.base_hi } else { stylesheet.base }),
-                Span::from(format!(
-                    " {} >: | {}{}",
-                    if library.playing() { "::" } else { "/>" },
-                    library
-                        .track_get()
-                        .map(|t| t.tagstring(library.statusline_get()))
-                        .unwrap_or("???".to_string()),
-                    // Not sure if I like this at the end yet.
-                    match library.times() {
-                        Some((cur, tot)) => format!(
-                            " | {:02.0}:{:02.0} / {:02.0}:{:02.0}",
-                            (cur.as_secs_f32() / 60.0).floor(),
-                            (cur.as_secs_f32() % 60.0).floor(),
-                            (tot.as_secs_f32() / 60.0).floor(),
-                            (tot.as_secs_f32() % 60.0).floor(),
-                        ),
-                        None => String::new(),
-                    }
-                )),
-            ]))
-            .style(stylesheet.base),
-            area,
-        );
+        Paragraph::new(Line::from(vec![
+            Span::from(format!(
+                " -- {:.2} ++ | ({}) ",
+                library.volume_get(),
+                match library.repeat_get() {
+                    None =>
+                        if library.shuffle_get() {
+                            '-'
+                        } else {
+                            'X'
+                        },
+                    Some(false) => '1',
+                    Some(true) => ' ',
+                }
+            )),
+            Span::styled("><", if library.shuffle_get() { stylesheet.base_hi } else { stylesheet.base }),
+            Span::from(" :< "),
+            Span::styled("#", if library.stopped() { stylesheet.base_hi } else { stylesheet.base }),
+            Span::from(format!(
+                " {} >: | {}{}",
+                if library.playing() { "::" } else { "/>" },
+                library
+                    .track_get()
+                    .map(|t| t.tagstring(library.statusline_get()))
+                    .unwrap_or("???".to_string()),
+                // Not sure if I like this at the end yet.
+                match library.times() {
+                    Some((cur, tot)) => format!(
+                        " | {:02.0}:{:02.0} / {:02.0}:{:02.0}",
+                        (cur.as_secs_f32() / 60.0).floor(),
+                        (cur.as_secs_f32() % 60.0).floor(),
+                        (tot.as_secs_f32() / 60.0).floor(),
+                        (tot.as_secs_f32() % 60.0).floor(),
+                    ),
+                    None => String::new(),
+                }
+            )),
+        ]))
+        .style(stylesheet.base)
+        .render(area, buf);
     }
 }
 
 impl Clickable for StatusBar {
-    fn process_event(&mut self, event: MouseEvent) -> super::Action {
+    fn process_event(&mut self, event: MouseEvent) -> Action {
         let Some(library) = self.lib_weak.upgrade() else {
-            return super::Action::None;
+            return Action::None;
         };
 
         if let MouseEventKind::Down(button) = event.kind {

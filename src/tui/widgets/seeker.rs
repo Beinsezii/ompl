@@ -1,18 +1,15 @@
 #![warn(missing_docs)]
 
-use super::{Action, Clickable, ContainedWidget};
+use super::{Action, Clickable, ContainedWidget, StyleSheet};
 use crate::library::Library;
 
-use std::{
-    sync::{Arc, Weak},
-    time::Duration,
-};
+use std::sync::{Arc, Weak};
+use std::time::Duration;
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    widgets::Sparkline,
-};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::widgets::{Sparkline, Widget};
 
 pub struct Seeker {
     lib_weak: Weak<Library>,
@@ -31,7 +28,7 @@ impl Seeker {
 }
 
 impl ContainedWidget for Seeker {
-    fn draw(&mut self, frame: &mut ratatui::Frame, area: Rect, stylesheet: super::StyleSheet) {
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet) {
         self.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
         let Some(seekable) = library.seekable() else { return };
@@ -44,27 +41,27 @@ impl ContainedWidget for Seeker {
             let ratio = times.0.as_secs_f32() / times.1.as_secs_f32();
             let split = (area.width as f32 * ratio + 0.5).round() as u16;
 
-            let zones = Layout::default()
+            let [past, future] = *Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Length(split), Constraint::Length(area.width.saturating_sub(split))])
-                .split(area);
+                .split(area)
+            else {
+                unreachable!()
+            };
 
-            frame.render_widget(
-                Sparkline::default()
-                    .max(max)
-                    .data(&data[..zones[0].width as usize])
-                    .style(stylesheet.active),
-                zones[0],
-            );
-            frame.render_widget(
-                Sparkline::default()
-                    .max(max)
-                    .data(&data[zones[0].width as usize..])
-                    .style(stylesheet.base),
-                zones[1],
-            );
+            Sparkline::default()
+                .max(max)
+                .data(&data[..past.width as usize])
+                .style(stylesheet.active)
+                .render(past, buf);
+
+            Sparkline::default()
+                .max(max)
+                .data(&data[past.width as usize..])
+                .style(stylesheet.base)
+                .render(future, buf);
         } else {
-            frame.render_widget(Sparkline::default().max(4).data(&vec![1; area.width.into()]), area)
+            Sparkline::default().max(4).data(&vec![1; area.width.into()]).render(area, buf);
         }
     }
 }

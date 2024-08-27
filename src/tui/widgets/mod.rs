@@ -4,6 +4,7 @@ use std::cmp::Ordering;
 
 pub use super::stylesheet::StyleSheet;
 pub use super::Action;
+
 mod statusbar;
 pub use statusbar::StatusBar;
 mod menubar;
@@ -17,11 +18,11 @@ pub use seeker::Seeker;
 mod art;
 pub use art::Art;
 
+use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-use ratatui::{text::Span, Frame};
+use ratatui::text::Span;
+use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Widget};
 
 /// Creates constraints for a distance that meet 3 criteria:
 /// 1) Fills the whole width with no gaps
@@ -50,7 +51,7 @@ pub fn equal_constraints(width: u16, n: u16) -> Vec<Constraint> {
 
 /// Self-contained widget does it's own state and render management
 pub trait ContainedWidget {
-    fn draw(&mut self, frame: &mut Frame, area: Rect, stylesheet: StyleSheet);
+    fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet);
 }
 
 pub trait Clickable {
@@ -303,7 +304,7 @@ impl PaneArray {
     // # prep_event # }}}
 
     // # draw_from # {{{
-    pub fn draw_from(&mut self, frame: &mut Frame, stylesheet: StyleSheet, items: &Vec<(String, Vec<String>)>, highlights: &Vec<Vec<String>>) {
+    pub fn draw_from(&mut self, buf: &mut Buffer, stylesheet: StyleSheet, items: &Vec<(String, Vec<String>)>, highlights: &Vec<Vec<String>>) {
         // clamp index
         self.index = self.index.min(items.len().saturating_sub(1));
 
@@ -355,74 +356,75 @@ impl PaneArray {
                 item.1.len(),
             );
 
-            frame.render_widget(
-                List::new(
-                    item.1
-                        .iter()
-                        .enumerate()
-                        .map(|(n, s)| {
-                            ListItem::new(s.clone()).style(if self.active && num == self.index {
-                                match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
-                                    true => match n == self.positions[num_join] {
-                                        true => stylesheet.active_hi_sel,
-                                        false => stylesheet.active_hi,
-                                    },
-                                    false => match n == self.positions[num_join] {
-                                        true => stylesheet.active_sel,
-                                        false => stylesheet.active,
-                                    },
-                                }
-                            } else {
-                                match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
-                                    true => match n == self.positions[num_join] {
-                                        true => stylesheet.base_hi_sel,
-                                        false => stylesheet.base_hi,
-                                    },
-                                    false => match n == self.positions[num_join] {
-                                        true => stylesheet.base_sel,
-                                        false => stylesheet.base,
-                                    },
-                                }
-                            })
-                        })
-                        .skip(self.views[num_join])
-                        .collect::<Vec<ListItem>>(),
-                )
-                .block(
-                    Block::default()
-                        .title(Span::styled(
-                            &item.0,
-                            if self.active && num == self.index {
-                                match highlights.get(num).unwrap_or(&vec![]).is_empty() {
-                                    true => stylesheet.active,
+            List::new(
+                item.1
+                    .iter()
+                    .enumerate()
+                    .map(|(n, s)| {
+                        ListItem::new(s.clone()).style(if self.active && num == self.index {
+                            match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
+                                true => match n == self.positions[num_join] {
+                                    true => stylesheet.active_hi_sel,
                                     false => stylesheet.active_hi,
-                                }
-                            } else {
-                                match highlights.get(num).unwrap_or(&vec![]).is_empty() {
-                                    true => stylesheet.base,
-                                    false => stylesheet.base_hi,
-                                }
-                            },
-                        ))
-                        .borders(Borders::ALL)
-                        .style(if self.active && num == self.index {
-                            stylesheet.active
+                                },
+                                false => match n == self.positions[num_join] {
+                                    true => stylesheet.active_sel,
+                                    false => stylesheet.active,
+                                },
+                            }
                         } else {
-                            stylesheet.base
-                        }),
-                ),
-                *area,
-            );
-            frame.render_widget(
-                Paragraph::new(if area.width < PA_LONG.len() as u16 { PA_SHORT } else { PA_LONG }).alignment(Alignment::Right),
-                Rect {
-                    x: area.x,
-                    y: area.y + area.height.saturating_sub(1),
-                    width: area.width.saturating_sub(1),
-                    // needs to handle 0 else crash bang
-                    height: area.height.min(1),
-                },
-            );
+                            match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
+                                true => match n == self.positions[num_join] {
+                                    true => stylesheet.base_hi_sel,
+                                    false => stylesheet.base_hi,
+                                },
+                                false => match n == self.positions[num_join] {
+                                    true => stylesheet.base_sel,
+                                    false => stylesheet.base,
+                                },
+                            }
+                        })
+                    })
+                    .skip(self.views[num_join])
+                    .collect::<Vec<ListItem>>(),
+            )
+            .block(
+                Block::default()
+                    .title(Span::styled(
+                        &item.0,
+                        if self.active && num == self.index {
+                            match highlights.get(num).unwrap_or(&vec![]).is_empty() {
+                                true => stylesheet.active,
+                                false => stylesheet.active_hi,
+                            }
+                        } else {
+                            match highlights.get(num).unwrap_or(&vec![]).is_empty() {
+                                true => stylesheet.base,
+                                false => stylesheet.base_hi,
+                            }
+                        },
+                    ))
+                    .borders(Borders::ALL)
+                    .style(if self.active && num == self.index {
+                        stylesheet.active
+                    } else {
+                        stylesheet.base
+                    }),
+            )
+            .render(*area, buf);
+
+            Paragraph::new(if area.width < PA_LONG.len() as u16 { PA_SHORT } else { PA_LONG })
+                .alignment(Alignment::Right)
+                .render(
+                    Rect {
+                        x: area.x,
+                        y: area.y + area.height.saturating_sub(1),
+                        width: area.width.saturating_sub(1),
+                        // needs to handle 0 else crash bang
+                        height: area.height.min(1),
+                    },
+                    buf,
+                );
         }
     }
     // # draw_from # }}}
