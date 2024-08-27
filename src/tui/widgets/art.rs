@@ -16,19 +16,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 
-pub struct Art {
-    lib_weak: Weak<Library>,
-    pub area: Rect,
-}
-
-impl Art {
-    pub fn new(library: &Arc<Library>) -> Self {
-        Self {
-            lib_weak: Arc::downgrade(library),
-            area: Rect::default(),
-        }
-    }
-}
+// ### FNs {{{
 
 // blend alpha onto black canvas
 fn alpha([r, g, b, a]: [u8; 4]) -> [u8; 3] {
@@ -84,7 +72,24 @@ fn pixel2col(rgba: [u8; 4], quantize: bool) -> Color {
     }
 }
 
+//}}}
+
+pub struct Art {
+    lib_weak: Weak<Library>,
+    pub area: Rect,
+}
+
+impl Art {
+    pub fn new(library: &Arc<Library>) -> Self {
+        Self {
+            lib_weak: Arc::downgrade(library),
+            area: Rect::default(),
+        }
+    }
+}
+
 impl ContainedWidget for Art {
+    // {{{
     fn render(&mut self, buf: &mut Buffer, area: Rect, stylesheet: StyleSheet)
     where
         Self: Sized,
@@ -150,7 +155,7 @@ impl ContainedWidget for Art {
             Block::new().style(stylesheet.base).borders(Borders::ALL).render(self.area, buf)
         }
     }
-}
+} // }}}
 
 impl Clickable for Art {
     fn process_event(&mut self, event: MouseEvent) -> Action {
