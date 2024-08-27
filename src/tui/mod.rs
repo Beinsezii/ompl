@@ -140,7 +140,6 @@ pub enum Action {
     InsertBefore,
     MoveLeft,
     MoveRight,
-    Search,
 }
 
 struct UI<T: Backend> {
@@ -162,45 +161,38 @@ struct UI<T: Backend> {
 
 impl<T: Backend> UI<T> {
     fn from_library(library: Arc<Library>, terminal: Terminal<T>, stylesheet: StyleSheet) -> Self {
-        #[rustfmt::skip]
         let tree = MTree::Tree(vec![
             (String::from("Help"), MTree::Action(Action::Help)),
-            (String::from("Search"), MTree::Action(Action::Search)),
-
             (
-            String::from("Pane"),
-            MTree::Tree(vec![
-                // arrows to save precious space. not sure if I like
-                (String::from("Insert <-"), MTree::Action(Action::InsertAfter)),
-                (String::from("Insert ->"), MTree::Action(Action::InsertBefore)),
-                (String::from("Move <-"), MTree::Action(Action::MoveLeft)),
-                (String::from("Move ->"), MTree::Action(Action::MoveRight)),
-                (String::from("Edit"), MTree::Action(Action::Edit)),
-                (String::from("Delete"), MTree::Action(Action::Delete)),
-            ]),
+                String::from("Pane"),
+                MTree::Tree(vec![
+                    (String::from("Insert <-"), MTree::Action(Action::InsertBefore)),
+                    (String::from("Insert ->"), MTree::Action(Action::InsertAfter)),
+                    (String::from("Move <-"), MTree::Action(Action::MoveLeft)),
+                    (String::from("Move ->"), MTree::Action(Action::MoveRight)),
+                    (String::from("Edit"), MTree::Action(Action::Edit)),
+                    (String::from("Delete"), MTree::Action(Action::Delete)),
+                ]),
             ),
-
             (
-            String::from("Library"),
-            MTree::Tree(vec![
-                (String::from("Seek To"), MTree::Action(Action::SeekTo)),
-                (String::from("Append"), MTree::Action(Action::Append)),
-                (String::from("Purge"), MTree::Action(Action::Purge)),
-            ]),
+                String::from("Library"),
+                MTree::Tree(vec![
+                    (String::from("Seek To"), MTree::Action(Action::SeekTo)),
+                    (String::from("Statusline"), MTree::Action(Action::Statusline)),
+                    (String::from("Append"), MTree::Action(Action::Append)),
+                    (String::from("Purge"), MTree::Action(Action::Purge)),
+                ]),
             ),
-
             (
-            String::from("UI"),
-            MTree::Tree(vec![
-                (String::from("Statusline"), MTree::Action(Action::Statusline)),
-                (String::from("Foreground"), MTree::Action(Action::FG)),
-                (String::from("Background"), MTree::Action(Action::BG)),
-                (String::from("Accent"), MTree::Action(Action::ACC)),
-                (String::from("Art Size"), MTree::Action(Action::ArtSize)),
-                (String::from("Debug"), MTree::Action(Action::Debug)),
-            ]),
+                String::from("Theme"),
+                MTree::Tree(vec![
+                    (String::from("Foreground"), MTree::Action(Action::FG)),
+                    (String::from("Background"), MTree::Action(Action::BG)),
+                    (String::from("Accent"), MTree::Action(Action::ACC)),
+                    (String::from("Art Size"), MTree::Action(Action::ArtSize)),
+                ]),
             ),
-
+            (String::from("Debug"), MTree::Action(Action::Debug)),
         ]);
 
         let debug = if LOG_LEVEL.load(Ordering::Relaxed) >= 3 { true } else { false };
@@ -694,7 +686,6 @@ impl<T: Backend> UI<T> {
             Action::InsertBefore => self.insert(true),
             Action::MoveLeft => self.move_pane(true),
             Action::MoveRight => self.move_pane(false),
-            Action::Search => self.search(),
         }
     }
     // ## action ## }}}
