@@ -101,7 +101,7 @@ impl ContainedWidget for SortPanes {
             self.items_cache = new_items
         }
 
-        self.pane_array.draw_from(buf, stylesheet, &self.items_cache, &Vec::new());
+        self.pane_array.render(buf, stylesheet, &self.items_cache, &Vec::new());
     }
 }
 // ### impl ContainedWidget }}}

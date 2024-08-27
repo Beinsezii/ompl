@@ -303,7 +303,7 @@ impl PaneArray {
     // # prep_event # }}}
 
     // # draw_from # {{{
-    pub fn draw_from(&mut self, buf: &mut Buffer, stylesheet: StyleSheet, items: &Vec<(String, Vec<String>)>, highlights: &Vec<Vec<String>>) {
+    pub fn render(&mut self, buf: &mut Buffer, stylesheet: StyleSheet, items: &Vec<(String, Vec<String>)>, highlights: &Vec<Vec<String>>) {
         // clamp index
         self.index = self.index.min(items.len().saturating_sub(1));
 
@@ -359,6 +359,8 @@ impl PaneArray {
                 item.1
                     .iter()
                     .enumerate()
+                    .skip(self.views[num_join])
+                    .take(self.area.height.saturating_sub(2).into())
                     .map(|(n, s)| {
                         ListItem::new(s.clone()).style(if self.active && num == self.index {
                             match highlights.get(num).unwrap_or(&vec![]).contains(&s) {
@@ -384,7 +386,6 @@ impl PaneArray {
                             }
                         })
                     })
-                    .skip(self.views[num_join])
                     .collect::<Vec<ListItem>>(),
             )
             .block(

@@ -162,7 +162,7 @@ impl ContainedWidget for FilterPanes {
         }
 
         let (items, highlights) = &self.pane_cache;
-        self.pane_array.draw_from(buffer, stylesheet, items, highlights)
+        self.pane_array.render(buffer, stylesheet, items, highlights)
     }
 }
 // ### impl ContainedWidget ### }}}
