@@ -103,7 +103,7 @@ pub mod logging {
 
 use logging::*;
 
-const ID: &str = "OMPL SERVER 0.10.0";
+const ID: &str = "OMPL SERVER 0.10";
 const PORT: &str = "18346";
 
 /// petty 100
