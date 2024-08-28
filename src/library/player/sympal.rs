@@ -591,18 +591,21 @@ impl Player for Backend {
 
             // Interleaved channels + rate over 20KHz for 'resolution' right?
             let sample_size = self.channels.load(Ordering::Relaxed) * (self.rate.load(Ordering::Relaxed) as usize / 20_000);
-            let subsamples = (reader.len() / sample_size / count).max(1);
+            let mut chunk_size = (reader.len() / count).max(1);
+            chunk_size = chunk_size.saturating_sub(chunk_size % sample_size);
+            // cap to sample cluster steps to avoid pure waste on massive songs
+            let sampling_step = (chunk_size / sample_size).div_ceil((chunk_size / sample_size).min(10240));
 
             Some(
                 reader
-                    .chunks_exact((reader.len() / count).max(1))
+                    .chunks_exact(chunk_size)
                     .map(|chunk| {
                         chunk
-                            .iter()
-                            .step_by((chunk.len().div_ceil(subsamples)).max(1))
-                            .map(|n| (*n as f32).abs() / i16::MAX as f32)
+                            .chunks(sample_size)
+                            .step_by(sampling_step)
+                            .map(|c| c.into_iter().map(|n| (*n as f32).abs() / i16::MAX as f32).sum::<f32>())
                             .sum::<f32>()
-                            / subsamples as f32
+                            / (chunk_size.div_ceil(sampling_step)) as f32
                     })
                     .collect(),
             )
