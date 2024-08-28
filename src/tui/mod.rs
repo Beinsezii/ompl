@@ -353,7 +353,7 @@ impl<T: Backend> UI<T> {
             .as_mut()
             .unwrap()
             .draw(|f| {
-                let time_headers = Instant::now();
+                let time_other = Instant::now();
                 let size = f.area();
                 let [header, body] = *Layout::vertical([
                     Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(if self.art_inspect {
@@ -406,15 +406,18 @@ impl<T: Backend> UI<T> {
                 self.status_bar.render(f.buffer_mut(), status_bar_area, self.stylesheet);
 
                 self.menubar.render(f.buffer_mut(), menubar_area, self.stylesheet);
+                let time_other2 = Instant::now();
 
+                let time_seekbar = Instant::now();
                 if let Some(_) = library.seekable() {
                     self.seeker.render(f.buffer_mut(), seeker_area, self.stylesheet)
                 }
+                let time_seekbar2 = Instant::now();
 
+                let time_art = Instant::now();
                 self.art
                     .render(f.buffer_mut(), if self.art_inspect { art_area2 } else { art_area }, self.stylesheet);
-
-                let time_headers2 = Instant::now();
+                let time_art2 = Instant::now();
 
                 let time_panes = Instant::now();
                 self.filterpanes.render(f.buffer_mut(), filterpanes_area, self.stylesheet);
@@ -427,9 +430,11 @@ impl<T: Backend> UI<T> {
                 if self.debug {
                     f.render_widget(
                         Paragraph::new(format!(
-                            "Draws: {} timeH: {:.2}ms timeP: {:.2}ms timeQ: {:.2}ms",
+                            "Draws: {} timeO: {:.2}ms timeS: {:.2}ms timeA: {:.2}ms timeP: {:.2}ms timeQ: {:.2}ms",
                             self.draw_count,
-                            (time_headers2 - time_headers).as_secs_f64() * 1000.0,
+                            (time_other2 - time_other).as_secs_f64() * 1000.0,
+                            (time_seekbar2 - time_seekbar).as_secs_f64() * 1000.0,
+                            (time_art2 - time_art).as_secs_f64() * 1000.0,
                             (time_panes2 - time_panes).as_secs_f64() * 1000.0,
                             (time_queue2 - time_queue).as_secs_f64() * 1000.0,
                         ))
