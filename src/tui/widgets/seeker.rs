@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use super::{Action, Clickable, ContainedWidget, StyleSheet};
-use crate::library::Library;
+use crate::library::{Library, Track};
 
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -15,6 +15,7 @@ pub struct Seeker {
     lib_weak: Weak<Library>,
     previous: u16,
     area: Rect,
+    sparkwave: Option<(usize, Arc<Track>, Vec<u64>)>,
 }
 
 impl Seeker {
@@ -23,6 +24,7 @@ impl Seeker {
             lib_weak: Arc::downgrade(library),
             previous: u16::MAX,
             area: Rect::default(),
+            sparkwave: None,
         }
     }
 }
@@ -32,32 +34,47 @@ impl ContainedWidget for Seeker {
         self.area = area;
         let Some(library) = self.lib_weak.upgrade() else { return };
         let Some(seekable) = library.seekable() else { return };
+        let Some(track) = library.track_get() else { return };
         if seekable {
-            let Some(waveform) = library.waveform(area.width.into()) else { return };
-            let Some(times) = library.times() else { return };
-            let data = waveform.into_iter().map(|n| (n * 1024.0) as u64).collect::<Vec<u64>>();
-            let max = *data.iter().max().unwrap();
+            let sparklen: usize = area.width.into();
+            let Some((start, end)) = library.times() else { return };
+            let ratio = start.as_secs_f32() / end.as_secs_f32();
+            let split = (sparklen as f32 * ratio + 0.5).round() as u16;
 
-            let ratio = times.0.as_secs_f32() / times.1.as_secs_f32();
-            let split = (area.width as f32 * ratio + 0.5).round() as u16;
+            let Some(sparkwave) = (if self.sparkwave.as_ref().map(|(l, t, _v)| (*l, t)) == Some((sparklen, &track)) {
+                self.sparkwave.as_ref().map(|t| &t.2)
+            } else {
+                self.sparkwave = None;
+                if let Some(waveform) = library.waveform(sparklen) {
+                    let new_sparkwave = waveform.into_iter().map(|n| (n * u16::MAX as f32) as u64).collect::<Vec<u64>>();
+                    self.sparkwave = Some((sparklen, track, new_sparkwave));
+                    self.sparkwave.as_ref().map(|t| &t.2)
+                } else {
+                    None
+                }
+            }) else {
+                return;
+            };
+
+            let max = *sparkwave.iter().max().unwrap();
 
             let [past, future] = *Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Length(split), Constraint::Length(area.width.saturating_sub(split))])
                 .split(area)
             else {
-                unreachable!()
+                unreachable!("Sparkline past/future split was not 2")
             };
 
             Sparkline::default()
                 .max(max)
-                .data(&data[..past.width as usize])
+                .data(&sparkwave[..past.width as usize])
                 .style(stylesheet.active)
                 .render(past, buf);
 
             Sparkline::default()
                 .max(max)
-                .data(&data[past.width as usize..])
+                .data(&sparkwave[past.width as usize..])
                 .style(stylesheet.base)
                 .render(future, buf);
         } else {

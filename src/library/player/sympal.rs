@@ -591,8 +591,7 @@ impl Player for Backend {
 
             // Interleaved channels + rate over 20KHz for 'resolution' right?
             let sample_size = self.channels.load(Ordering::Relaxed) * (self.rate.load(Ordering::Relaxed) as usize / 20_000);
-            // Cap samples per item to 256 for performance
-            let subsamples = (reader.len() / sample_size / count).clamp(1, 256);
+            let subsamples = (reader.len() / sample_size / count).max(1);
 
             Some(
                 reader
