@@ -353,7 +353,7 @@ impl<T: Backend> UI<T> {
             .as_mut()
             .unwrap()
             .draw(|f| {
-                let time_other = Instant::now();
+                let time_begin = Instant::now();
                 let size = f.area();
                 let [header, body] = *Layout::vertical([
                     Constraint::Length(if library.seekable().is_some() { 4 } else { 2 }.max(if self.art_inspect {
@@ -404,39 +404,40 @@ impl<T: Backend> UI<T> {
                 };
 
                 self.status_bar.render(f.buffer_mut(), status_bar_area, self.stylesheet);
-
                 self.menubar.render(f.buffer_mut(), menubar_area, self.stylesheet);
-                let time_other2 = Instant::now();
 
-                let time_seekbar = Instant::now();
+                let time_bars = Instant::now();
+
                 if let Some(_) = library.seekable() {
                     self.seeker.render(f.buffer_mut(), seeker_area, self.stylesheet)
                 }
-                let time_seekbar2 = Instant::now();
 
-                let time_art = Instant::now();
+                let time_seekbar = Instant::now();
+
                 self.art
                     .render(f.buffer_mut(), if self.art_inspect { art_area2 } else { art_area }, self.stylesheet);
-                let time_art2 = Instant::now();
+
+                let time_art = Instant::now();
+
+                self.filterpanes.render(f.buffer_mut(), filterpanes_area, self.stylesheet);
 
                 let time_panes = Instant::now();
-                self.filterpanes.render(f.buffer_mut(), filterpanes_area, self.stylesheet);
-                let time_panes2 = Instant::now();
+
+                self.sortpanes.render(f.buffer_mut(), sortpanes_area, self.stylesheet);
 
                 let time_queue = Instant::now();
-                self.sortpanes.render(f.buffer_mut(), sortpanes_area, self.stylesheet);
-                let time_queue2 = Instant::now();
 
                 if self.debug {
                     f.render_widget(
                         Paragraph::new(format!(
-                            "Draws: {: <4} timeO: {: <4} timeS: {: <4} timeA: {: <4} timeP: {: <4} timeQ: {: <4}",
+                            "Draws: {: <4} time: {: <4} timeB: {: <4} timeS: {: <4} timeA: {: <4} timeP: {: <4} timeQ: {: <4}",
                             self.draw_count,
-                            (time_other2 - time_other).as_micros(),
-                            (time_seekbar2 - time_seekbar).as_micros(),
-                            (time_art2 - time_art).as_micros(),
-                            (time_panes2 - time_panes).as_micros(),
-                            (time_queue2 - time_queue).as_micros(),
+                            time_begin.elapsed().as_micros(),
+                            (time_bars - time_begin).as_micros(),
+                            (time_seekbar - time_bars).as_micros(),
+                            (time_art - time_seekbar).as_micros(),
+                            (time_panes - time_art).as_micros(),
+                            (time_queue - time_panes).as_micros(),
                         ))
                         .style(self.stylesheet.base),
                         debug_area,
