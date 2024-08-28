@@ -430,13 +430,13 @@ impl<T: Backend> UI<T> {
                 if self.debug {
                     f.render_widget(
                         Paragraph::new(format!(
-                            "Draws: {} timeO: {:.2}ms timeS: {:.2}ms timeA: {:.2}ms timeP: {:.2}ms timeQ: {:.2}ms",
+                            "Draws: {: <4} timeO: {: <4} timeS: {: <4} timeA: {: <4} timeP: {: <4} timeQ: {: <4}",
                             self.draw_count,
-                            (time_other2 - time_other).as_secs_f64() * 1000.0,
-                            (time_seekbar2 - time_seekbar).as_secs_f64() * 1000.0,
-                            (time_art2 - time_art).as_secs_f64() * 1000.0,
-                            (time_panes2 - time_panes).as_secs_f64() * 1000.0,
-                            (time_queue2 - time_queue).as_secs_f64() * 1000.0,
+                            (time_other2 - time_other).as_micros(),
+                            (time_seekbar2 - time_seekbar).as_micros(),
+                            (time_art2 - time_art).as_micros(),
+                            (time_panes2 - time_panes).as_micros(),
+                            (time_queue2 - time_queue).as_micros(),
                         ))
                         .style(self.stylesheet.base),
                         debug_area,
