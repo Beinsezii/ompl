@@ -1,10 +1,11 @@
-# OMPL - Opinionated Music Player/Library v0.9.2
+# OMPL - Opinionated Music Player/Library v0.10.0
 <img src="./screenshot.png" height = 400px />
 
 ## Features
 
   * Fully functional TUI with mouse & tty support
     * Filter and sort tags however you want. See [Tagstrings](https://github.com/Beinsezii/ompl#tagstrings) and [Filters](https://github.com/Beinsezii/ompl#filters)
+    * Blocky album art display
     * Pretty colors
   * Fully functional CLI that interacts either with the TUI or a daemon
     * Identical functionality and control in both TUI and CLI
@@ -22,12 +23,11 @@
       - Symphonia often fails to identify non-audio containers such as `mp4` and `mkv`
     * Rodio backend: [".mp3", ".flac", ".ogg", ".wav"]
     * All [ID3v2 tags/frames](https://id3.org/id3v2.3.0#Declared_ID3v2_frames). You may sort by either the 4-character codes (TALB, TIT2, etc) or the [human names](./src/library/track/mod.rs#L44). There's no standardization for the human names, so I tried to match what other taggers & players do.
-    * Vorbis comments for FLAC/OGG
+    * Vorbis comments
     * Utilizes ReplayGain (track gain only)
   * Pure Rust where possible; completely portable
   * Very fast - Handle a few thousand files effortlessly on a low power device
   * Interfaces as a media player for direct OS control
-  * Shouldn't crash
 
 ### Goals for 1.0
   * Code docs
@@ -61,7 +61,7 @@ It's recommended you add the downloaded binary or cargo install directory to you
 
 To start a simple example filtering by album and sorting by title run `ompl main Path/To/Music -f album -s title`
 
-To change filters to the "Epic" genre with "Thomas Bergersen" and "Nick Phoenix" as the artists run `ompl filter set-all 'genre=Epic' 'artist=Thomas Bergersen,Nick Phoenix'`
+To change filters to the "Epic" genre with "Thomas Bergersen" and "Nick Phoenix" as the artists run `ompl filter set 'genre=Epic' 'artist=Thomas Bergersen,Nick Phoenix'`
 
 Finally play the current track with `ompl play`
 
