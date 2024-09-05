@@ -13,7 +13,7 @@ use ratatui::widgets::{Sparkline, Widget};
 
 pub struct Seeker {
     lib_weak: Weak<Library>,
-    previous: u16,
+    previous: Option<u16>,
     area: Rect,
     sparkwave: Option<(usize, Arc<Track>, Vec<u64>)>,
 }
@@ -22,7 +22,7 @@ impl Seeker {
     pub fn new(library: &Arc<Library>) -> Self {
         Self {
             lib_weak: Arc::downgrade(library),
-            previous: u16::MAX,
+            previous: None,
             area: Rect::default(),
             sparkwave: None,
         }
@@ -90,19 +90,26 @@ impl Clickable for Seeker {
         let Some(times) = library.times() else { return none };
         if self.area.intersects(Rect::new(event.column, event.row, 1, 1)) {
             match event.kind {
-                MouseEventKind::Down(MouseButton::Left) => library.seek(Duration::from_secs_f32(
-                    (event.column as f32 / self.area.width as f32) * times.1.as_secs_f32(),
-                )),
+                MouseEventKind::Down(MouseButton::Left) => {
+                    library.seek(Duration::from_secs_f32(
+                        (event.column as f32 / self.area.width as f32) * times.1.as_secs_f32(),
+                    ));
+                    self.previous = Some(event.column)
+                }
                 MouseEventKind::Drag(MouseButton::Left) => {
-                    if event.column != self.previous {
-                        library.seek(Duration::from_secs_f32(
-                            (event.column as f32 / self.area.width as f32) * times.1.as_secs_f32(),
-                        ))
+                    if let Some(previous) = self.previous {
+                        if event.column != previous {
+                            library.seek(Duration::from_secs_f32(
+                                (event.column as f32 / self.area.width as f32) * times.1.as_secs_f32(),
+                            ));
+                            self.previous = Some(event.column)
+                        }
                     }
                 }
                 _ => (),
             }
-            self.previous = event.column
+        } else {
+            self.previous = None
         }
 
         none
