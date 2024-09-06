@@ -32,6 +32,7 @@
 ### Goals for 1.0
   * Code docs
   * Stability
+  * SYMPAL guest channel muxing
   
 ## Installation
 Manually compiled and tested binaries for Linux and Windows are provided on the [releases tab](https://github.com/Beinsezii/ompl/releases)
