@@ -46,8 +46,8 @@ tui = ["dep:ratatui"]
 clipboard = ["dep:copypasta", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]
-jack = ["cpal/jack"]
-album-art = ["dep:image"]
+jack = ["cpal/jack", "backend-sympal"]
+album-art = ["dep:image", "tui"]
 
 default = ["media-controls", "tui", "clipboard", "backend-sympal", "album-art"]
 

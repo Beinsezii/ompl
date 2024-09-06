@@ -55,6 +55,8 @@ These are all enabled by default, but can be disabled if a lighter binary is des
   * `clipboard` : Enables clipboard in the TUI
   * `backend-rodio` : Rodio backend
   * `backend-sympal` : Sympal backend
+  * `album-art` : Enables album art display in the TUI
+  * `jack` : Set backend-sympal to use JACK instead of ALSA on Linux. Mostly intended for testing purposes.
 
 It's recommended you add the downloaded binary or cargo install directory to your environment `PATH` for ease of use.
 
