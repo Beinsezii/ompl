@@ -33,7 +33,7 @@ souvlaki = { version = "0.7", optional = true, default-features = false, feature
 ratatui = { version = "0.28", optional = true, default-features = false, features = ['crossterm'] }
 
 # clipboard
-copypasta = { version = "0.10", optional = true }
+arboard = { version = "3", optional = true, default-features = false, features = ['wayland-data-control'] }
 
 # album-art
 image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"], optional = true }
@@ -42,7 +42,7 @@ image = { version = "0.25.2", default-features = false, features = ["jpeg", "png
 [features]
 media-controls = ["dep:souvlaki"]
 tui = ["dep:ratatui"]
-clipboard = ["dep:copypasta", "tui"]
+clipboard = ["dep:arboard", "tui"]
 backend-rodio = ["dep:rodio"]
 backend-sympal = ["dep:cpal", "dep:dasp"]
 jack = ["cpal/jack", "backend-sympal"]

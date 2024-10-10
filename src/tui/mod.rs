@@ -12,7 +12,7 @@ use crate::library::{Color, Filter, LibEvt, Library, Theme};
 use crate::{logging::*, parse_art_size, parse_time};
 
 #[cfg(feature = "clipboard")]
-use copypasta::{ClipboardContext, ClipboardProvider};
+use arboard::Clipboard;
 
 use ratatui::crossterm::{
     cursor, event,
@@ -156,7 +156,7 @@ struct UI<T: Backend> {
     debug: bool,
     draw_count: u128,
     #[cfg(feature = "clipboard")]
-    clipboard: Option<ClipboardContext>,
+    clipboard: Option<Clipboard>,
 }
 
 impl<T: Backend> UI<T> {
@@ -211,7 +211,7 @@ impl<T: Backend> UI<T> {
             debug,
             draw_count: 0,
             #[cfg(feature = "clipboard")]
-            clipboard: ClipboardContext::new().ok(),
+            clipboard: Clipboard::new().ok(),
         }
     }
 
@@ -548,7 +548,7 @@ impl<T: Backend> UI<T> {
                         #[cfg(feature = "clipboard")]
                         km_c!('p') => {
                             if let Some(clip) = self.clipboard.as_mut() {
-                                if let Ok(contents) = clip.get_contents() {
+                                if let Ok(contents) = clip.get_text() {
                                     result = contents
                                 }
                             }
@@ -556,7 +556,7 @@ impl<T: Backend> UI<T> {
                         #[cfg(feature = "clipboard")]
                         km_c!('y') => {
                             if let Some(clip) = self.clipboard.as_mut() {
-                                drop(clip.set_contents(result.clone()));
+                                drop(clip.set_text(result.clone()));
                             }
                         }
                         // // seriously why the fuck does this print 'h'
