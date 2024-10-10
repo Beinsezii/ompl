@@ -13,31 +13,30 @@ bus = "2"
 clap = { version = "4", features = ["derive", "unicode"] }
 lexical-sort = "0.3"
 rand = "0.8"
-regex = {package = "regex-lite", version = "0.1"}
+regex = { package = "regex-lite", version = "0.1" }
 serde = { version = "1", features = ["derive"] }
-symphonia = { version = "0.5", features = ['all']}
+symphonia = { version = "0.5", features = ['all'] }
 walkdir = "2"
 
 # backend-rodio
 rodio = { version = "0.19", optional = true }
 
 # backend-sympal
-cpal = {version = "0.15", optional = true}
-dasp = {version = "0.11", optional = true, features = ["interpolate", "interpolate-linear", "signal"]}
+cpal = { version = "0.15", optional = true }
+dasp = { version = "0.11", optional = true, features = ["interpolate", "interpolate-linear", "signal"] }
 
 # media-controls
-souvlaki = {version = "0.7", optional = true, default-features = false, features = ['use_zbus']}
+souvlaki = { version = "0.7", optional = true, default-features = false, features = ['use_zbus'] }
 
 # tui
 # ratatui re-exports crossterm
-ratatui = {version = "0.28", optional = true, default-features = false, features = ['crossterm']}
+ratatui = { version = "0.28", optional = true, default-features = false, features = ['crossterm'] }
 
 # clipboard
-copypasta = {version = "0.10", optional=true}
+copypasta = { version = "0.10", optional = true }
 
 # album-art
-image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"], optional=true}
-
+image = { version = "0.25.2", default-features = false, features = ["jpeg", "png"], optional = true }
 
 
 [features]
@@ -53,7 +52,7 @@ default = ["media-controls", "tui", "clipboard", "backend-sympal", "album-art"]
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.5"
-winit = {version = "0.29", default-features = false, features = ["rwh_05"]}
+winit = { version = "0.29", default-features = false, features = ["rwh_05"] }
 
 [profile.dev]
 opt-level = 1
