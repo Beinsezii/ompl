@@ -33,21 +33,21 @@ pub enum Backend {
 }
 
 /// Panics if no backends are enabled at compile time.
-pub fn backend(backend: Backend, signal: SyncSender<PlayerMessage>) -> Box<dyn Player> {
+pub fn backend(backend: Backend, buffer: Option<u32>, signal: SyncSender<PlayerMessage>) -> Box<dyn Player> {
     // {{{
     #[allow(unreachable_code)]
     match backend {
         Backend::Default => {
             #[cfg(feature = "backend-sympal")]
-            return Box::new(sympal::Backend::new(signal));
+            return Box::new(sympal::Backend::new(buffer, signal));
             #[cfg(feature = "backend-rodio")]
-            return Box::new(brodio::Backend::new(signal));
+            return Box::new(brodio::Backend::new(buffer, signal));
             panic!("No backends enabled during compile!")
         }
         #[cfg(feature = "backend-sympal")]
-        Backend::Sympal => Box::new(sympal::Backend::new(signal)),
+        Backend::Sympal => Box::new(sympal::Backend::new(buffer, signal)),
         #[cfg(feature = "backend-rodio")]
-        Backend::Rodio => Box::new(brodio::Backend::new(signal)),
+        Backend::Rodio => Box::new(brodio::Backend::new(buffer, signal)),
     }
     // }}}
 }
@@ -70,7 +70,7 @@ pub trait Player: Send + Sync {
 
     /// Constructs new player with optional sender that fires when
     /// the current playing track ends or playback is otherwise interrupted.
-    fn new(sig: SyncSender<PlayerMessage>) -> Self
+    fn new(buffer: Option<u32>, sig: SyncSender<PlayerMessage>) -> Self
     where
         Self: Sized;
 

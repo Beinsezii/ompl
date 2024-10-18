@@ -271,12 +271,12 @@ pub struct Library {
 
 impl Library {
     // # new # {{{
-    pub fn new(backend: Backend) -> Result<Arc<Self>, Box<dyn Error>> {
+    pub fn new(backend: Backend, buffer: Option<u32>) -> Result<Arc<Self>, Box<dyn Error>> {
         let bus = Mutex::new(Bus::<LibEvt>::new(99));
 
         let (next_s, next_r) = sync_channel(1);
         let result = Arc::new(Self {
-            player: player::backend(backend, next_s),
+            player: player::backend(backend, buffer, next_s),
             tracks: RwLock::new(Vec::new()),
             history: Mutex::new(Vec::new()),
             filtered_tree: RwLock::new(Vec::new()),

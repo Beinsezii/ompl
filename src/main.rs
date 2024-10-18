@@ -5,7 +5,7 @@
 
 #![warn(missing_docs)]
 
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{value_parser, ArgAction, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::io::{Read, Write};
@@ -499,6 +499,11 @@ pub enum Action {
         #[arg(long, default_value = "default")]
         backend: Backend,
 
+        /// Set audio buffer size if supported
+        /// Will be clamped to what the audio device actually supports
+        #[arg(long, default_value = None, value_parser=value_parser!(u32).range(48..=384000))]
+        buffer: Option<u32>,
+
         /// Verbosity level. Pass multiple times to get more verbose (spammy).
         #[arg(long, short = 'V', action(ArgAction::Count))]
         verbosity: u8,
@@ -837,11 +842,12 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
             acc,
             art_size,
             backend,
+            buffer,
         } => {
             LOG_LEVEL.store(verbosity, std::sync::atomic::Ordering::Relaxed);
 
             debug!("Starting main...");
-            let library = Library::new(backend)?;
+            let library = Library::new(backend, buffer)?;
             library.hidden_set(hidden);
             library.volume_set(volume);
             library.shuffle_set(!noshuffle);

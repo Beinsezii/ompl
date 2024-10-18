@@ -58,7 +58,7 @@ impl Drop for Backend {
 }
 
 impl Player for Backend {
-    fn new(sig_end: SyncSender<PlayerMessage>) -> Self {
+    fn new(_buffer: Option<u32>, sig_end: SyncSender<PlayerMessage>) -> Self {
         debug!("Constructing Backend...");
         let sink = Arc::new(RwLock::new(None));
 

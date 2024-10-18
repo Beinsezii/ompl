@@ -84,6 +84,7 @@ pub struct Backend {
     device_rate: Arc<AtomicU32>,
     device_channels: Arc<AtomicU32>,
     device_format: Arc<AtomicU8>,
+    buffer: Option<u32>,
 }
 
 impl Backend {
@@ -220,6 +221,17 @@ impl Backend {
         let device_rate = self.device_rate.load(Ordering::SeqCst);
         let device_format: SampleFormat = unsafe { transmute(self.device_format.load(Ordering::SeqCst)) };
 
+        // Customize buffer size
+        let mut stream_config = config.config();
+        if let Some(b) = self.buffer {
+            match config.buffer_size() {
+                cpal::SupportedBufferSize::Range { min, max } => {
+                    stream_config.buffer_size = cpal::BufferSize::Fixed(b.clamp(*min, *max));
+                }
+                cpal::SupportedBufferSize::Unknown => (),
+            }
+        }
+
         // if play requested on last pos, reset.
         // basically if you manage to pause it after samples[] ends,
         // this restarts playback instead of playing nothing
@@ -231,7 +243,7 @@ impl Backend {
         thread::Builder::new().name(String::from("SYMPAL Audio Stream")).spawn(move || {
             streaming.store(true, Ordering::Relaxed);
             let stream = device.build_output_stream_raw(
-                &config.config(),
+                &stream_config,
                 device_format,
                 move |ring_buffer: &mut cpal::Data, _: &cpal::OutputCallbackInfo| {
                     let result = try_block!({
@@ -485,7 +497,7 @@ impl Backend {
 }
 
 impl Player for Backend {
-    fn new(sig: SyncSender<PlayerMessage>) -> Self
+    fn new(buffer: Option<u32>, sig: SyncSender<PlayerMessage>) -> Self
     where
         Self: Sized,
     {
@@ -504,6 +516,7 @@ impl Player for Backend {
             device_rate: Arc::new(AtomicU32::new(0)),
             device_channels: Arc::new(AtomicU32::new(0)),
             device_format: Arc::new(AtomicU8::new(0)),
+            buffer,
         }
     }
     fn types(&self) -> Vec<String> {
