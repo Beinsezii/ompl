@@ -499,8 +499,7 @@ pub enum Action {
         #[arg(long, default_value = "default")]
         backend: Backend,
 
-        /// Set audio buffer size if supported
-        /// Will be clamped to what the audio device actually supports
+        /// Set audio buffer size if supported. Will be clamped to what the audio device actually supports
         #[arg(long, default_value = None, value_parser=value_parser!(u32).range(48..=384000))]
         buffer: Option<u32>,
 
