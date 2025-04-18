@@ -5,9 +5,11 @@
 
 #![warn(missing_docs)]
 
-use clap::{value_parser, ArgAction, Parser, Subcommand};
+use clap::builder::{PathBufValueParser, TypedValueParser};
+use clap::{Arg, ArgAction, Command, Parser, Subcommand, value_parser};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
 use std::path::PathBuf;
@@ -31,8 +33,8 @@ pub mod logging {
     // {{{
 
     use std::sync::{
-        atomic::{AtomicBool, AtomicU8},
         Mutex,
+        atomic::{AtomicBool, AtomicU8},
     };
 
     /// Verbosity level of log to print/queue
@@ -207,6 +209,19 @@ fn parse_art_size(s: &str) -> Result<u8, Box<dyn Error + Send + Sync>> {
         Ok(uint8)
     } else {
         Err(format!("Art size must be one of {:?}", VALID).into())
+    }
+}
+
+#[derive(Clone, Copy, Default, Debug)]
+struct AbsPathParser {
+    pbvp: PathBufValueParser,
+}
+
+impl TypedValueParser for AbsPathParser {
+    type Value = <PathBufValueParser as TypedValueParser>::Value;
+
+    fn parse_ref(&self, cmd: &Command, arg: Option<&Arg>, value: &OsStr) -> Result<Self::Value, clap::Error> {
+        self.pbvp.parse_ref(cmd, arg, value).and_then(|r| r.canonicalize().map_err(|e| e.into()))
     }
 }
 
@@ -557,6 +572,7 @@ pub enum Action {
     /// Send a file directly to the audio player
     PlayFile {
         /// A single audio track
+        #[arg(value_parser=AbsPathParser::default())]
         file: PathBuf,
     },
     /// Control how tracks are filtered for final play queue using layers of Filters.
@@ -568,6 +584,7 @@ pub enum Action {
     /// Append tracks to library from path
     Append {
         /// Path to scan for audio files
+        #[arg(value_parser=AbsPathParser::default())]
         path: PathBuf,
     },
     /// Remove all currently loaded tracks
