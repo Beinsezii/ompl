@@ -685,10 +685,9 @@ impl Library {
 
         let now = Instant::now();
         thread::scope(|scope| {
-            // 50 is a completely arbitrary value that seems to perform well enough
-            // Basically tradeoff between thread spawn overhead and IO calls.
-            // I dont want an entire async runtime for loading metadata so here it is
-            for chunk in new_tracks.chunks_mut(50) {
+            // include a high minimum for small libraries to avoid unnecessary thread overhead
+            let chunk_size = (new_tracks.len() / 128).max(20);
+            for chunk in new_tracks.chunks_mut(chunk_size) {
                 scope.spawn(|| chunk.iter_mut().for_each(|track| track.load_meta()));
             }
         });
