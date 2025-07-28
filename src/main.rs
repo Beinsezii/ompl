@@ -6,7 +6,7 @@
 #![warn(missing_docs)]
 
 use clap::builder::{PathBufValueParser, TypedValueParser};
-use clap::{value_parser, Arg, ArgAction, Command, Parser, Subcommand};
+use clap::{Arg, ArgAction, Command, Parser, Subcommand, value_parser};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::ffi::OsStr;
@@ -33,8 +33,8 @@ pub mod logging {
     // {{{
 
     use std::sync::{
-        atomic::{AtomicBool, AtomicU8},
         Mutex,
+        atomic::{AtomicBool, AtomicU8},
     };
 
     /// Verbosity level of log to print/queue

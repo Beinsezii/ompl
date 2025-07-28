@@ -94,8 +94,8 @@ pub fn parse<T: AsRef<str>>(tagstring: T, tags: &Tags) -> String {
 
 #[cfg(test)]
 mod tagstring_tests {
-    use super::parse;
     use super::Tags;
+    use super::parse;
     fn tags() -> Tags {
         Tags::from([
             (String::from("tit1"), String::from("TheTitle")),

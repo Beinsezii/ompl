@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use std::cmp::min;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -20,10 +20,10 @@ use ratatui::crossterm::{
     queue, terminal,
 };
 
+use ratatui::Terminal;
 use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
-use ratatui::Terminal;
 
 mod stylesheet;
 use stylesheet::StyleSheet;
@@ -598,11 +598,7 @@ impl<T: Backend> UI<T> {
 
         self.draw();
 
-        if submit {
-            result
-        } else {
-            String::from(prefill)
-        }
+        if submit { result } else { String::from(prefill) }
     }
 
     // ## Popops ## }}}

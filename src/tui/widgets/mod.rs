@@ -2,8 +2,8 @@
 
 use std::cmp::Ordering;
 
-pub use super::stylesheet::StyleSheet;
 pub use super::Action;
+pub use super::stylesheet::StyleSheet;
 
 mod statusbar;
 pub use statusbar::StatusBar;

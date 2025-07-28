@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{sync_channel, Receiver};
+use std::sync::mpsc::{Receiver, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::thread::{self, sleep};
 use std::time::{Duration, Instant};
@@ -19,7 +19,7 @@ mod track;
 use crate::logging::*;
 
 pub use player::{Backend, Player};
-pub use track::{find_tracks, get_taglist, get_taglist_sort, tagstring, RawImage, Track};
+pub use track::{RawImage, Track, find_tracks, get_taglist, get_taglist_sort, tagstring};
 
 use player::PlayerMessage;
 

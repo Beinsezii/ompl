@@ -11,8 +11,8 @@ mod brodio;
 #[cfg(feature = "backend-sympal")]
 mod sympal;
 
-use std::sync::mpsc::SyncSender;
 use std::sync::Arc;
+use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
 use clap::ValueEnum;
@@ -135,11 +135,7 @@ pub trait Player: Send + Sync {
 
     /// Toggle between play/pause.
     fn toggle(&self) {
-        if self.playing() {
-            self.pause()
-        } else {
-            self.play()
-        }
+        if self.playing() { self.pause() } else { self.play() }
     }
 
     /// Whether player is completeley stopped.

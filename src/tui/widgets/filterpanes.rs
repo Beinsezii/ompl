@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use super::{Action, Clickable, ContainedWidget, PaneArray, PaneArrayEvt, Scrollable, Searchable, StyleSheet};
-use crate::library::{get_taglist_sort, LibEvt, Library};
+use crate::library::{LibEvt, Library, get_taglist_sort};
 
 use std::sync::{Arc, Weak};
 
