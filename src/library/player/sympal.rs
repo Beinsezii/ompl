@@ -9,15 +9,15 @@ use std::error::Error;
 use std::fs::File;
 use std::mem::{swap, transmute};
 use std::ops::Deref;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU8, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use cpal::{
-    traits::{DeviceTrait, HostTrait, StreamTrait},
     SampleFormat, SampleRate,
+    traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use dasp::{Sample, Signal};
 
@@ -590,9 +590,12 @@ impl Player for Backend {
         }
     }
     fn seek(&self, time: Duration) {
-        if self.seekable() == Some(true) {
+        if self.seekable() == Some(true)
+            && let Ok(samples) = self.samples.read()
+        {
             self.pos.store(
-                (time.as_secs_f32() * self.rate.load(Ordering::Relaxed) as f32) as usize * self.channels.load(Ordering::Relaxed),
+                ((time.as_secs_f32() * self.rate.load(Ordering::Relaxed) as f32) as usize * self.channels.load(Ordering::Relaxed))
+                    .min(samples.len() - 1),
                 Ordering::Release,
             );
             let _ = self.channel.send(PlayerMessage::Clock);
