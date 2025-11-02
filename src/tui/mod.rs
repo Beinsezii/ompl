@@ -1098,10 +1098,8 @@ pub fn tui(library: Arc<Library>) -> bool {
                                     }
                                 }
                             }
-                            LibEvt::Error(message) => {
-                                let mut uiw = ui.lock().unwrap();
-                                uiw.message("Library Error", &message)
-                            }
+                            LibEvt::Error(message) => ui.lock().unwrap().message("Library Error", &message),
+                            LibEvt::Message(message) => ui.lock().unwrap().message("Message", &message),
                         },
                         None => break,
                     },

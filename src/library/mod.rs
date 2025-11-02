@@ -245,6 +245,8 @@ pub enum LibEvt {
     Theme,
     /// Non-fatal error.
     Error(String),
+    /// General information message
+    Message(String),
 }
 
 pub struct Library {
@@ -312,6 +314,10 @@ impl Library {
         if let Ok(mut bus) = self.bus.timed_lock() {
             bus.broadcast(message)
         }
+    }
+
+    pub fn message<T: ToString>(&self, message: T) {
+        self.broadcast(LibEvt::Message(message.to_string()))
     }
 
     fn read_art(&self) {

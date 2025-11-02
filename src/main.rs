@@ -589,6 +589,11 @@ pub enum Action {
     },
     /// Remove all currently loaded tracks
     Purge,
+    /// Display a message on the main instance
+    Message {
+        /// The text to send
+        message: String,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Serialize, Deserialize)]
@@ -817,6 +822,7 @@ fn server(listener: TcpListener, library: Arc<Library>) {
                             },
                             Action::Append { path } => library.append_library(path),
                             Action::Purge => library.purge(),
+                            Action::Message { message } => library.message(message),
                         };
                     }
                     Err(e) => response = format!("Could not deserialize args\n{}\nOMPL version mismatch?", e),
@@ -1002,6 +1008,7 @@ fn instance_main(listener: TcpListener, args: Args) -> Result<(), Box<dyn Error>
                 loop {
                     match recv.recv() {
                         Ok(LibEvt::Error(e)) => eprintln!("{}", e),
+                        Ok(LibEvt::Message(e)) => println!("{}", e),
                         Ok(_) => (),
                         Err(_e) => break,
                     }
