@@ -10,7 +10,7 @@ use ratatui::crossterm::{
     event::{MouseButton, MouseEvent, MouseEventKind},
     style::available_color_count,
 };
-use ratatui::layout::Rect;
+use ratatui::layout::{Margin, Rect};
 use ratatui::prelude::Buffer;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -150,7 +150,14 @@ impl ContainedWidget for Art {
                 })
                 .collect();
 
-            Paragraph::new(lines).render(self.area, buf)
+            let (art_h, art_w) = (lines.len() as u16, lines.get(0).map(|l| l.spans.len()).unwrap_or(0) as u16);
+            Paragraph::new(lines).render(
+                self.area.inner(Margin {
+                    horizontal: self.area.width.saturating_sub(art_w) / 2,
+                    vertical: self.area.height.saturating_sub(art_h) / 2,
+                }),
+                buf,
+            )
         } else {
             Block::new().style(stylesheet.base).borders(Borders::ALL).render(self.area, buf)
         }
