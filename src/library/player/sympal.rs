@@ -471,7 +471,7 @@ impl Backend {
                             return Err("SampleBuffer capacity was lower than AudioBuffer frame count!".into());
                         };
                         sb.copy_interleaved_ref(ab);
-                        samples.write()?.append(&mut sb.samples_mut().to_vec());
+                        samples.write()?.extend_from_slice(sb.samples());
                     }
                     bench!("Track fully decoded in {:?}", begin.elapsed());
                     decoder_state.store(*DecoderState::Complete, Ordering::Relaxed);
